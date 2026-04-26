@@ -111,11 +111,12 @@ User selected "all" scope; everything below is in v1.
 - [ ] **STRS-01**: `lib/stress.py` rate-shock sweep: re-solves PMT for grid of rates
 - [ ] **STRS-02**: Income-shock sweep: recomputes DTI for grid of income reductions
 - [ ] **STRS-03**: ARM-reset sweep: simulates rate path scenarios (parallel-shift, gradual-rise, fall-then-rise)
-- [ ] **STRS-04**: `scripts/stress_test.py` provides JSON-in / JSON-out CLI; output includes scenario summary
+- [ ] **STRS-04**: `scripts/stress_test.py` provides JSON-in / JSON-out CLI; output includes scenario summary; tests for stress sweeps include parameter-grid expected outputs
 - [ ] **PNTS-01**: `lib/points.py` calculates discount-points breakeven (`points_cost / monthly_savings = months`)
 - [ ] **PNTS-02**: Cross-check NPV-based points decision (positive NPV ⇔ keep points; negative ⇔ skip)
 - [ ] **PNTS-03**: `scripts/points_breakeven.py` provides JSON-in / JSON-out CLI
-- [ ] **STRS-04**: Tests for stress sweeps include parameter-grid expected outputs
+
+> **Note:** STRS-04 was duplicated in the original requirements (one for the script CLI, one for sweep-test fixtures); the two have been merged into a single requirement above. Coverage count treats this as **one** requirement.
 
 ### Persistence (DuckDB)
 
@@ -206,18 +207,150 @@ Deferred to future releases. Tracked but not in current roadmap.
 
 ## Traceability
 
-Empty until `gsd-roadmapper` runs in the next step.
+Mapped 2026-04-26 by gsd-roadmapper. Every v1 requirement is assigned to exactly one phase. See `.planning/ROADMAP.md` for phase goals + success criteria.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| FND-01 | TBD | Pending |
-| ... | TBD | Pending |
+| FND-01 | Phase 1 | Pending |
+| FND-02 | Phase 1 | Pending |
+| FND-03 | Phase 1 | Pending |
+| FND-04 | Phase 1 | Pending |
+| FND-05 | Phase 1 | Pending |
+| FND-06 | Phase 1 | Pending |
+| FND-07 | Phase 1 | Pending |
+| FND-08 | Phase 1 | Pending |
+| FND-09 | Phase 1 | Pending |
+| FND-10 | Phase 1 | Pending |
+| REF-01 | Phase 2 | Pending |
+| REF-02 | Phase 2 | Pending |
+| REF-03 | Phase 2 | Pending |
+| REF-04 | Phase 2 | Pending |
+| REF-05 | Phase 2 | Pending |
+| REF-06 | Phase 2 | Pending |
+| REF-07 | Phase 2 | Pending |
+| REF-08 | Phase 2 | Pending |
+| REF-09 | Phase 2 | Pending |
+| RUL-01 | Phase 2 | Pending |
+| RUL-02 | Phase 2 | Pending |
+| RUL-03 | Phase 2 | Pending |
+| RUL-04 | Phase 2 | Pending |
+| RUL-05 | Phase 2 | Pending |
+| RUL-06 | Phase 2 | Pending |
+| RUL-07 | Phase 2 | Pending |
+| RUL-08 | Phase 2 | Pending |
+| RUL-09 | Phase 2 | Pending |
+| RUL-10 | Phase 2 | Pending |
+| RUL-11 | Phase 2 | Pending |
+| RUL-12 | Phase 2 | Pending |
+| RUL-13 | Phase 2 | Pending |
+| AMRT-01 | Phase 3 | Pending |
+| AMRT-02 | Phase 3 | Pending |
+| AMRT-03 | Phase 3 | Pending |
+| AMRT-04 | Phase 3 | Pending |
+| AMRT-05 | Phase 3 | Pending |
+| AMRT-06 | Phase 3 | Pending |
+| AMRT-07 | Phase 3 | Pending |
+| AMRT-08 | Phase 3 | Pending |
+| AFFD-01 | Phase 4 | Pending |
+| AFFD-02 | Phase 4 | Pending |
+| AFFD-03 | Phase 4 | Pending |
+| AFFD-04 | Phase 4 | Pending |
+| AFFD-05 | Phase 4 | Pending |
+| AFFD-06 | Phase 4 | Pending |
+| AFFD-07 | Phase 4 | Pending |
+| AFFD-08 | Phase 4 | Pending |
+| AFFD-09 | Phase 4 | Pending |
+| ARM-01 | Phase 5 | Pending |
+| ARM-02 | Phase 5 | Pending |
+| ARM-03 | Phase 5 | Pending |
+| ARM-04 | Phase 5 | Pending |
+| ARM-05 | Phase 5 | Pending |
+| ARM-06 | Phase 5 | Pending |
+| ARM-07 | Phase 5 | Pending |
+| ARM-08 | Phase 5 | Pending |
+| ARM-09 | Phase 5 | Pending |
+| REFI-01 | Phase 6 | Pending |
+| REFI-02 | Phase 6 | Pending |
+| REFI-03 | Phase 6 | Pending |
+| REFI-04 | Phase 6 | Pending |
+| REFI-05 | Phase 6 | Pending |
+| REFI-06 | Phase 6 | Pending |
+| REFI-07 | Phase 6 | Pending |
+| REFI-08 | Phase 6 | Pending |
+| REFI-09 | Phase 6 | Pending |
+| APR-01 | Phase 7 | Pending |
+| APR-02 | Phase 7 | Pending |
+| APR-03 | Phase 7 | Pending |
+| APR-04 | Phase 7 | Pending |
+| APR-05 | Phase 7 | Pending |
+| APR-06 | Phase 7 | Pending |
+| APR-07 | Phase 7 | Pending |
+| APR-08 | Phase 7 | Pending |
+| STRS-01 | Phase 8 | Pending |
+| STRS-02 | Phase 8 | Pending |
+| STRS-03 | Phase 8 | Pending |
+| STRS-04 | Phase 8 | Pending |
+| PNTS-01 | Phase 8 | Pending |
+| PNTS-02 | Phase 8 | Pending |
+| PNTS-03 | Phase 8 | Pending |
+| PERS-01 | Phase 9 | Pending |
+| PERS-02 | Phase 9 | Pending |
+| PERS-03 | Phase 9 | Pending |
+| PERS-04 | Phase 9 | Pending |
+| PERS-05 | Phase 9 | Pending |
+| PERS-06 | Phase 9 | Pending |
+| PERS-07 | Phase 9 | Pending |
+| SKLL-01 | Phase 10 | Pending |
+| SKLL-02 | Phase 10 | Pending |
+| SKLL-03 | Phase 10 | Pending |
+| SKLL-04 | Phase 10 | Pending |
+| SKLL-05 | Phase 10 | Pending |
+| SKLL-06 | Phase 10 | Pending |
+| SKLL-07 | Phase 10 | Pending |
+| SKLL-08 | Phase 10 | Pending |
+| SKLL-09 | Phase 10 | Pending |
+| SKLL-10 | Phase 10 | Pending |
+| SKLL-11 | Phase 10 | Pending |
+| SKLL-12 | Phase 10 | Pending |
+| SKLL-13 | Phase 10 | Pending |
+| SUBA-01 | Phase 11 | Pending |
+| SUBA-02 | Phase 11 | Pending |
+| SUBA-03 | Phase 11 | Pending |
+| SUBA-04 | Phase 11 | Pending |
+| SUBA-05 | Phase 11 | Pending |
+| SUBA-06 | Phase 11 | Pending |
+| LIVE-01 | Phase 12 | Pending |
+| LIVE-02 | Phase 12 | Pending |
+| LIVE-03 | Phase 12 | Pending |
+| LIVE-04 | Phase 12 | Pending |
+| EVAL-01 | Phase 12 | Pending |
+| EVAL-02 | Phase 12 | Pending |
+| EVAL-03 | Phase 12 | Pending |
+| EVAL-04 | Phase 12 | Pending |
 
 **Coverage:**
-- v1 requirements: 110 total (across 12 categories)
-- Mapped to phases: 0 (pending roadmapper)
-- Unmapped: 110 ⚠️
+
+| Phase | Requirements Mapped | Count |
+|-------|---------------------|-------|
+| Phase 1: Foundations & Money Discipline | FND-01..10 | 10 |
+| Phase 2: Regulatory Reference Data & Rules Predicates | REF-01..09, RUL-01..13 | 22 |
+| Phase 3: Core Amortization | AMRT-01..08 | 8 |
+| Phase 4: Affordability | AFFD-01..09 | 9 |
+| Phase 5: ARM Modeling | ARM-01..09 | 9 |
+| Phase 6: Refinance NPV | REFI-01..09 | 9 |
+| Phase 7: Estimated APR | APR-01..08 | 8 |
+| Phase 8: Stress Tests & Points Breakeven | STRS-01..04, PNTS-01..03 | 7 |
+| Phase 9: DuckDB Persistence & Node Orchestration | PERS-01..07 | 7 |
+| Phase 10: Claude Skill Frontend | SKLL-01..13 | 13 |
+| Phase 11: Subagents | SUBA-01..06 | 6 |
+| Phase 12: FRED MCP Live Rates & Eval Harness | LIVE-01..04, EVAL-01..04 | 8 |
+| **Total** | | **116** |
+
+- v1 requirements: 116 unique IDs across 13 categories (note: original draft said 110 — recount shows 116 once REF/RUL/SKLL fully enumerated; one duplicate STRS-04 in source merged into a single requirement)
+- Mapped to phases: 116 ✓
+- Unmapped: 0 ✓
+- Phases without requirements: 0 ✓
 
 ---
 *Requirements defined: 2026-04-26*
-*Last updated: 2026-04-26 after initial definition*
+*Last updated: 2026-04-26 — traceability populated by gsd-roadmapper*
