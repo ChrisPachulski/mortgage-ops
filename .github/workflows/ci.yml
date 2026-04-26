@@ -1,0 +1,61 @@
+# .github/workflows/ci.yml
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # full history so the user-layer hook can see all changes vs base
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.11.7"
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Sync deps (frozen)
+        run: uv sync --locked --dev
+
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Ruff format check
+        run: uv run ruff format --check .
+
+      - name: Mypy strict
+        run: uv run mypy --strict .
+
+      - name: Pytest
+        run: uv run pytest
+
+      - name: User-Layer commit guard (server-side belt-and-suspenders)
+        # Re-runs scripts/hooks/block-user-layer.py against every changed file in
+        # the PR / push range. Closes the `git commit --no-verify` bypass per
+        # Open Question 1 in 01-RESEARCH.md.
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${GITHUB_BASE_REF:-}" ]; then
+            git fetch --no-tags --prune origin "+refs/heads/${GITHUB_BASE_REF}:refs/remotes/origin/${GITHUB_BASE_REF}"
+            CHANGED=$(git diff --name-only "origin/${GITHUB_BASE_REF}...HEAD" || true)
+          else
+            CHANGED=$(git diff --name-only "HEAD~1..HEAD" || true)
+          fi
+          if [ -z "$CHANGED" ]; then
+            echo "No changed files; skipping user-layer guard."
+            exit 0
+          fi
+          echo "Changed files:"
+          echo "$CHANGED"
+          # shellcheck disable=SC2086
+          uv run python scripts/hooks/block-user-layer.py $CHANGED
