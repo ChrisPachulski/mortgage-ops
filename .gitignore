@@ -1,0 +1,33 @@
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+*.egg-info/
+build/
+dist/
+
+# uv
+.uv-cache/
+
+# User Layer (DATA_CONTRACT.md) — NEVER commit
+config/household.yml
+config/profile.yml
+modes/_profile.md
+
+# Data Layer (generated)
+data/*.duckdb
+data/market/
+data/mortgage-ops.duckdb-wal
+data/mortgage-ops.duckdb-shm
+
+# Reports (generated)
+reports/*
+!reports/.gitkeep
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
