@@ -1,0 +1,35 @@
+# config/household.example.yml
+#
+# COMMITTED SKELETON — copy to config/household.yml and fill in your real values.
+# config/household.yml is in the User Layer (per DATA_CONTRACT.md): gitignored
+# and never auto-updated by any system process.
+#
+# Phase 4 (Affordability) consumes this schema. Phase 1 ships only this redacted
+# example so DATA_CONTRACT.md can cite a real path. Fields here are placeholders;
+# Phase 4 (AFFD-09) will document the full schema with units and constraints.
+
+household:
+  # Location — used by Phase 2 rules predicates (loan_type classification needs county).
+  location:
+    state: "WA"
+    county: "King"            # Must match a county in data/reference/conforming-limits-*.yml (Phase 2)
+    zip: "00000"
+
+  # Joint applicants — Phase 4 supports two-income households.
+  applicants:
+    - name: "Applicant A"     # Display name only, not a legal identifier
+      gross_monthly_income: "0.00"   # Decimal string — see CLAUDE.md money discipline
+      credit_score: 0                # FICO 300-850; Phase 4 picks the lower-mid score per Fannie/Freddie convention
+    - name: "Applicant B"
+      gross_monthly_income: "0.00"
+      credit_score: 0
+
+  # Monthly debts that count toward back-end DTI.
+  monthly_debts:
+    auto: "0.00"
+    student_loans: "0.00"
+    credit_cards: "0.00"
+    other: "0.00"
+
+  # Optional: existing housing payment (rent/own) for affordability comparison.
+  current_housing_payment: "0.00"

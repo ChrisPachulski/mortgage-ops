@@ -1,0 +1,29 @@
+# config/profile.example.yml
+#
+# COMMITTED SKELETON — copy to config/profile.yml and fill in your real values.
+# config/profile.yml is in the User Layer (per DATA_CONTRACT.md): gitignored
+# and never auto-updated by any system process.
+#
+# Phase 10 (Claude Skill Frontend) consumes this schema. Phase 1 ships only this
+# redacted example so DATA_CONTRACT.md can cite a real path.
+
+profile:
+  # Display preferences for generated reports and skill output.
+  display:
+    money_format: "USD"         # Reserved; Phase 10 uses this
+    rate_format: "percent"      # "percent" => 6.5%, "decimal" => 0.065
+    decimal_places_money: 2
+    decimal_places_rate: 4
+
+  # Default assumptions for "what if" runs when the user does not specify.
+  defaults:
+    term_months: 360            # 30-year default
+    rate_source: "FRED:MORTGAGE30US"  # Phase 12 FRED MCP (LIVE-01)
+    extra_principal_monthly: "0.00"
+
+  # Per-mode behavior overrides (Phase 10).
+  modes:
+    affordability:
+      max_back_end_dti: "0.43"
+    refinance:
+      assumed_holding_period_months: 60
