@@ -39,7 +39,13 @@ User selected **fine** (8-12 phases). This roadmap is **12 phases** — each cal
   3. GitHub Actions CI workflow runs the full test+typecheck+lint matrix on push and blocks merges on failure
   4. Pre-commit hook rejects any staged change to `config/household.yml`, `config/profile.yml`, or `data/mortgage-ops.duckdb` with a clear "User Layer is read-only" error
   5. `tests/fixtures/` contains pinned golden-value JSON for all four oracles (Wikipedia $200k@6.5%/30yr→$1,264.14, CFPB LE $162k@3.875%/30yr→$761.78, computed $400k@6.5%/30yr→$2,528.27, computed $200k@7%/15yr→$1,797.66)
-**Plans**: TBD
+**Plans:** 6 plans
+- [ ] 01-01-PLAN.md — pyproject.toml + uv.lock + repo skeleton (lib/, tests/, scripts/, config/, data/reference/, reports/) — FND-03/04/05/08
+- [ ] 01-02-PLAN.md — DATA_CONTRACT.md (User/System/Data/Reference layers) + config/household.example.yml + config/profile.example.yml — FND-07
+- [ ] 01-03-PLAN.md — lib/money.py (Decimal helpers: to_money, quantize_cents, MONEY_CONTEXT, CENT) + tests — FND-01
+- [ ] 01-04-PLAN.md — lib/models.py (Pydantic v2 Loan/Schedule/Payment + Money/Rate Annotated aliases, strict + frozen + extra=forbid) + tests — FND-02
+- [ ] 01-05-PLAN.md — tests/fixtures/golden_pmt.json (4 pinned oracles) + tests/test_fixtures.py — FND-09
+- [ ] 01-06-PLAN.md — .gitignore + .github/workflows/ci.yml + .pre-commit-config.yaml + scripts/hooks/block-user-layer.py + branch-protection checkpoint — FND-06/10
 
 ### Phase 2: Regulatory Reference Data & Rules Predicates
 **Goal**: Build the cited regulatory data layer (YAML with `source:` + `effective:`) and the one-predicate-per-citation rules library that every later calc phase composes
@@ -181,7 +187,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Foundations & Money Discipline | 0/TBD | Not started | - |
+| 1. Foundations & Money Discipline | 0/6 | Planned | - |
 | 2. Regulatory Reference Data & Rules Predicates | 0/TBD | Not started | - |
 | 3. Core Amortization | 0/TBD | Not started | - |
 | 4. Affordability | 0/TBD | Not started | - |
