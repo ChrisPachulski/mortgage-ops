@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "fixtures": [
+    {
+      "id": "wikipedia_200k_30yr",
+      "source": "https://en.wikipedia.org/wiki/Mortgage_calculator",
+      "principal": "200000.00",
+      "annual_rate": "0.065000",
+      "term_months": 360,
+      "expected_monthly_pi": "1264.14",
+      "rounding": "ROUND_HALF_UP",
+      "notes": "Wikipedia worked example; canonical reference."
+    },
+    {
+      "id": "cfpb_le_162k_30yr",
+      "source": "https://files.consumerfinance.gov/f/201405_cfpb_loan-estimate-h-24-b.pdf",
+      "principal": "162000.00",
+      "annual_rate": "0.038750",
+      "term_months": 360,
+      "expected_monthly_pi": "761.78",
+      "rounding": "ROUND_HALF_UP",
+      "notes": "CFPB Loan Estimate sample form H-24(B); regulator-published worked example."
+    },
+    {
+      "id": "computed_400k_30yr",
+      "source": "computed in-tree with Decimal + ROUND_HALF_UP; cross-verified against any standard amortization calculator",
+      "principal": "400000.00",
+      "annual_rate": "0.065000",
+      "term_months": 360,
+      "expected_monthly_pi": "2528.27",
+      "rounding": "ROUND_HALF_UP",
+      "notes": "Stress-test scale of Wikipedia oracle (2x principal, same rate/term)."
+    },
+    {
+      "id": "computed_200k_15yr",
+      "source": "computed in-tree with Decimal + ROUND_HALF_UP",
+      "principal": "200000.00",
+      "annual_rate": "0.070000",
+      "term_months": 180,
+      "expected_monthly_pi": "1797.66",
+      "rounding": "ROUND_HALF_UP",
+      "notes": "Shorter-term sanity check (15yr instead of 30yr)."
+    }
+  ]
+}
