@@ -126,6 +126,76 @@ def test_fha_mip_ufmip_returns_quantized_two_places() -> None:
     assert result.ufmip.as_tuple().exponent == -2
 
 
+def test_fha_mip_high_balance_low_ltv_returns_a_rate_not_lookup_error() -> None:
+    # Regression for BL-03 (02-REVIEW.md): pre-fix, the high-balance tier
+    # (loan_amount > $726,200) only covered LTV bands 0.78-1.00. A high-balance
+    # loan with LTV <= 0.78 (uncommon but permissible — borrower made a large
+    # additional down payment) raised LookupError instead of returning the
+    # published rate. Fix added a 0.00-0.78 high-balance row at 0.0070 (term
+    # > 15yr) and 0.0040 (term <= 15yr).
+    # Hand: $800k loan / $1.2M property = 0.6667 LTV, term 360 -> high-balance
+    # tier, term > 15yr, LTV <= 0.78. annual_mip = 0.0070 (NOT LookupError).
+    # UFMIP = $800k * 0.0175 = $14,000.00. Termination = 132mo (LTV <= 0.90).
+    loan = Loan(
+        principal=Decimal("800000.00"),
+        annual_rate=Decimal("0.065000"),
+        term_months=360,
+        origination_date=date(2024, 6, 15),
+        loan_type="fha",
+    )
+    result = compute(
+        loan=loan,
+        original_property_value=Decimal("1200000.00"),
+        endorsement_date=date(2024, 6, 15),
+    )
+    assert result.annual_mip_pct == Decimal("0.0070")
+    assert result.ufmip == Decimal("14000.00")
+    assert result.terminates_at_period == 132
+
+
+def test_fha_mip_high_balance_low_ltv_short_term() -> None:
+    # Regression for BL-03 (02-REVIEW.md): same defect on the term <= 15yr leg.
+    # Hand: $800k / $1.2M = 0.6667 LTV, term 180 -> high-balance, term <= 15yr,
+    # LTV <= 0.78. annual_mip = 0.0040.
+    loan = Loan(
+        principal=Decimal("800000.00"),
+        annual_rate=Decimal("0.065000"),
+        term_months=180,
+        origination_date=date(2024, 6, 15),
+        loan_type="fha",
+    )
+    result = compute(
+        loan=loan,
+        original_property_value=Decimal("1200000.00"),
+        endorsement_date=date(2024, 6, 15),
+    )
+    assert result.annual_mip_pct == Decimal("0.0040")
+
+
+def test_fha_mip_high_balance_at_ltv_exactly_078() -> None:
+    # Regression for BL-03 (02-REVIEW.md): pre-fix, ltv=exactly 0.78 fell
+    # through the 0.78-0.90 row's exclusive-lower-bound check (`ltv_min < ltv`
+    # is False at equality) AND had no 0.00-0.78 row to catch it. Post-fix the
+    # new 0.00-0.78 row uses inclusive-zero / inclusive-upper logic and catches
+    # ltv=0.78.
+    # Hand: principal/value = 780000/1000000 = 0.78 exactly. term 360 ->
+    # high-balance, term > 15yr, ltv == 0.78 -> matches new 0.00-0.78 row at
+    # 0.0070.
+    loan = Loan(
+        principal=Decimal("780000.00"),
+        annual_rate=Decimal("0.065000"),
+        term_months=360,
+        origination_date=date(2024, 6, 15),
+        loan_type="fha",
+    )
+    result = compute(
+        loan=loan,
+        original_property_value=Decimal("1000000.00"),
+        endorsement_date=date(2024, 6, 15),
+    )
+    assert result.annual_mip_pct == Decimal("0.0070")
+
+
 def test_fha_mip_ltv_above_one_raises() -> None:
     # Loud failure: principal > property_value is invalid input.
     loan = Loan(

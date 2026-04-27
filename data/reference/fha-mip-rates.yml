@@ -26,9 +26,17 @@ annual_mip_table:
   - {term_months_min: 181, term_months_max: 360, ltv_min: "0.95", ltv_max: "1.00", loan_amount_max: "999999999", annual_mip_rate: "0.0075"}
   - {term_months_min: 181, term_months_max: 360, ltv_min: "0.90", ltv_max: "0.95", loan_amount_max: "999999999", annual_mip_rate: "0.0070"}
   - {term_months_min: 181, term_months_max: 360, ltv_min: "0.78", ltv_max: "0.90", loan_amount_max: "999999999", annual_mip_rate: "0.0070"}
+  # BL-03 fix (02-REVIEW.md): low-LTV band added — pre-fix, a high-balance loan
+  # with LTV <= 0.78 raised LookupError because no row covered it. Rate matches
+  # the 0.78-0.90 high-balance row (HUD ML 2023-05 Table B treats sub-78% LTV
+  # at the same rate as 78-90% for high-balance long-term loans).
+  - {term_months_min: 181, term_months_max: 360, ltv_min: "0.00", ltv_max: "0.78", loan_amount_max: "999999999", annual_mip_rate: "0.0070"}
   # High-balance tier, term ≤ 15yr
   - {term_months_min: 1, term_months_max: 180, ltv_min: "0.90", ltv_max: "1.00", loan_amount_max: "999999999", annual_mip_rate: "0.0040"}
   - {term_months_min: 1, term_months_max: 180, ltv_min: "0.78", ltv_max: "0.90", loan_amount_max: "999999999", annual_mip_rate: "0.0040"}
+  # BL-03 fix: low-LTV band for short-term high-balance loans. Rate matches
+  # the 0.78-0.90 high-balance short-term row.
+  - {term_months_min: 1, term_months_max: 180, ltv_min: "0.00", ltv_max: "0.78", loan_amount_max: "999999999", annual_mip_rate: "0.0040"}
 termination:
   ltv_above_90_pct: "life_of_loan"
   ltv_at_or_below_90_pct: 132   # 11 years × 12 months
