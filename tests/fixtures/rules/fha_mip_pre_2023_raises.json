@@ -1,0 +1,10 @@
+{
+  "citation": "Pre-HUD-ML-2023-05 deferral; grandfathering is v2 work",
+  "source_url": "https://www.hud.gov/sites/dfiles/OCHCO/documents/2023-05hsgml.pdf",
+  "comment": "Hand-calc: endorsement_date=2014-08-01 is before 2023-03-20 effective date of HUD ML 2023-05. Predicate must raise NotImplementedError, never silently apply current rates (Pitfall 5: silent grandfathering would understate user's MIP burden).",
+  "loan": {"principal": "300000.00", "annual_rate": "0.045000", "term_months": 360, "origination_date": "2014-08-01", "loan_type": "fha"},
+  "original_property_value": "350000.00",
+  "endorsement_date": "2014-08-01",
+  "expected_exception": "NotImplementedError",
+  "expected_match": "pre-2023-03-20"
+}

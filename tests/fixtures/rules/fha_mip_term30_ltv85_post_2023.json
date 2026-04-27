@@ -1,0 +1,11 @@
+{
+  "citation": "HUD ML 2023-05 Table A row \"Term > 15yr, LTV <= 90%, <= $726,200\"; HUD ML 2013-04 termination rule",
+  "source_url": "https://www.hud.gov/sites/dfiles/OCHCO/documents/2023-05hsgml.pdf",
+  "comment": "Hand-calc: principal=$400k, original_value=$470k -> LTV=0.85106382... <= 0.90 -> row [term<=360, 0.00<LTV<=0.90, <=$726,200] -> annual_mip_rate=0.0050. UFMIP = $400,000 * 0.0175 = $7,000.00. LTV<=0.90 -> terminates at 132 months (11 years).",
+  "loan": {"principal": "400000.00", "annual_rate": "0.065000", "term_months": 360, "origination_date": "2024-06-15", "loan_type": "fha"},
+  "original_property_value": "470000.00",
+  "endorsement_date": "2024-06-15",
+  "expected_ufmip": "7000.00",
+  "expected_annual_mip_pct": "0.0050",
+  "expected_terminates_at_period": 132
+}
