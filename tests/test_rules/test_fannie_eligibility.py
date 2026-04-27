@@ -81,6 +81,30 @@ def test_ltv_bucket_80_belongs_to_75_01_to_80() -> None:
     assert _ltv_bucket(Decimal("80.00")) == "75.01-80"
 
 
+def test_ltv_bucket_rejects_more_than_two_decimal_places() -> None:
+    # Regression for WR-03 (02-REVIEW.md): the LLPA bucket schema is
+    # two-decimal-precision. An LTV like Decimal("60.0056") falls in the open
+    # fractional gap (60.00, 60.01) and would match no bucket, raising a
+    # generic LookupError mid-iteration. Post-fix, _ltv_bucket fails fast with
+    # an explicit ValueError that tells the caller to quantize.
+    with pytest.raises(ValueError, match="must be quantized to <= 2 decimal places"):
+        _ltv_bucket(Decimal("60.0056"))
+
+
+def test_ltv_bucket_accepts_exactly_two_decimal_places() -> None:
+    # Regression for WR-03: ensure the >2-decimal guard does not over-trigger
+    # — Decimal("60.00") has exponent -2 and must still resolve cleanly.
+    # 60.00 is the upper bound of the '0-60' bucket per the YAML.
+    assert _ltv_bucket(Decimal("60.00")) == "0-60"
+
+
+def test_ltv_bucket_accepts_one_decimal_place() -> None:
+    # Regression for WR-03: <2 decimal places is also fine. Decimal("75.0")
+    # has exponent -1, less negative than -2, so the guard accepts it.
+    # 75.0 == 75.00 falls in 70.01-75.
+    assert _ltv_bucket(Decimal("75.0")) == "70.01-75"
+
+
 # Full-stack LLPA round-trip tests at each Pitfall 6 boundary.
 
 

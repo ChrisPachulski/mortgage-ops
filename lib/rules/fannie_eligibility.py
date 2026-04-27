@@ -31,7 +31,12 @@ detail under RUL-02; NOT a new REF-ID.
 
 Inputs:
     credit_score: int (300-850; matches lib.rules.types.Borrower.credit_score)
-    ltv_pct: Decimal (e.g., Decimal("80.00") for 80% LTV)
+    ltv_pct: Decimal (e.g., Decimal("80.00") for 80% LTV) — MUST be quantized
+        to at most 2 decimal places (WR-03 02-REVIEW.md). The LLPA bucket
+        schema is two-decimal-precision (e.g., 60.00 / 60.01-70.00); a value
+        on the open fractional interval (60.00, 60.01) matches no bucket.
+        compute_llpa raises ValueError on >2-decimal input rather than
+        falling through to a generic LookupError.
     loan_purpose: Literal["purchase", "rate_term_refi", "cash_out_refi"]
     occupancy: Literal["primary", "second_home", "investment"]
     unit_count: int (1-4)
@@ -83,7 +88,31 @@ def _ltv_bucket(ltv_pct: Decimal) -> str:
 
     Bucket boundaries are HIGH-INCLUSIVE per the YAML (e.g., 75.01-80.00
     includes 80.00 but excludes 75.00 which belongs to the lower bucket).
+
+    WR-03 quantization contract (02-REVIEW.md): ltv_pct MUST be quantized to
+    at most 2 decimal places. The YAML's bucket schema (...60.00 / 60.01-70.00)
+    leaves a fractional gap on the open interval (60.00, 60.01); a 4-decimal
+    LTV like Decimal("60.0056") would match no bucket and the predicate would
+    fail loud. We surface the contract here as an explicit ValueError so the
+    error message guides the caller to quantize, rather than dumping a generic
+    LookupError mid-iteration.
     """
+    exponent = ltv_pct.as_tuple().exponent
+    # exponent is `int` for finite Decimals, `'n' | 'N' | 'F'` for NaN/Infinity.
+    if not isinstance(exponent, int):
+        raise ValueError(
+            f"ltv_pct={ltv_pct} is not a finite Decimal "
+            f"(exponent={exponent!r}); LLPA bucket lookup requires a finite, "
+            f"two-decimal-quantized Decimal."
+        )
+    if exponent < -2:
+        raise ValueError(
+            f"ltv_pct={ltv_pct} must be quantized to <= 2 decimal places "
+            f"(LLPA buckets are two-decimal-precision per the YAML schema); "
+            f"got exponent={exponent}. Quantize the input "
+            f"with .quantize(Decimal('0.01'), rounding=ROUND_HALF_UP) before "
+            f"calling compute_llpa()."
+        )
     raw = load_reference("fannie-llpa-matrix")
     buckets = raw["ltv_buckets"]
     for bucket in buckets:

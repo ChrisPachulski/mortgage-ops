@@ -24,7 +24,10 @@ matrices ship in lockstep so Phase 4 affordability can compose both outcomes
 
 Inputs:
     credit_score: int (300-850)
-    ltv_pct: Decimal (e.g., Decimal("80.00"))
+    ltv_pct: Decimal (e.g., Decimal("80.00")) — MUST be quantized to at most
+        2 decimal places (WR-03 02-REVIEW.md). The LTV bucket schema is
+        two-decimal-precision (60.00 / 60.01-70.00); higher precision raises
+        ValueError rather than falling through to a generic LookupError.
     loan_purpose: Literal["purchase", "rate_term_refi", "cash_out_refi"]
     occupancy: Literal["primary", "second_home", "investment"]
     unit_count: int (1-4)
@@ -78,6 +81,30 @@ def _credit_score_bucket(credit_score: int) -> str:
 
 
 def _ltv_bucket(ltv_pct: Decimal) -> str:
+    """Map LTV percentage to its Freddie matrix bucket id.
+
+    WR-03 quantization contract (02-REVIEW.md): ltv_pct MUST be quantized to
+    at most 2 decimal places. The bucket schema (...60.00 / 60.01-70.00)
+    leaves a fractional gap on the open interval (60.00, 60.01); a >2-decimal
+    LTV would match no bucket. Surface this as ValueError so the caller knows
+    to quantize, rather than dumping a generic LookupError mid-iteration.
+    """
+    exponent = ltv_pct.as_tuple().exponent
+    # exponent is `int` for finite Decimals, `'n' | 'N' | 'F'` for NaN/Infinity.
+    if not isinstance(exponent, int):
+        raise ValueError(
+            f"ltv_pct={ltv_pct} is not a finite Decimal "
+            f"(exponent={exponent!r}); Freddie LTV bucket lookup requires a "
+            f"finite, two-decimal-quantized Decimal."
+        )
+    if exponent < -2:
+        raise ValueError(
+            f"ltv_pct={ltv_pct} must be quantized to <= 2 decimal places "
+            f"(Freddie LTV buckets are two-decimal-precision per the YAML schema); "
+            f"got exponent={exponent}. Quantize the input "
+            f"with .quantize(Decimal('0.01'), rounding=ROUND_HALF_UP) before "
+            f"calling evaluate()."
+        )
     raw = load_reference("freddie-eligibility-matrix")
     for bucket in raw["ltv_buckets"]:
         lo = Decimal(bucket["min"])

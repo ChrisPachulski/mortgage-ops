@@ -22,6 +22,7 @@ from typing import Any
 import pytest
 from lib.rules.freddie_eligibility import (
     FreddieEligibilityResult,
+    _ltv_bucket,
     evaluate,
 )
 from pydantic import ValidationError
@@ -131,3 +132,17 @@ def test_below_620_is_ineligible_at_all_ltv() -> None:
         unit_count=1,
     )
     assert result.eligible is False
+
+
+def test_ltv_bucket_rejects_more_than_two_decimal_places() -> None:
+    # Regression for WR-03 (02-REVIEW.md): the LTV bucket schema is
+    # two-decimal-precision (60.00 / 60.01-70.00). A 4-decimal LTV like
+    # Decimal("60.0056") falls in the open fractional gap and matches no
+    # bucket. Post-fix, _ltv_bucket fails fast with an explicit ValueError.
+    with pytest.raises(ValueError, match="must be quantized to <= 2 decimal places"):
+        _ltv_bucket(Decimal("60.0056"))
+
+
+def test_ltv_bucket_accepts_exactly_two_decimal_places() -> None:
+    # Regression for WR-03: ensure the >2-decimal guard does not over-trigger.
+    assert _ltv_bucket(Decimal("60.00")) == "0-60"
