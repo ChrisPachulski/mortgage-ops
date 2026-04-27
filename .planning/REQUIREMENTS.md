@@ -27,8 +27,8 @@ User selected "all" scope; everything below is in v1.
 - [x] **REF-03**: `data/reference/fha-mip-rates.yml` with FHA UFMIP + annual MIP rates per term/LTV/loan-amount tier
 - [x] **REF-04**: `data/reference/va-funding-fees.yml` with first-use/subsequent-use/IRRRL/cash-out funding fee tables
 - [x] **REF-05**: `data/reference/va-residual-income.yml` with geographic × family-size × loan-amount residual income table
-- [ ] **REF-06**: `data/reference/usda-income-limits.yml` with 115%-of-area-median income thresholds
-- [ ] **REF-07**: `data/reference/irs-pub936.yml` with $750k cap (post-2017), $1M cap (grandfathered), points deductibility rules
+- [x] **REF-06**: `data/reference/usda-income-limits.yml` with 115%-of-area-median income thresholds
+- [x] **REF-07**: `data/reference/irs-pub936.yml` with $750k cap (post-2017), $1M cap (grandfathered), points deductibility rules
 - [x] **REF-08**: Startup-time staleness check warns when any reference YAML's `effective:` date is > 12 months old
 - [x] **REF-09**: Tests assert every reference YAML has `source:` URL and `effective:` date fields
 
@@ -41,10 +41,10 @@ User selected "all" scope; everything below is in v1.
 - [ ] **RUL-05**: `lib/rules/conventional_pmi.py` implements HPA auto-termination (78% LTV) and request-termination (80% LTV) rules
 - [x] **RUL-06**: `lib/rules/va_funding_fee.py` calculates VA funding fee per Lender Handbook M26-7
 - [x] **RUL-07**: `lib/rules/va_residual_income.py` evaluates residual income vs geographic × family-size × loan-amount table
-- [ ] **RUL-08**: `lib/rules/usda.py` evaluates USDA income limits (115% area median) and guarantee fees
+- [x] **RUL-08**: `lib/rules/usda.py` evaluates USDA income limits (115% area median) and guarantee fees
 - [ ] **RUL-09**: `lib/rules/atr_qm.py` implements General QM price-based test (Mar 2021 final rule, replaces 43% DTI cap)
 - [ ] **RUL-10**: `lib/rules/reg_z.py` implements Reg Z disclosures and tolerances (1/8 percentage point regular, 1/4 percentage point irregular)
-- [ ] **RUL-11**: `lib/rules/irs_pub936.py` implements qualified loan limit worksheet ($750k post-2017 cap)
+- [x] **RUL-11**: `lib/rules/irs_pub936.py` implements qualified loan limit worksheet ($750k post-2017 cap)
 - [x] **RUL-12**: Every rules predicate has docstring with regulatory citation
 - [x] **RUL-13**: 1:1 test-to-citation mapping: every predicate has at least one test fixture per citation
 
@@ -226,8 +226,8 @@ Mapped 2026-04-26 by gsd-roadmapper. Every v1 requirement is assigned to exactly
 | REF-03 | Phase 2 | Done (02-02) |
 | REF-04 | Phase 2 | Done (02-03) |
 | REF-05 | Phase 2 | Done (02-03) |
-| REF-06 | Phase 2 | Pending |
-| REF-07 | Phase 2 | Pending |
+| REF-06 | Phase 2 | Done (02-04) |
+| REF-07 | Phase 2 | Done (02-04) |
 | REF-08 | Phase 2 | Done (02-01) |
 | REF-09 | Phase 2 | Done (02-01) |
 | RUL-01 | Phase 2 | Done (02-01) |
@@ -237,10 +237,10 @@ Mapped 2026-04-26 by gsd-roadmapper. Every v1 requirement is assigned to exactly
 | RUL-05 | Phase 2 | Pending |
 | RUL-06 | Phase 2 | Done (02-03) |
 | RUL-07 | Phase 2 | Done (02-03) |
-| RUL-08 | Phase 2 | Pending |
+| RUL-08 | Phase 2 | Done (02-04) |
 | RUL-09 | Phase 2 | Pending |
 | RUL-10 | Phase 2 | Pending |
-| RUL-11 | Phase 2 | Pending |
+| RUL-11 | Phase 2 | Done (02-04) |
 | RUL-12 | Phase 2 | Done (02-01) |
 | RUL-13 | Phase 2 | Done (02-01) |
 | AMRT-01 | Phase 3 | Pending |
