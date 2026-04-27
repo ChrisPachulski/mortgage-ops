@@ -1,0 +1,162 @@
+# data/reference/fannie-llpa-matrix.yml
+# RUL-02 reference data. Implementation-detail under RUL-02 per CONTEXT.md D-05;
+# NOT a new REF-ID. Annual refresh = re-extract matrix from
+# singlefamily.fanniemae.com + bump `effective:` + commit (no code change).
+source: "https://singlefamily.fanniemae.com/media/9391/display"
+effective: 2026-01-28
+notes: |
+  Fannie Mae LLPA Matrix, Single-Family Selling Guide §B5-1. Quarterly revisions
+  per Assumption A4 (RESEARCH §Sources). Per CONTEXT.md D-04: full matrix shipped;
+  no `NotImplementedError` branches. Quoted-string numeric values per Pitfall 1.
+  Bucket boundaries per Pitfall 6: credit-score buckets are LOW-INCLUSIVE,
+  HIGH-INCLUSIVE (e.g., 720-739 includes both 720 and 739); LTV buckets are
+  HIGH-INCLUSIVE (e.g., 75.01-80.00 includes 80.00 but excludes 75.00 which
+  belongs to the lower bucket).
+
+  Cell values are derived from the public Fannie matrix structure; annual
+  refresh = re-extract from the source URL and bump `effective:`. Numeric
+  scalars are QUOTED strings so PyYAML emits str (not float); loader callers
+  wrap in Decimal(...) at consumption time per Pitfall 1.
+
+# Bucket definitions — explicit so the predicate doesn't infer them.
+credit_score_buckets:
+  - {min: "740", max: "850", id: "740-759-or-better"}
+  - {min: "720", max: "739", id: "720-739"}
+  - {min: "700", max: "719", id: "700-719"}
+  - {min: "680", max: "699", id: "680-699"}
+  - {min: "660", max: "679", id: "660-679"}
+  - {min: "640", max: "659", id: "640-659"}
+  - {min: "620", max: "639", id: "620-639"}
+  - {min: "300", max: "619", id: "below-620"}
+
+ltv_buckets:
+  - {min: "0", max: "60.00", id: "0-60"}
+  - {min: "60.01", max: "70.00", id: "60.01-70"}
+  - {min: "70.01", max: "75.00", id: "70.01-75"}
+  - {min: "75.01", max: "80.00", id: "75.01-80"}
+  - {min: "80.01", max: "85.00", id: "80.01-85"}
+  - {min: "85.01", max: "90.00", id: "85.01-90"}
+  - {min: "90.01", max: "95.00", id: "90.01-95"}
+  - {min: "95.01", max: "97.00", id: "95.01-97"}
+
+# Base LLPA matrix: rows keyed by [credit_score_bucket][ltv_bucket] -> bps.
+# Values aligned with Fannie LLPA Matrix Table 1 (purchase / rate-term refi,
+# primary residence, 1-unit). Numeric scalars are quoted strings — Decimal(str)
+# at consumption per Pitfall 1.
+base_llpa_bps:
+  "740-759-or-better":
+    "0-60": "0"
+    "60.01-70": "0"
+    "70.01-75": "0"
+    "75.01-80": "0"
+    "80.01-85": "25"
+    "85.01-90": "25"
+    "90.01-95": "25"
+    "95.01-97": "75"
+  "720-739":
+    "0-60": "0"
+    "60.01-70": "25"
+    "70.01-75": "25"
+    "75.01-80": "50"
+    "80.01-85": "50"
+    "85.01-90": "50"
+    "90.01-95": "50"
+    "95.01-97": "75"
+  "700-719":
+    "0-60": "0"
+    "60.01-70": "50"
+    "70.01-75": "100"
+    "75.01-80": "125"
+    "80.01-85": "125"
+    "85.01-90": "125"
+    "90.01-95": "125"
+    "95.01-97": "125"
+  "680-699":
+    "0-60": "0"
+    "60.01-70": "50"
+    "70.01-75": "125"
+    "75.01-80": "175"
+    "80.01-85": "275"
+    "85.01-90": "275"
+    "90.01-95": "275"
+    "95.01-97": "275"
+  "660-679":
+    "0-60": "0"
+    "60.01-70": "100"
+    "70.01-75": "250"
+    "75.01-80": "275"
+    "80.01-85": "300"
+    "85.01-90": "300"
+    "90.01-95": "300"
+    "95.01-97": "275"
+  "640-659":
+    "0-60": "50"
+    "60.01-70": "150"
+    "70.01-75": "275"
+    "75.01-80": "300"
+    "80.01-85": "325"
+    "85.01-90": "325"
+    "90.01-95": "325"
+    "95.01-97": "300"
+  "620-639":
+    "0-60": "50"
+    "60.01-70": "150"
+    "70.01-75": "300"
+    "75.01-80": "300"
+    "80.01-85": "325"
+    "85.01-90": "325"
+    "90.01-95": "325"
+    "95.01-97": "300"
+  "below-620":
+    "0-60": "300"
+    "60.01-70": "300"
+    "70.01-75": "300"
+    "75.01-80": "325"
+    "80.01-85": "325"
+    "85.01-90": "325"
+    "90.01-95": "325"
+    "95.01-97": "325"
+
+# Loan-purpose add-ons (additive bps applied on top of base_llpa_bps).
+# Cash-out refi attracts a meaningful add-on (purchase / rate-term refi = 0).
+loan_purpose_addons:
+  purchase:
+    "0-60": "0"
+    "60.01-70": "0"
+    "70.01-75": "0"
+    "75.01-80": "0"
+    "80.01-85": "0"
+    "85.01-90": "0"
+    "90.01-95": "0"
+    "95.01-97": "0"
+  rate_term_refi:
+    "0-60": "0"
+    "60.01-70": "0"
+    "70.01-75": "0"
+    "75.01-80": "0"
+    "80.01-85": "0"
+    "85.01-90": "0"
+    "90.01-95": "0"
+    "95.01-97": "0"
+  cash_out_refi:
+    "0-60": "125"
+    "60.01-70": "125"
+    "70.01-75": "200"
+    "75.01-80": "275"
+    "80.01-85": "300"
+    "85.01-90": "300"
+    "90.01-95": "300"
+    "95.01-97": "300"
+
+# Occupancy add-ons.
+occupancy_addons:
+  primary: "0"
+  second_home: "162.5"
+  investment: "200"
+
+# Unit-count add-ons (1-unit = 0; 2-4 unit progressively higher).
+unit_count_addons:
+  "1": "0"
+  "2": "100"
+  "3": "100"
+  "4": "100"

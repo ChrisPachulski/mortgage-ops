@@ -1,0 +1,13 @@
+{
+  "citation": "Fannie LLPA Matrix §B5-1 (Pitfall 6 boundary: 739 stays in 720-739 bucket; NOT 740-759)",
+  "source_url": "https://singlefamily.fanniemae.com/media/9391/display",
+  "comment": "Hand-calc: credit_score=739 -> '720-739' bucket (UPPER boundary inclusive); LTV=80 -> '75.01-80'. Base 50 + 0 + 0 + 0 = 50 bps.",
+  "credit_score": 739,
+  "ltv_pct": "80.00",
+  "loan_purpose": "purchase",
+  "occupancy": "primary",
+  "unit_count": 1,
+  "expected_credit_score_bucket": "720-739",
+  "expected_ltv_bucket": "75.01-80",
+  "expected_llpa_bps": "50"
+}

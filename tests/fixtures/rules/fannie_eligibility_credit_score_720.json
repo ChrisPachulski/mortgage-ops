@@ -1,0 +1,13 @@
+{
+  "citation": "Fannie LLPA Matrix §B5-1 (Pitfall 6 LOAD-BEARING boundary: 720 -> 720-739 bucket, NOT 700-719)",
+  "source_url": "https://singlefamily.fanniemae.com/media/9391/display",
+  "comment": "Hand-calc: credit_score=720 -> '720-739' bucket (LOWER boundary inclusive); LTV=80 -> '75.01-80'. Base 50 bps (better tier than 700-719's 125 bps) + 0 + 0 + 0 = 50 bps. This is THE Pitfall 6 test: if executor accidentally puts 720 in 700-719, customer is OVERCHARGED 75 bps.",
+  "credit_score": 720,
+  "ltv_pct": "80.00",
+  "loan_purpose": "purchase",
+  "occupancy": "primary",
+  "unit_count": 1,
+  "expected_credit_score_bucket": "720-739",
+  "expected_ltv_bucket": "75.01-80",
+  "expected_llpa_bps": "50"
+}
