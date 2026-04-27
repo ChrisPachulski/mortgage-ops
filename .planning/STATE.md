@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: Phase 2 plan 06 complete (Wave 3 plan 02-06 closed — RUL-09 ATR/QM + RUL-10 Reg Z APR-tolerance landed; 22/22 phase-2 requirements done; only 02-07 audit gate remains)
-last_updated: "2026-04-27T04:24:13.000Z"
-last_activity: 2026-04-27 -- Phase 2 plan 06 complete (RUL-09 atr_qm + RUL-10 reg_z landed; CFPB Q4 2025 publication pinned with 2026-indexed loan-amount tiers; statutory-constants-in-code idiom reused for Reg-Z tolerances; 210/210 tests green)
+stopped_at: Phase 2 COMPLETE (Wave 4 plan 02-07 audit gate ratified; 11 predicates + 10 reference YAMLs + mutation harness proves meta-tests have teeth; 224/224 tests green; Phase 4 affordability may now consume lib.rules.*)
+last_updated: "2026-04-27T04:37:15.000Z"
+last_activity: 2026-04-27 -- Phase 2 plan 07 complete (citation-coverage mutation harness + YAML count audit pinned at 10 + cross-predicate smoke pinned at 11; 14 new audit tests; full-stack gate green; ~4 min wall time; Phase 2 closes)
 progress:
   total_phases: 12
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 15
-  completed_plans: 12
-  percent: 80
+  completed_plans: 13
+  percent: 87
 ---
 
 # Project State
@@ -25,12 +25,12 @@ See: .planning/PROJECT.md (updated 2026-04-26)
 
 ## Current Position
 
-Phase: 2 of 12 in progress (Regulatory Reference Data + Rules Predicates)
-Plan: 6 of 7 in Phase 2 complete
-Status: Wave 3 plan 02-06 closed — RUL-09 ATR/QM + RUL-10 Reg Z APR-tolerance wired; all 22/22 phase-2 requirements landed; only 02-07 citation-coverage audit gate remains
-Last activity: 2026-04-27 -- Phase 2 plan 06 complete (atr_qm + reg_z; 210/210 tests pass)
+Phase: 2 of 12 COMPLETE (Regulatory Reference Data + Rules Predicates)
+Plan: 7 of 7 in Phase 2 complete
+Status: Wave 4 plan 02-07 audit gate ratified — mutation harness proves citation-coverage + schema meta-tests catch all six target regression classes; YAML count pinned at 10; predicate count pinned at 11; full-stack gate green; Phase 4 affordability may now begin
+Last activity: 2026-04-27 -- Phase 2 plan 07 complete (audit gate; 14 new tests; 224/224 tests pass; Phase 2 closes)
 
-Progress: [█░░░░░░░░░] 8% (1/12 phases)
+Progress: [██░░░░░░░░] 17% (2/12 phases)
 
 ## Performance Metrics
 
@@ -44,13 +44,14 @@ Progress: [█░░░░░░░░░] 8% (1/12 phases)
 - Phase 2 plan 04 wall time: ~5 min (sequential, single executor — pattern fully internalized; no stub resolution; both new predicates pure new artifacts)
 - Phase 2 plan 05 wall time: ~10 min (sequential, single executor — largest plan in Phase 2 by file count: 3 predicates + 2 reference YAMLs + 12 fixtures + 3 test files = 20 new files; Pitfall 6 boundary tests + twin-predicate-with-shared-bucket-structure)
 - Phase 2 plan 06 wall time: ~5 min (sequential, single executor — atr_qm + reg_z; CFPB Q4 2025 publication pin + Reg-Z statutory constants reuse the 02-05 idiom; 19 new files: 2 predicates + 1 YAML + 2 test files + 15 fixtures + 2 deviations both Rule-3 ruff I001)
+- Phase 2 plan 07 wall time: ~4 min (sequential, single executor — audit-only gate; 3 new test files [mutation harness + YAML count audit + cross-predicate smoke] + 0 production code changes; 14 new tests; 1 Rule-1 deviation [removed inapplicable ruff RUF100 noqa: BLE001 from plan spec])
 
 **By Phase:**
 
 | Phase | Plans | Status |
 |-------|-------|--------|
 | 1     | 6/6   | Complete (PASS-WITH-CAVEATS) |
-| 2     | 6/7   | In progress — 02-01..02-06 green (all 11 predicates shipped: FHA + VA + USDA + IRS Pub 936 + HPA + Fannie LLPA + Freddie eligibility + ATR/QM + Reg Z); only 02-07 citation-coverage audit gate remains |
+| 2     | 7/7   | Complete — 02-01..02-07 green; 11 predicates + 10 reference YAMLs + citation-coverage + schema meta-tests + mutation-harness audit ratification; 224/224 tests pass; ready for Phase 4 affordability consumers |
 
 **Plan-level metrics:**
 
@@ -62,11 +63,12 @@ Progress: [█░░░░░░░░░] 8% (1/12 phases)
 | 02-04 | 5 min | 2 | 14 created + 0 modified | +24 net (+8 USDA + +10 IRS Pub 936 + +2 new schema params + +4 new citation-cov params; no test removal since no cross-plan stub resolution this plan) | green |
 | 02-05 | 10 min | 3 | 20 created + 0 modified | +42 net (+9 conventional_pmi + +18 fannie_eligibility + +7 freddie_eligibility + +2 new schema params + +6 new citation-cov params; no cross-plan stub resolution) | green |
 | 02-06 | 5 min | 2 | 19 created + 0 modified | +29 net (+14 atr_qm + +10 reg_z + +1 new schema param [atr-qm-thresholds] + +4 new citation-cov params [atr_qm × 2, reg_z × 2]; no cross-plan stub resolution) | green |
+| 02-07 | 4 min | 4 + 1 checkpoint (auto-approved) | 3 created + 0 modified | +14 net (7 mutation harness + 2 YAML count audit + 5 cross-predicate smoke; zero production code touched; audit-only gate) | green |
 
 **Recent Trend:**
 
-- Last 12 plans: 01-01..01-06 + 02-01..02-06 (all green; 210/210 tests pass)
-- Trend: clean — no node repairs, no rework cycles. 02-06 returned to the 5-min floor (matching 02-04 and the new per-predicate velocity baseline of ~2.5 min/predicate). All 11 RUL-* predicates now shipped — atr_qm closes out the price-based QM test (replacing the legacy 43% DTI cap; CFPB Q4 2025 publication pinned for 2026-indexed loan-amount tiers $110,260/$66,156); reg_z closes out the APR tolerance gate that Phase 7 will consume. Two Rule-3 deviations (ruff I001 import-block) auto-fixed without scope expansion. Phase 2 is one plan from done.
+- Last 13 plans: 01-01..01-06 + 02-01..02-07 (all green; 224/224 tests pass)
+- Trend: clean — no node repairs, no rework cycles. 02-07 set a NEW velocity floor at 4 min — fastest plan to date; audit-only plan (3 new test files + 0 production code changes) avoided the per-predicate research cost. Phase 2 is COMPLETE: 11 predicates ratified by mutation harness, YAML count pinned at 10, cross-predicate smoke green. One Rule-1 deviation (removed inapplicable ruff RUF100 noqa: BLE001 from plan spec — ruff config doesn't enable BLE rules). Phase 4 affordability is unblocked.
 
 *Updated after each plan completion*
 
@@ -122,6 +124,11 @@ Recent decisions affecting current work:
 - 02-06: Caller-classified booleans for regulatory grace periods / transaction-type classification — predicate does NOT classify; signature accepts caller-provided booleans (RUL-11 binding-contract flags from 02-04; RUL-10 is_irregular_transaction). Reusable for any future predicate with regulatory-classification ambiguity.
 - 02-06: `abs(disclosed - actual) <= tolerance` with Decimal-only operands as the canonical direction-agnostic-tolerance idiom — pinned by exactness assertion + symmetry-under-swap test + same-diff-different-branch test. Reusable for any future predicate comparing two Decimal values against a Decimal tolerance.
 - 02-06: LienPosition Literal alias scoped to atr_qm.py (NOT promoted to types.py) — RUL-10 reg_z is APR-tolerance-only and does NOT take a lien_position parameter (Reg-Z tolerance is lien-agnostic per §1026.22). No second consumer; promotion deferred. Mirrors FilingStatus + LoanPurpose/Occupancy scoping conventions.
+- 02-07: Mutation-test isolation via subprocess + shutil.copytree clone (NEVER monkeypatch the meta-test in-process). Reusable across the project for any future meta-test mutation harness — Phase 7 APR Newton-Raphson tolerance, Phase 12 eval harness regression detection.
+- 02-07: Anchored vs substring line-strip mutation. YAML key mutations (`source:` / `effective:` at line start) MUST use anchored regex matching (`^\s*key:`) to avoid stripping `source_url:`-style false positives. Predicate docstring mutations use substring match because Citation:/Source URL:/Effective: may appear multiple times and stripping all is desired.
+- 02-07: Paired count + stems assertions for filesystem audits. Two test functions (count match + stems set match) catch the rename-pair edge case where two YAMLs are renamed simultaneously and the count happens to balance. Reusable for Phase 9 DuckDB schema files, Phase 12 eval harness fixtures.
+- 02-07: Import-only smoke for the 9 YAML-backed predicates; happy-path call only for the 2 pure-Python predicates (reg_z + conventional_pmi). Calling all 11 with regulator-pinned inputs would duplicate per-predicate test files. Reusable cross-module smoke convention.
+- 02-07: Plan-author noqa speculation can fire ruff RUF100. The plan spec at line 775 included `# noqa: BLE001` but pyproject ruff config does NOT enable BLE rules. Future plan-authors should grep `pyproject.toml [tool.ruff.lint]` before pre-emptively writing noqa directives.
 
 ### Pending Todos
 
@@ -147,6 +154,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-04-27T04:24:13.000Z
-Stopped at: Phase 2 plan 06 complete; Wave 3 plan 02-06 closed; only 02-07 citation-coverage audit gate remains in Phase 2
-Resume file: .planning/phases/02-regulatory-reference-data-rules-predicates/02-06-SUMMARY.md
+Last session: 2026-04-27T04:37:15.000Z
+Stopped at: Phase 2 COMPLETE (Wave 4 plan 02-07 audit gate ratified; 11 predicates + 10 reference YAMLs; mutation harness proves meta-tests have teeth; 224/224 tests green; Phase 4 affordability is unblocked)
+Resume file: .planning/phases/02-regulatory-reference-data-rules-predicates/02-07-SUMMARY.md
