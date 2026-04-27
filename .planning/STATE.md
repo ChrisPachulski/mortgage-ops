@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: Phase 2 COMPLETE (Wave 4 plan 02-07 audit gate ratified; 11 predicates + 10 reference YAMLs + mutation harness proves meta-tests have teeth; 224/224 tests green; Phase 4 affordability may now consume lib.rules.*)
-last_updated: "2026-04-27T04:37:15.000Z"
-last_activity: 2026-04-27 -- Phase 2 plan 07 complete (citation-coverage mutation harness + YAML count audit pinned at 10 + cross-predicate smoke pinned at 11; 14 new audit tests; full-stack gate green; ~4 min wall time; Phase 2 closes)
+stopped_at: Phase 2 paused after code review — 5 BLOCKER findings flagged; running /gsd-code-review-fix before verification
+last_updated: "2026-04-26T20:50:00.000Z"
+last_activity: 2026-04-26 -- Phase 2 all 7 plans executed; code review surfaced 5 blockers + 9 warnings
 progress:
   total_phases: 12
-  completed_phases: 2
-  total_plans: 15
+  completed_phases: 1
+  total_plans: 13
   completed_plans: 13
-  percent: 87
+  percent: 50
 ---
 
 # Project State
@@ -21,16 +21,24 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-26)
 
 **Core value:** Math correctness first — every dollar figure traces to a tested, deterministic Python function; the LLM is a router and narrator that never owns numbers.
-**Current focus:** Phase 2 in progress — Regulatory Reference Data + Rules Predicates
+**Current focus:** Phase 2 — execution complete, code review flagged 5 blockers; running fix-pass before verification
 
 ## Current Position
 
-Phase: 2 of 12 COMPLETE (Regulatory Reference Data + Rules Predicates)
-Plan: 7 of 7 in Phase 2 complete
-Status: Wave 4 plan 02-07 audit gate ratified — mutation harness proves citation-coverage + schema meta-tests catch all six target regression classes; YAML count pinned at 10; predicate count pinned at 11; full-stack gate green; Phase 4 affordability may now begin
-Last activity: 2026-04-27 -- Phase 2 plan 07 complete (audit gate; 14 new tests; 224/224 tests pass; Phase 2 closes)
+Phase: 2 of 12 — execution complete, awaiting fix-pass + verification (NOT yet marked complete)
+Plan: 7 of 7 in Phase 2 executed (224/224 tests pass)
+Status: Code review found 5 BLOCKER findings (FHA classification, VA cash-out fee, FHA MIP coverage, multi-unit limits) + 9 warnings. User chose to pause and run /gsd-code-review-fix 2 before verification.
+Last activity: 2026-04-26 -- Phase 2 execution complete; paused at code review gate
 
-Progress: [██░░░░░░░░] 17% (2/12 phases)
+Progress: [█░░░░░░░░░] 8% (1/12 phases complete; phase 2 pending verification)
+
+### Resume instructions
+
+1. Run `/gsd-code-review-fix 2` to auto-fix the blockers in `.planning/phases/02-regulatory-reference-data-rules-predicates/02-REVIEW.md`
+2. Re-run `/gsd-execute-phase 2` — it will detect all plans have SUMMARY.md and skip execution, then proceed directly to regression gate + verification
+3. After verification passes, ROADMAP/STATE will be auto-updated and phase 2 marked complete
+
+The 5 blockers are in regulatory-compliance code (FHA, VA, MIP, multi-unit county data) — addressing them is non-optional given the project's "math correctness first" core value.
 
 ## Performance Metrics
 
