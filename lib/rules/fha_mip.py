@@ -104,11 +104,14 @@ def compute(
     )
 
     # Termination rule (HUD ML 2013-04 — UNchanged by 2023-05)
+    # WR-02 (02-REVIEW.md): YAML now quotes "132" as a string (project Pitfall 1
+    # — all numeric scalars quoted). The above-90 sentinel "life_of_loan" is
+    # a string already; below-90 is an integer count of months coerced via int().
     terminates: int | Literal["life_of_loan"]
     if ltv > Decimal("0.90"):
         terminates = ref["termination"]["ltv_above_90_pct"]
     else:
-        terminates = ref["termination"]["ltv_at_or_below_90_pct"]
+        terminates = int(ref["termination"]["ltv_at_or_below_90_pct"])
 
     return MIPResult(
         ufmip=ufmip,
@@ -132,7 +135,11 @@ def _lookup_annual_mip(
     inclusive when it is the lowest bucket (0.00), exclusive otherwise.
     """
     for row in table:
-        if not (row["term_months_min"] <= term_months <= row["term_months_max"]):
+        # WR-02 (02-REVIEW.md): term_months_{min,max} are quoted strings in the
+        # YAML (project Pitfall 1: numerics-as-strings). Coerce to int for the
+        # comparison; loan_amount_max is similarly Decimal-from-string further
+        # down.
+        if not (int(row["term_months_min"]) <= term_months <= int(row["term_months_max"])):
             continue
         ltv_min = Decimal(row["ltv_min"])
         ltv_max = Decimal(row["ltv_max"])

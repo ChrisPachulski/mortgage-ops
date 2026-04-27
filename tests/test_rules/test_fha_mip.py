@@ -12,6 +12,9 @@ Coverage:
   - Pre-2023-03-20 endorsement: NotImplementedError (Pitfall 5 protection)
   - UFMIP returned with exact two-decimal-place quantization (money discipline)
   - LTV > 1.00 raises ValueError (loud failure on invalid input)
+  - WR-02 (02-REVIEW.md): every numeric scalar in fha-mip-rates.yml is a
+    quoted string per project Pitfall 1 — guards against future YAML edits
+    that drop quotes and silently re-introduce float-downcast risk.
 """
 
 from __future__ import annotations
@@ -23,6 +26,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 from lib.models import Loan
 from lib.rules.fha_mip import MIPResult, compute
 
@@ -194,6 +198,47 @@ def test_fha_mip_high_balance_at_ltv_exactly_078() -> None:
         endorsement_date=date(2024, 6, 15),
     )
     assert result.annual_mip_pct == Decimal("0.0070")
+
+
+def test_fha_mip_yaml_numerics_are_quoted_strings() -> None:
+    # Regression for WR-02 (02-REVIEW.md): every numeric scalar in
+    # data/reference/fha-mip-rates.yml must be a quoted string per project
+    # Pitfall 1 (Decimal-from-string-only, never PyYAML float). Pre-fix the
+    # term_months_min/max and the 132-month termination period were unquoted
+    # ints — no precision-loss bug today (PyYAML emits int) but it broke the
+    # all-numerics-quoted invariant and a future copy-paste maintainer might
+    # not notice the inconsistency.
+    yaml_path = (
+        Path(__file__).resolve().parent.parent.parent / "data" / "reference" / "fha-mip-rates.yml"
+    )
+    raw = yaml.safe_load(yaml_path.read_text())
+
+    # ufmip_rate
+    assert isinstance(raw["ufmip_rate"], str), "ufmip_rate must be a quoted string"
+
+    # Every scalar numeric inside annual_mip_table rows
+    numeric_keys = {
+        "term_months_min",
+        "term_months_max",
+        "ltv_min",
+        "ltv_max",
+        "loan_amount_max",
+        "annual_mip_rate",
+    }
+    for row in raw["annual_mip_table"]:
+        for key in numeric_keys:
+            value = row[key]
+            assert isinstance(value, str), (
+                f"annual_mip_table[{key!r}]={value!r} must be a quoted string "
+                f"(WR-02 Pitfall 1); got {type(value).__name__}"
+            )
+
+    # Termination block: ltv_above_90_pct is the "life_of_loan" sentinel string;
+    # ltv_at_or_below_90_pct is the quoted month count.
+    assert isinstance(raw["termination"]["ltv_above_90_pct"], str)
+    assert isinstance(raw["termination"]["ltv_at_or_below_90_pct"], str), (
+        "termination.ltv_at_or_below_90_pct must be a quoted string per WR-02"
+    )
 
 
 def test_fha_mip_ltv_above_one_raises() -> None:
