@@ -162,3 +162,43 @@ def test_high_risk_without_months_elapsed_raises_loud() -> None:
             is_high_risk=True,
             months_elapsed=None,
         )
+
+
+def test_high_risk_midpoint_uses_floor_for_odd_term() -> None:
+    # Regression for WR-08 (02-REVIEW.md): HPA §4902(g) is silent on rounding
+    # the midpoint for odd-month terms; the predicate uses floor (term_months
+    # // 2) per industry convention. Pin this convention with a 359-month term.
+    # Hand: term=359 -> midpoint = 359 // 2 = 179 (NOT 180). months_elapsed=179
+    # therefore satisfies >= midpoint and the carve-out fires regardless of LTV.
+    loan = Loan(
+        principal=Decimal("400000.00"),
+        annual_rate=Decimal("0.085000"),
+        term_months=359,
+    )
+    result = status(
+        loan=loan,
+        scheduled_balance=Decimal("380000"),
+        original_property_value=Decimal("400000"),
+        is_high_risk=True,
+        months_elapsed=179,
+    )
+    assert result == "high_risk_midpoint_terminated"
+
+
+def test_high_risk_midpoint_floor_one_month_below_does_not_fire() -> None:
+    # Regression for WR-08 (02-REVIEW.md): pin the lower-bound boundary too —
+    # term=359, months_elapsed=178 < 179 (=midpoint). §4902(g) does NOT fire;
+    # standard rules apply. LTV=380000/400000=0.95 > 0.80 -> in_force.
+    loan = Loan(
+        principal=Decimal("400000.00"),
+        annual_rate=Decimal("0.085000"),
+        term_months=359,
+    )
+    result = status(
+        loan=loan,
+        scheduled_balance=Decimal("380000"),
+        original_property_value=Decimal("400000"),
+        is_high_risk=True,
+        months_elapsed=178,
+    )
+    assert result == "in_force"

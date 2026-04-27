@@ -101,6 +101,16 @@ def status(
 
     # §4902(g) high-risk midpoint carve-out — checked BEFORE the LTV thresholds
     # because the carve-out terminates regardless of LTV.
+    #
+    # WR-08 midpoint floor semantics (02-REVIEW.md): HPA §4902(g) says
+    # "midpoint of the amortization period" but is silent on rounding for
+    # odd-month terms. We use floor (term_months // 2) per industry convention:
+    # for the canonical 360-month term this is exactly 180; for an odd-month
+    # term such as 359 (rare; can occur from short-month carryover), floor
+    # gives 179 — meaning the borrower hits the carve-out one month earlier
+    # than a strict 359/2 = 179.5 reading. This is the borrower-favorable
+    # rounding choice and matches common servicer practice. Pinned by
+    # test_high_risk_midpoint_uses_floor_for_odd_term in test_conventional_pmi.py.
     if is_high_risk:
         midpoint = loan.term_months // 2
         # months_elapsed has been guarded above; mypy knows it is int here.
