@@ -1,0 +1,10 @@
+{
+  "citation": "12 USC §1717 + FHFA county XLSX 2026",
+  "source_url": "https://www.fhfa.gov/news/news-release/fhfa-announces-conforming-loan-limit-values-for-2026",
+  "comment": "Hand-calc: $1,000,000 VA loan in San Francisco (06/075). $832,750 < $1M <= $1,249,125 SF ceiling → va_high_balance.",
+  "loan_amount": "1000000.00",
+  "county": {"state_fips": "06", "county_fips": "075", "name": "San Francisco CA"},
+  "program": "va",
+  "unit_count": 1,
+  "expected_loan_type": "va_high_balance"
+}

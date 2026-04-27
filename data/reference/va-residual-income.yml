@@ -1,0 +1,76 @@
+# data/reference/va-residual-income.yml
+source: "https://benefits.va.gov/WARMS/docs/admin26/m26-07/"
+effective: 2023-04-07
+notes: |
+  VA Lender Handbook M26-7 — Residual Income Tables (Topic 7). Per-region
+  minimum residual income required for loans of two amount bands (< $80,000 and
+  >= $80,000). Add per_extra_member_increment ($80) per family member above 5.
+
+  IMPORTANT: This effective date (2023-04-07) is older than the 12-month staleness
+  threshold; StaleReferenceWarning will fire on import. This is CORRECT behavior —
+  VA has not republished. Re-verify annually that no new VA Circular has changed
+  these residual-income values.
+
+  Cell values verified via VA M26-7 Topic 7 (loans >= $80k tier shown; below-80k
+  tier values are roughly 10-12% lower per published M26-7 table). Per Phase 2
+  D-PHASE2 discipline, all dollar values are quoted strings (Decimal-from-string).
+
+  Stable binding-rule format: predicates that fail residual-income evaluation must
+  emit a binding_rule_citation in the format "VA-RESIDUAL-{REGION_UPPER}-FAMILY-{N}"
+  for AFFD-07 (Phase 4) — string-format drift breaks Phase 4's "blocked_by" sentinel.
+
+regions: [northeast, midwest, south, west]
+loan_band_threshold: "80000"
+per_extra_member_increment: "80"
+
+table_above_80k:
+  northeast:
+    "1": "450"
+    "2": "755"
+    "3": "909"
+    "4": "1025"
+    "5": "1062"
+  midwest:
+    "1": "441"
+    "2": "738"
+    "3": "889"
+    "4": "1003"
+    "5": "1039"
+  south:
+    "1": "441"
+    "2": "738"
+    "3": "889"
+    "4": "1003"
+    "5": "1039"
+  west:
+    "1": "491"
+    "2": "823"
+    "3": "990"
+    "4": "1117"
+    "5": "1158"
+
+table_below_80k:
+  northeast:
+    "1": "390"
+    "2": "654"
+    "3": "788"
+    "4": "888"
+    "5": "921"
+  midwest:
+    "1": "382"
+    "2": "641"
+    "3": "772"
+    "4": "868"
+    "5": "902"
+  south:
+    "1": "382"
+    "2": "641"
+    "3": "772"
+    "4": "868"
+    "5": "902"
+  west:
+    "1": "425"
+    "2": "713"
+    "3": "859"
+    "4": "967"
+    "5": "1004"

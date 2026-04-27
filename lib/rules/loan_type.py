@@ -33,7 +33,9 @@ Edge cases:
   - program=fha + loan_amount > floor + county=None → MissingCountyDataError
   - program=fha + loan_amount > county ceiling → NotImplementedError (jumbo FHA
     not in v1)
-  - program=va before REF-04 lands → NotImplementedError pointing to plan 02-03
+  - program=va + loan_amount > baseline + county=None → MissingCountyDataError
+  - program=va + loan_amount > county ceiling → NotImplementedError (partial-
+    entitlement VA, which requires a gap-down-payment, is not a v1 product)
   - unit_count > 1 → NotImplementedError (multi-family deferred to v2)
 """
 
@@ -136,12 +138,32 @@ def _classify_fha(loan_amount: Decimal, county: County | None, unit_count: int) 
 
 
 def _classify_va(loan_amount: Decimal, county: County | None, unit_count: int) -> LoanType:
-    """VA classification reads REF-04 wiring.
+    """VA classification — full-entitlement vets use FHFA conforming limits since
+    the 2020 Blue Water Navy Vietnam Veterans Act removed VA-specific loan limits.
 
-    VA uses the FHFA conforming limits for full-entitlement vets (since 2020).
-    Implementation lands when plan 02-03 ships VA infrastructure.
+    Loans <= conforming baseline → va_standard. Loans above baseline but at or
+    below county ceiling → va_high_balance. Loans above county ceiling → out of
+    VA full-entitlement (raise NotImplementedError; partial-entitlement is not a
+    v1 product).
     """
-    raise NotImplementedError("VA classify() body shipped in plan 02-03 (RUL-06/RUL-07 wiring)")
+    ref = load_reference("conforming-limits-2026")
+    unit_key = f"{_UNIT_WORD[unit_count]}_unit"
+    baseline = Decimal(ref["limits"]["baseline"][unit_key])
+    if loan_amount <= baseline:
+        return "va_standard"
+    if county is None:
+        raise MissingCountyDataError(
+            f"VA loan_amount {loan_amount} exceeds baseline {baseline}; "
+            f"county required to determine va_high_balance vs out-of-program"
+        )
+    county_limit = _county_limit(ref, county, unit_key, baseline)
+    if loan_amount <= county_limit:
+        return "va_high_balance"
+    raise NotImplementedError(
+        f"VA loan_amount {loan_amount} exceeds county ceiling {county_limit} "
+        f"for {county.name}; partial-entitlement VA loans (which require down "
+        f"payment to cover the gap) are not a v1 product"
+    )
 
 
 def _county_limit(ref: dict[str, Any], county: County, unit_key: str, baseline: Decimal) -> Decimal:

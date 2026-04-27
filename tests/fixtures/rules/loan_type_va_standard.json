@@ -1,0 +1,10 @@
+{
+  "citation": "12 USC §1717 + Blue Water Navy Vietnam Veterans Act of 2019 (eff. 2020-01-01)",
+  "source_url": "https://www.fhfa.gov/news/news-release/fhfa-announces-conforming-loan-limit-values-for-2026",
+  "comment": "Hand-calc: $400,000 VA loan in Autauga AL (not high-cost). $400k <= $832,750 baseline → va_standard. VA full-entitlement uses FHFA conforming limits since 2020 (Blue Water Navy Vietnam Veterans Act removed VA-specific loan limits).",
+  "loan_amount": "400000.00",
+  "county": {"state_fips": "01", "county_fips": "001", "name": "Autauga AL"},
+  "program": "va",
+  "unit_count": 1,
+  "expected_loan_type": "va_standard"
+}

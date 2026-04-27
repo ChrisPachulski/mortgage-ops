@@ -1,0 +1,12 @@
+{
+  "citation": "VA M26-7 Topic 7 — Midwest region, family of 6 (5 base + 1 extra @ $80)",
+  "source_url": "https://benefits.va.gov/WARMS/docs/admin26/m26-07/",
+  "comment": "Hand-calc: Midwest family-6, loan $200k (above 80k). Base = table_above_80k['midwest']['5'] = $1,039. Extra member: (6-5) * $80 = $80. minimum_required = $1,039 + $80 = $1,119. Actual $1,500 >= $1,119 → pass. binding_rule_citation = 'VA-RESIDUAL-MIDWEST-FAMILY-6'.",
+  "region": "midwest",
+  "family_size": 6,
+  "loan_amount": "200000.00",
+  "actual_residual_income": "1500.00",
+  "expected_status": "pass",
+  "expected_minimum_required": "1119.00",
+  "expected_binding_rule_citation": "VA-RESIDUAL-MIDWEST-FAMILY-6"
+}

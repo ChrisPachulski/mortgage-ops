@@ -1,0 +1,12 @@
+{
+  "citation": "VA M26-7 Topic 7 — Northeast region, family of 2, loan < $80k",
+  "source_url": "https://benefits.va.gov/WARMS/docs/admin26/m26-07/",
+  "comment": "Hand-calc: Northeast family-2, loan $75,000 (BELOW 80k threshold) → uses table_below_80k['northeast']['2'] = $654. Actual $700 >= $654 → pass. binding_rule_citation = 'VA-RESIDUAL-NORTHEAST-FAMILY-2'. Boundary test: must NOT use table_above_80k.",
+  "region": "northeast",
+  "family_size": 2,
+  "loan_amount": "75000.00",
+  "actual_residual_income": "700.00",
+  "expected_status": "pass",
+  "expected_minimum_required": "654.00",
+  "expected_binding_rule_citation": "VA-RESIDUAL-NORTHEAST-FAMILY-2"
+}

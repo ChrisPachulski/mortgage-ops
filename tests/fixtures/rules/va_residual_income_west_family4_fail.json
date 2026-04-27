@@ -1,0 +1,12 @@
+{
+  "citation": "VA M26-7 Topic 7 — West region, family of 4, loan >= $80k",
+  "source_url": "https://benefits.va.gov/WARMS/docs/admin26/m26-07/",
+  "comment": "Hand-calc: West family-4, loan $400k → minimum_required $1,117. Actual $500 < $1,117 → fail. binding_rule_citation = 'VA-RESIDUAL-WEST-FAMILY-4' (must match pass-case format exactly so AFFD-07 sentinel is stable across pass/fail).",
+  "region": "west",
+  "family_size": 4,
+  "loan_amount": "400000.00",
+  "actual_residual_income": "500.00",
+  "expected_status": "fail",
+  "expected_minimum_required": "1117.00",
+  "expected_binding_rule_citation": "VA-RESIDUAL-WEST-FAMILY-4"
+}
