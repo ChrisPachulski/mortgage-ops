@@ -1,0 +1,37 @@
+# data/reference/fha-mip-rates.yml
+source: "https://www.hud.gov/sites/dfiles/OCHCO/documents/2023-05hsgml.pdf"
+effective: 2023-03-20
+notes: |
+  HUD Mortgagee Letter 2023-05: Annual MIP rates reduced 30bps for FHA forward
+  mortgages endorsed on or after 2023-03-20. Termination rules unchanged from
+  HUD ML 2013-04: loans with origination LTV > 90% pay MIP for life of loan;
+  loans with origination LTV ≤ 90% terminate at 132 months (= 11 years × 12).
+  UFMIP unchanged at 1.75% across all forward mortgages.
+
+  IMPORTANT: This effective date (2023-03-20) is older than the 12-month
+  staleness threshold; StaleReferenceWarning will fire on import. This is
+  CORRECT behavior — HUD has not republished. Re-verify annually that no new
+  Mortgagee Letter has changed these rates.
+ufmip_rate: "0.0175"
+annual_mip_table:
+  # Standard tier (loan_amount ≤ 726200), term > 15yr (180 < term ≤ 360 months)
+  - {term_months_min: 181, term_months_max: 360, ltv_min: "0.95", ltv_max: "1.00", loan_amount_max: "726200", annual_mip_rate: "0.0055"}
+  - {term_months_min: 181, term_months_max: 360, ltv_min: "0.90", ltv_max: "0.95", loan_amount_max: "726200", annual_mip_rate: "0.0050"}
+  - {term_months_min: 181, term_months_max: 360, ltv_min: "0.00", ltv_max: "0.90", loan_amount_max: "726200", annual_mip_rate: "0.0050"}
+  # Standard tier, term ≤ 15yr (term_months ≤ 180)
+  - {term_months_min: 1, term_months_max: 180, ltv_min: "0.90", ltv_max: "1.00", loan_amount_max: "726200", annual_mip_rate: "0.0040"}
+  - {term_months_min: 1, term_months_max: 180, ltv_min: "0.78", ltv_max: "0.90", loan_amount_max: "726200", annual_mip_rate: "0.0015"}
+  - {term_months_min: 1, term_months_max: 180, ltv_min: "0.00", ltv_max: "0.78", loan_amount_max: "726200", annual_mip_rate: "0.0015"}
+  # High-balance tier (loan_amount > 726200), term > 15yr — HUD ML 2023-05 Table B
+  - {term_months_min: 181, term_months_max: 360, ltv_min: "0.95", ltv_max: "1.00", loan_amount_max: "999999999", annual_mip_rate: "0.0075"}
+  - {term_months_min: 181, term_months_max: 360, ltv_min: "0.90", ltv_max: "0.95", loan_amount_max: "999999999", annual_mip_rate: "0.0070"}
+  - {term_months_min: 181, term_months_max: 360, ltv_min: "0.78", ltv_max: "0.90", loan_amount_max: "999999999", annual_mip_rate: "0.0070"}
+  # High-balance tier, term ≤ 15yr
+  - {term_months_min: 1, term_months_max: 180, ltv_min: "0.90", ltv_max: "1.00", loan_amount_max: "999999999", annual_mip_rate: "0.0040"}
+  - {term_months_min: 1, term_months_max: 180, ltv_min: "0.78", ltv_max: "0.90", loan_amount_max: "999999999", annual_mip_rate: "0.0040"}
+termination:
+  ltv_above_90_pct: "life_of_loan"
+  ltv_at_or_below_90_pct: 132   # 11 years × 12 months
+grandfathering:
+  pre_2023_endorsement_handling: "raise_NotImplementedError"
+  earliest_supported_endorsement_date: 2023-03-20

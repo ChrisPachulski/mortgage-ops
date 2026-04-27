@@ -1,0 +1,10 @@
+{
+  "citation": "NHA §203(b)(2) + HUD ML 2025-23",
+  "source_url": "https://www.hud.gov/sites/dfiles/hudclips/documents/2025-23hsgml.pdf",
+  "comment": "Hand-calc: $400,000 loan in Autauga AL (low-cost county, NOT in high_cost_counties subset → FHA limit IS floor=$541,287). $400k <= $541,287 → fha_standard.",
+  "loan_amount": "400000.00",
+  "county": {"state_fips": "01", "county_fips": "001", "name": "Autauga AL"},
+  "program": "fha",
+  "unit_count": 1,
+  "expected_loan_type": "fha_standard"
+}

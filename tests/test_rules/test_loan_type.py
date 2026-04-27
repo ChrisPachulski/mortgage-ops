@@ -13,7 +13,11 @@ Coverage:
   - low-cost-county Pitfall 7: sub-baseline loan in non-high-cost county is conforming
   - missing-county fail-loud (cfpb/jumbo-mortgage pattern) when loan > baseline
   - USDA flag-only branch (no amount-based classification)
-  - FHA / VA branches stubbed with NotImplementedError until 02-02 / 02-03 wire them
+  - FHA fha_standard: loan <= floor in low-cost county (REF-02 wired in plan 02-02)
+  - FHA fha_high_balance: loan > floor + listed high-cost county at <= ceiling
+  - FHA above-county-ceiling: NotImplementedError (jumbo FHA not in v1)
+  - FHA missing-county above floor: MissingCountyDataError (loud)
+  - VA branch stubbed with NotImplementedError until 02-03 wires it
   - unit_count > 1 stubbed with NotImplementedError (multi-family deferred)
 """
 
@@ -111,15 +115,49 @@ def test_usda_program_flag_only() -> None:
     assert classify(Decimal("100000.00"), county=None, program="usda") == "usda"
 
 
-def test_fha_program_raises_not_implemented_until_ref_02_lands() -> None:
-    # Plan 02-02 will replace this assertion with positive FHA tests once
-    # data/reference/fha-limits-2026.yml lands.
-    with pytest.raises(NotImplementedError, match="REF-02"):
+def test_fha_program_classifies_below_floor_as_fha_standard() -> None:
+    # Hand: $400,000 loan in Autauga AL (NOT in high_cost_counties; FHA limit IS
+    # the floor=$541,287). $400k <= $541,287 → fha_standard.
+    fx = _fx("loan_type_fha_standard.json")
+    county = _county_from_fx(fx["county"])
+    result = classify(
+        Decimal(fx["loan_amount"]),
+        county=county,
+        program=fx["program"],
+        unit_count=fx["unit_count"],
+    )
+    assert result == fx["expected_loan_type"] == "fha_standard"
+
+
+def test_fha_program_classifies_above_floor_as_fha_high_balance() -> None:
+    # Hand: $700,000 loan in San Francisco (FHA ceiling=$1,249,125).
+    # $541,287 < $700k <= $1,249,125 → fha_high_balance.
+    fx = _fx("loan_type_fha_high_balance.json")
+    county = _county_from_fx(fx["county"])
+    result = classify(
+        Decimal(fx["loan_amount"]),
+        county=county,
+        program=fx["program"],
+        unit_count=fx["unit_count"],
+    )
+    assert result == fx["expected_loan_type"] == "fha_high_balance"
+
+
+def test_fha_program_above_county_ceiling_raises() -> None:
+    # Hand: $1,500,000 loan in San Francisco (ceiling=$1,249,125). Above ceiling
+    # → not eligible for FHA. Loud error per fail-loud-on-edge-case discipline.
+    with pytest.raises(NotImplementedError, match="exceeds FHA county ceiling"):
         classify(
-            Decimal("400000.00"),
+            Decimal("1500000.00"),
             county=County(state_fips="06", county_fips="075", name="San Francisco CA"),
             program="fha",
         )
+
+
+def test_fha_program_above_floor_missing_county_raises() -> None:
+    # Hand: $700k > $541,287 floor; without county we cannot classify. Fail loud.
+    with pytest.raises(MissingCountyDataError, match="FHA loan_amount"):
+        classify(Decimal("700000.00"), county=None, program="fha")
 
 
 def test_va_program_raises_not_implemented_until_va_wiring_lands() -> None:

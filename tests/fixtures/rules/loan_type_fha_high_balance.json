@@ -1,0 +1,10 @@
+{
+  "citation": "NHA §203(b)(2) + HUD ML 2025-23",
+  "source_url": "https://www.hud.gov/sites/dfiles/hudclips/documents/2025-23hsgml.pdf",
+  "comment": "Hand-calc: $700,000 loan in San Francisco (06/075). FHA floor=$541,287, SF ceiling=$1,249,125. $541,287 < $700k <= $1,249,125 → fha_high_balance.",
+  "loan_amount": "700000.00",
+  "county": {"state_fips": "06", "county_fips": "075", "name": "San Francisco CA"},
+  "program": "fha",
+  "unit_count": 1,
+  "expected_loan_type": "fha_high_balance"
+}

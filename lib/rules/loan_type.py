@@ -30,8 +30,10 @@ Edge cases:
   - county=None + loan_amount <= baseline → conforming (no county lookup needed)
   - county=None + loan_amount > baseline → MissingCountyDataError (loud, never
     silent baseline fallback) — Pitfall 7 protection
-  - program=fha or program=va before REF-02/REF-04 land → NotImplementedError
-    referencing the plan that ships the missing reference YAML
+  - program=fha + loan_amount > floor + county=None → MissingCountyDataError
+  - program=fha + loan_amount > county ceiling → NotImplementedError (jumbo FHA
+    not in v1)
+  - program=va before REF-04 lands → NotImplementedError pointing to plan 02-03
   - unit_count > 1 → NotImplementedError (multi-family deferred to v2)
 """
 
@@ -106,22 +108,31 @@ def _classify_conventional(
 
 
 def _classify_fha(loan_amount: Decimal, county: County | None, unit_count: int) -> LoanType:
-    """FHA classification reads REF-02 (fha-limits-2026.yml).
+    """FHA classification per HUD ML 2025-23 (REF-02).
 
-    Implementation lands when REF-02 ships in plan 02-02. Until then, raises
-    NotImplementedError with the plan ID so the executor knows where the wiring
-    completes.
+    Floor = $541,287 (low-cost areas); ceiling = $1,249,125 (high-cost areas).
+    Loans at or below floor → fha_standard. Loans above floor but at or below
+    county ceiling → fha_high_balance. Loans above county ceiling → out of FHA
+    program (raise NotImplementedError; jumbo FHA is not a v1 product).
     """
-    try:
-        load_reference("fha-limits-2026")
-    except FileNotFoundError as exc:
-        raise NotImplementedError(
-            "FHA classification requires data/reference/fha-limits-2026.yml "
-            "(REF-02), shipped in plan 02-02"
-        ) from exc
-    # Once 02-02 lands, replace the body below with FHA floor / ceiling logic
-    # mirroring _classify_conventional. Plan 02-02 owns this work.
-    raise NotImplementedError("FHA classify() body shipped in plan 02-02 (REF-02 + RUL-04 wiring)")
+    ref = load_reference("fha-limits-2026")
+    unit_key = f"{_UNIT_WORD[unit_count]}_unit"
+    floor = Decimal(ref["limits"]["floor"][unit_key])
+    if loan_amount <= floor:
+        return "fha_standard"
+    if county is None:
+        raise MissingCountyDataError(
+            f"FHA loan_amount {loan_amount} exceeds floor {floor}; "
+            f"county required to determine high-balance vs out-of-program"
+        )
+    county_limit = _county_limit_fha(ref, county, unit_key, floor)
+    if loan_amount <= county_limit:
+        return "fha_high_balance"
+    raise NotImplementedError(
+        f"loan_amount {loan_amount} exceeds FHA county ceiling {county_limit} "
+        f"for {county.name}; loans above the FHA ceiling are not eligible for "
+        f"the FHA program (consider conventional jumbo)"
+    )
 
 
 def _classify_va(loan_amount: Decimal, county: County | None, unit_count: int) -> LoanType:
@@ -140,3 +151,14 @@ def _county_limit(ref: dict[str, Any], county: County, unit_key: str, baseline: 
         if entry["state_fips"] == county.state_fips and entry["county_fips"] == county.county_fips:
             return Decimal(entry[unit_key])
     return baseline
+
+
+def _county_limit_fha(
+    ref: dict[str, Any], county: County, unit_key: str, floor: Decimal
+) -> Decimal:
+    """Return county-specific FHA ceiling, falling back to floor for unlisted
+    counties (matches HUD's convention: low-cost areas use the floor)."""
+    for entry in ref["limits"]["high_cost_counties"]:
+        if entry["state_fips"] == county.state_fips and entry["county_fips"] == county.county_fips:
+            return Decimal(entry[unit_key])
+    return floor
