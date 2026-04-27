@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: Phase 2 plan 04 complete (Wave 2 closed — USDA + IRS Pub 936 landed; locked decisions D-PHASE2-Q5 + RUL-11 two-boolean grace period preserved end-to-end)
-last_updated: "2026-04-27T03:50:00.000Z"
-last_activity: 2026-04-27 -- Phase 2 plan 04 complete (REF-06, REF-07, RUL-08, RUL-11 landed; cross-predicate-asymmetry pattern + two-boolean grace-period idiom established; 18/22 phase-2 requirements done)
+stopped_at: Phase 2 plan 05 complete (Wave 3 plan 02-05 closed — RUL-05 Conventional PMI + RUL-02 Fannie LLPA + RUL-03 Freddie eligibility landed; statutory-constants-in-code idiom + twin-predicate-with-shared-bucket-structure pattern established)
+last_updated: "2026-04-27T04:09:04.000Z"
+last_activity: 2026-04-27 -- Phase 2 plan 05 complete (RUL-02, RUL-03, RUL-05 landed; Pitfall 6 boundary tests pinned; 21/22 phase-2 requirements done; 181/181 tests green)
 progress:
   total_phases: 12
   completed_phases: 1
-  total_plans: 14
-  completed_plans: 10
-  percent: 71
+  total_plans: 15
+  completed_plans: 11
+  percent: 73
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-04-26)
 ## Current Position
 
 Phase: 2 of 12 in progress (Regulatory Reference Data + Rules Predicates)
-Plan: 4 of 7 in Phase 2 complete
-Status: Wave 2 closed — 02-04 USDA + IRS Pub 936 wired (REF-06 + REF-07 + RUL-08 + RUL-11 landed); ready for Wave 3 (02-05 PMI + Fannie + Freddie, sequential)
-Last activity: 2026-04-27 -- Phase 2 plan 04 complete (USDA SFH GLP eligibility + IRS Pub 936 deduction caps; 139/139 tests pass)
+Plan: 5 of 7 in Phase 2 complete
+Status: Wave 3 plan 02-05 closed — RUL-05 Conventional PMI + RUL-02 Fannie LLPA + RUL-03 Freddie eligibility wired; ready for Wave 3 tail (02-06 ATR/QM + Reg Z, then 02-07 audit gate, sequential)
+Last activity: 2026-04-27 -- Phase 2 plan 05 complete (Conventional PMI + Fannie LLPA + Freddie eligibility; 181/181 tests pass)
 
 Progress: [█░░░░░░░░░] 8% (1/12 phases)
 
@@ -36,19 +36,20 @@ Progress: [█░░░░░░░░░] 8% (1/12 phases)
 
 **Velocity:**
 
-- Total plans completed: 10
+- Total plans completed: 11
 - Phase 1 wall time: ~1.5 hours (orchestrated, sequential)
 - Phase 2 plan 01 wall time: ~35 min (sequential, single executor)
 - Phase 2 plan 02 wall time: ~7 min (sequential, single executor — fastest plan to date thanks to 02-01 foundation pattern)
 - Phase 2 plan 03 wall time: ~12 min (sequential, single executor — VA scope had two predicates + cross-plan stub resolution + AFFD-07 contract; still well under 02-01)
-- Phase 2 plan 04 wall time: ~5 min (sequential, single executor — new fastest plan to date; pattern fully internalized; no stub resolution this plan; both new predicates were pure new artifacts)
+- Phase 2 plan 04 wall time: ~5 min (sequential, single executor — pattern fully internalized; no stub resolution; both new predicates pure new artifacts)
+- Phase 2 plan 05 wall time: ~10 min (sequential, single executor — largest plan in Phase 2 by file count: 3 predicates + 2 reference YAMLs + 12 fixtures + 3 test files = 20 new files; Pitfall 6 boundary tests + twin-predicate-with-shared-bucket-structure)
 
 **By Phase:**
 
 | Phase | Plans | Status |
 |-------|-------|--------|
 | 1     | 6/6   | Complete (PASS-WITH-CAVEATS) |
-| 2     | 4/7   | In progress — 02-01..02-04 green (FHA + VA + USDA + IRS Pub 936 wired); Wave 2 closed |
+| 2     | 5/7   | In progress — 02-01..02-05 green (FHA + VA + USDA + IRS Pub 936 + HPA + Fannie LLPA + Freddie eligibility wired); Wave 3 plan 02-05 closed |
 
 **Plan-level metrics:**
 
@@ -58,11 +59,12 @@ Progress: [█░░░░░░░░░] 8% (1/12 phases)
 | 02-02 | 7 min | 2 | 10 created + 2 modified | +13 net (+6 fha_mip + +4 new FHA loan_type + +2 new schema params + +2 new citation-cov params, -1 stub-presence test removed) | green |
 | 02-03 | 12 min | 2 | 19 created + 2 modified | +25 net (+9 va_funding_fee + +7 va_residual_income + +4 new VA loan_type + +2 new schema params + +4 new citation-cov params, -1 stub-presence test removed) | green |
 | 02-04 | 5 min | 2 | 14 created + 0 modified | +24 net (+8 USDA + +10 IRS Pub 936 + +2 new schema params + +4 new citation-cov params; no test removal since no cross-plan stub resolution this plan) | green |
+| 02-05 | 10 min | 3 | 20 created + 0 modified | +42 net (+9 conventional_pmi + +18 fannie_eligibility + +7 freddie_eligibility + +2 new schema params + +6 new citation-cov params; no cross-plan stub resolution) | green |
 
 **Recent Trend:**
 
-- Last 10 plans: 01-01..01-06 + 02-01..02-04 (all green; 139/139 tests pass)
-- Trend: clean — no node repairs, no rework cycles. 02-04 is the new speed record (5 min) thanks to (a) two regulators bundled but each with smaller surface area than VA/FHA, (b) no cross-plan stub to resolve, (c) plan-author wrote tightly-scoped behavior specs that all passed on first run after auto-formatter applied. The Wave-2 internal pattern is fully locked.
+- Last 11 plans: 01-01..01-06 + 02-01..02-05 (all green; 181/181 tests pass)
+- Trend: clean — no node repairs, no rework cycles. 02-05 took 10 min (twice 02-04's 5 min) but shipped TWICE the surface area: 3 predicates + 2 YAMLs vs 02-04's 2 predicates + 2 YAMLs, plus the largest matrix payload of any Phase 2 plan (Fannie 8x8x3x3x4 cube + Freddie 8x8 eligibility table). Per-file/per-predicate velocity is ~3.3 min/predicate, the new floor. Pitfall 6 boundary tests proved easy to pin once the bucket convention was codified in YAML notes blocks. Six Rule-1/Rule-3 deviations were all auto-fixed without scope expansion.
 
 *Updated after each plan completion*
 
@@ -105,6 +107,13 @@ Recent decisions affecting current work:
 - 02-04: REF-07 effective: 2025-01-01 fires StaleReferenceWarning at execution time (today=2026-04-26 makes it 481 days old > 365 day threshold). NOT a bug — same correct loud-warning pattern as REF-03 / REF-04 / REF-05. Calendar drift between plan-write time and execution time naturally surfaces stale data; documented in REF-07 notes block.
 - 02-04: USDA county override list ships with one entry (San Francisco only). Per RESEARCH.md Pitfall 10 + D-PHASE2-Q5: canonical high-cost USDA-eligible county override; future YAML edits add more counties without code changes.
 - 02-04: FilingStatus Literal scoped to lib/rules/irs_pub936.py (not promoted to lib/rules/types.py). Mirrors VAFundingFeePurpose scoping in 02-03. Promotion deferred until a second consumer appears (Phase 7 APR after-tax cost may need it).
+- 02-05: Statutory-constants-in-code idiom for pure-statute predicates — when regulatory thresholds are statutory (HPA 0.78/0.80 LTV per 12 USC §4902), embed as Final[Decimal] module constants with citation comments rather than YAML lookup. CONTEXT.md D-02 anchors this. RUL-10 reg_z (1/8 + 1/4 percent tolerances per 12 CFR §1026.22) will reuse this pattern in 02-06.
+- 02-05: Two-helper-function idiom for 2D matrix lookups — separate `_credit_score_bucket` + `_ltv_bucket` helpers, each unit-tested at every boundary (Pitfall 6 mitigation). 5 boundary tests at 700/719/720(LOAD-BEARING)/739/740 anchor the credit-score helper; 3 boundary tests at 75.00/75.01/80.00 anchor the LTV helper. Reusable for any future tiered matrix predicate.
+- 02-05: Twin-predicate-with-shared-bucket-structure — Fannie + Freddie YAMLs intentionally mirror each other's 8x8 bucket structure so Phase 4 affordability can compose both outcomes via shared coordinate keys. CELL VALUES differ (overlay-diff cell at 620-639 x 90.01-95 -> Freddie ineligible / Fannie eligible) which is what makes RUL-03 a separate predicate from RUL-02 (citation discipline + RESEARCH.md §RUL-03 line 810).
+- 02-05: Composition-via-add-ons in matrix predicates — total = base + addon_1 + addon_2 + ... with one LookupError site per dimension (4 in fannie + 4 in freddie + 2 helpers each = 6+6 total). NEVER silently returns Decimal('0') or eligible=False on missing cell. Reusable for any future pricing matrix with independent stacking dimensions.
+- 02-05: LoanPurpose / Occupancy Literal aliases scoped to each predicate file (NOT promoted to types.py). Mirrors FilingStatus scoping in 02-04. Promotion deferred until a third consumer needs them.
+- 02-05: Plan-author-fixture-stem-must-match-predicate-stem (RUL-13 meta-test contract) — `tests/test_rules/test_citation_coverage.py` discovers fixtures via `FIX_DIR.glob(f'{path.stem}_*.json')`. Caused a Rule-1 deviation in this plan (renamed fannie fixtures from `fannie_llpa_*` to `fannie_eligibility_*`); future plan authors should follow predicate-stem-prefix convention.
+- 02-05: Plan acceptance grep `! grep -E 'NotImplementedError'` is literal — even descriptive phrases like "no NotImplementedError branches" in docstrings violate the literal grep. Reword as "no stub branches" or similar to satisfy the grep.
 
 ### Pending Todos
 
@@ -130,6 +139,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-04-27T03:50:00.000Z
-Stopped at: Phase 2 plan 04 complete; Wave 2 closed; ready for Wave 3 (02-05 PMI + Fannie LLPA + Freddie eligibility, sequential)
-Resume file: .planning/phases/02-regulatory-reference-data-rules-predicates/02-04-SUMMARY.md
+Last session: 2026-04-27T04:09:04.000Z
+Stopped at: Phase 2 plan 05 complete; Wave 3 plan 02-05 closed; ready for Wave 3 tail (02-06 ATR/QM + Reg Z, then 02-07 audit gate, sequential)
+Resume file: .planning/phases/02-regulatory-reference-data-rules-predicates/02-05-SUMMARY.md

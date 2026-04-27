@@ -35,10 +35,10 @@ User selected "all" scope; everything below is in v1.
 ### Rules Predicates (one predicate per citation)
 
 - [x] **RUL-01**: `lib/rules/loan_type.py` classifies conforming / high-balance / jumbo / FHA / FHA-HB / VA / VA-HB / USDA based on county data; fails loud when county missing (cfpb/jumbo-mortgage pattern)
-- [ ] **RUL-02**: `lib/rules/fannie_eligibility.py` implements LLPA matrix lookup (credit-score × LTV × loan-purpose tiers)
-- [ ] **RUL-03**: `lib/rules/freddie_eligibility.py` implements equivalent LPA-published eligibility checks
+- [x] **RUL-02**: `lib/rules/fannie_eligibility.py` implements LLPA matrix lookup (credit-score × LTV × loan-purpose tiers)
+- [x] **RUL-03**: `lib/rules/freddie_eligibility.py` implements equivalent LPA-published eligibility checks
 - [x] **RUL-04**: `lib/rules/fha_mip.py` implements MIP UFMIP + annual MIP per HUD ML 2023-05, with origination-date grandfathering
-- [ ] **RUL-05**: `lib/rules/conventional_pmi.py` implements HPA auto-termination (78% LTV) and request-termination (80% LTV) rules
+- [x] **RUL-05**: `lib/rules/conventional_pmi.py` implements HPA auto-termination (78% LTV) and request-termination (80% LTV) rules
 - [x] **RUL-06**: `lib/rules/va_funding_fee.py` calculates VA funding fee per Lender Handbook M26-7
 - [x] **RUL-07**: `lib/rules/va_residual_income.py` evaluates residual income vs geographic × family-size × loan-amount table
 - [x] **RUL-08**: `lib/rules/usda.py` evaluates USDA income limits (115% area median) and guarantee fees
@@ -231,10 +231,10 @@ Mapped 2026-04-26 by gsd-roadmapper. Every v1 requirement is assigned to exactly
 | REF-08 | Phase 2 | Done (02-01) |
 | REF-09 | Phase 2 | Done (02-01) |
 | RUL-01 | Phase 2 | Done (02-01) |
-| RUL-02 | Phase 2 | Pending |
-| RUL-03 | Phase 2 | Pending |
+| RUL-02 | Phase 2 | Done (02-05) |
+| RUL-03 | Phase 2 | Done (02-05) |
 | RUL-04 | Phase 2 | Done (02-02) |
-| RUL-05 | Phase 2 | Pending |
+| RUL-05 | Phase 2 | Done (02-05) |
 | RUL-06 | Phase 2 | Done (02-03) |
 | RUL-07 | Phase 2 | Done (02-03) |
 | RUL-08 | Phase 2 | Done (02-04) |
