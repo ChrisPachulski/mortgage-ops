@@ -41,6 +41,15 @@ Edge cases:
   - household_size > 8: applicable_income_limit = persons_5_to_8 +
     (household_size - 8) * persons_5_to_8 * per_extra_member_pct (USDA's 8%
     per-person uplift above 8).
+
+    WR-01 simplification (02-REVIEW.md): the >8-person uplift is computed
+    against `persons_5_to_8` (the YAML's banded 5..8 cap) rather than the
+    strict 8-person value from USDA's per-person table. USDA's published
+    table differentiates per-person values 5/6/7/8; we ship the banded value.
+    For typical household sizes (<=8) this is exact. For >8-person households
+    the result deviates slightly from USDA's per-person table — acceptable
+    for the v1 personal-use scope (the Pachulski household is far from this
+    edge). Flagged for v2 if multi-generational eligibility becomes in-scope.
   - household_income <= 0, household_size <= 0, loan_amount <= 0: raises
     ValueError (loud failure on invalid input).
   - Even when income_eligible=False, guarantee fees are still returned —
