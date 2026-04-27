@@ -10,6 +10,10 @@ notes: |
   symmetry. Counties NOT listed get the FLOOR limit. Per Phase 2 decision
   D-PHASE2-Q2: subset of high-cost counties shipped (CA / NY / DC / MA / NJ /
   HI / AK metros); unlisted high-cost counties → MissingCountyDataError.
+  This unlisted-county semantic is enforced in lib.rules.loan_type._county_limit_fha
+  (BL-01 / BL-05 fix in 02-REVIEW.md): the helper raises MissingCountyDataError
+  rather than silently returning the floor, matching this notes block. If you
+  edit one side you MUST edit the other — these two artifacts must agree.
 
   BL-04 (02-REVIEW.md) data-shape note: high_cost_counties entries below carry
   ONLY `one_unit`. The floor + ceiling blocks declare two/three/four_unit
