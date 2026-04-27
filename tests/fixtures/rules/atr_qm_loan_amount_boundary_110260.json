@@ -1,0 +1,10 @@
+{
+  "citation": "12 CFR §1026.43(e)(2) - first-lien tier boundary at $110,260 (inclusive lower bound on high band)",
+  "source_url": "https://www.federalregister.gov/documents/2020/12/29/2020-27567/qualified-mortgage-definition-under-the-truth-in-lending-act-regulation-z-general-qm-loan-definition",
+  "comment": "Hand-calc: loan_amount = exactly $110,260. Bands: mid = `66156 <= x < 110260`; high = `>= 110260`. So $110,260 is in HIGH band -> first-lien high threshold = 2.25 pp. apr=0.0800, apor=0.0500 -> spread = 3.00 pp > 2.25 pp -> general_qm_passes=False. Pins the inclusive-lower-bound semantic on the high-band boundary too (symmetric with $66,156 boundary).",
+  "apr": "0.0800",
+  "apor": "0.0500",
+  "loan_amount": "110260",
+  "lien_position": "first",
+  "expected_general_qm_passes": false
+}

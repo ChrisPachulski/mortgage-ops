@@ -1,0 +1,82 @@
+# data/reference/atr-qm-thresholds.yml
+# CFPB combined Reg Z thresholds adjustment publication carrying the 2026-indexed
+# loan-amount tiers ($110,260 high-band lower bound; $66,156 mid-band lower bound).
+# CFPB publishes the upcoming-year indexed thresholds in Q4 of the prior year;
+# the Q4 2025 publication (effective 2025-11-01 below) is the authoritative
+# source for these 2026-indexed tiers. The 2024-11 publication carried 2025-indexed
+# tiers and is therefore stale for our 2026-indexed claim — DO NOT pin it.
+source: "https://files.consumerfinance.gov/f/documents/cfpb_combined-reg-z-thresholds-adjustment-rule_2025-11.pdf"
+effective: 2025-11-01
+notes: |
+  ATR/QM General-QM and Safe-Harbor APR-APOR spread thresholds per
+  12 CFR §1026.43(e)(2). The CFPB Dec 2020 / Mar 2021 final rule (mandatory
+  compliance 2022-10-01) replaced the legacy 43% DTI cap with this price-based
+  test. Threshold percentages (2.25/3.5/6.5 pp General-QM and 1.5/3.5/6.5 pp
+  Safe-Harbor) are statutory and have not changed since 2022-10-01.
+
+  LOAN-AMOUNT TIERS ARE INDEXED ANNUALLY by CFPB's combined Reg Z thresholds
+  adjustment rule (REF-08 staleness check fires when this YAML's effective
+  is > 12 months old, prompting an annual refresh):
+  - 2026 tiers: $110,260 (high band lower bound) and $66,156 (mid band lower
+    bound). The most recent CFPB combined Reg Z thresholds adjustment publication
+    is the authoritative source for the indexed values.
+
+  TIER SEMANTICS (per §1026.43(e)(2)):
+  - First lien: high band = loan_amount >= $110,260; mid band = $66,156 <=
+    loan_amount < $110,260; low band = loan_amount < $66,156.
+  - Subordinate lien: high band = loan_amount >= $66,156; low band =
+    loan_amount < $66,156. (No 2.25 pp threshold for subordinate; subordinate
+    starts at 3.5 pp.)
+  - Boundaries are INCLUSIVE on the lower bound (`>=`) and EXCLUSIVE on the
+    upper bound (`<`), so exactly $66,156 is in the mid band (first-lien) or
+    high band (subordinate); exactly $110,260 is in the first-lien high band.
+
+  THRESHOLD UNIT CONVENTION:
+  - YAML body stores threshold as PERCENTAGE POINTS (e.g. "2.25" = 2.25 pp).
+  - The predicate computes `(apr - apor) <= threshold_pp / Decimal("100")`,
+    converting to fractional rate at consumption time. apr/apor inputs are
+    fractional (e.g. Decimal("0.0700") = 7.00%).
+
+  COLUMNS:
+  - general_qm_threshold_pp: 12 CFR §1026.43(e)(2) — General-QM rebuttable
+    presumption.
+  - safe_harbor_threshold_pp: 12 CFR §1026.43(b)(4) — tighter spread
+    confers Safe-Harbor (no rebuttable presumption).
+
+  Effective: pinned to the most recent CFPB combined Reg Z thresholds
+  adjustment publication; refresh annually when CFPB republishes (typically
+  Q4 each year for the upcoming calendar year's tiers). Pitfall 1
+  mitigation: all numeric scalars are QUOTED strings so PyYAML emits str,
+  not float; predicate Decimal-wraps at consumption.
+
+thresholds:
+  - lien_position: "first"
+    band: "high"
+    loan_amount_min: "110260"           # 2026-indexed first-lien high band lower bound (inclusive)
+    loan_amount_max: null               # no upper bound
+    general_qm_threshold_pp: "2.25"     # 12 CFR §1026.43(e)(2) - first-lien high
+    safe_harbor_threshold_pp: "1.5"     # 12 CFR §1026.43(b)(4) - first-lien high
+  - lien_position: "first"
+    band: "mid"
+    loan_amount_min: "66156"            # 2026-indexed first-lien mid band lower bound (inclusive)
+    loan_amount_max: "110260"           # exclusive upper bound (mid band stops where high band starts)
+    general_qm_threshold_pp: "3.5"      # 12 CFR §1026.43(e)(2) - first-lien mid
+    safe_harbor_threshold_pp: "3.5"     # Safe-Harbor matches General-QM at this band
+  - lien_position: "first"
+    band: "low"
+    loan_amount_min: "0"                # no lower bound (loan_amount > 0 enforced by predicate)
+    loan_amount_max: "66156"            # exclusive upper bound
+    general_qm_threshold_pp: "6.5"      # 12 CFR §1026.43(e)(2) - first-lien low
+    safe_harbor_threshold_pp: "6.5"     # Safe-Harbor matches General-QM at this band
+  - lien_position: "subordinate"
+    band: "high"
+    loan_amount_min: "66156"            # subordinate uses $66,156 as the only tier boundary
+    loan_amount_max: null               # no upper bound
+    general_qm_threshold_pp: "3.5"      # 12 CFR §1026.43(e)(2) - subordinate high
+    safe_harbor_threshold_pp: "3.5"     # Safe-Harbor matches at this band
+  - lien_position: "subordinate"
+    band: "low"
+    loan_amount_min: "0"                # no lower bound (loan_amount > 0 enforced by predicate)
+    loan_amount_max: "66156"            # exclusive upper bound
+    general_qm_threshold_pp: "6.5"      # 12 CFR §1026.43(e)(2) - subordinate low
+    safe_harbor_threshold_pp: "6.5"     # Safe-Harbor matches General-QM at this band

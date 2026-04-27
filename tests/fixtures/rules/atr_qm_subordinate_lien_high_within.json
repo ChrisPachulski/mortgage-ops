@@ -1,0 +1,10 @@
+{
+  "citation": "12 CFR §1026.43(e)(2) - General-QM subordinate-lien high band (loan >= $66,156)",
+  "source_url": "https://www.federalregister.gov/documents/2020/12/29/2020-27567/qualified-mortgage-definition-under-the-truth-in-lending-act-regulation-z-general-qm-loan-definition",
+  "comment": "Hand-calc: apr=0.0800, apor=0.0500 -> spread = 3.00 pp. Loan = $80,000 (>= $66,156) -> subordinate-lien high band -> threshold = 3.5 pp. 3.00 pp <= 3.5 pp -> True. NOTE: subordinate uses only $66,156 as tier boundary; no 2.25 pp threshold for subordinate.",
+  "apr": "0.0800",
+  "apor": "0.0500",
+  "loan_amount": "80000",
+  "lien_position": "subordinate",
+  "expected_general_qm_passes": true
+}

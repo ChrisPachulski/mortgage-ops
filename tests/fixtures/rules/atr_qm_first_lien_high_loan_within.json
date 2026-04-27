@@ -1,0 +1,10 @@
+{
+  "citation": "12 CFR §1026.43(e)(2) - General-QM first-lien high band (loan >= $110,260)",
+  "source_url": "https://www.federalregister.gov/documents/2020/12/29/2020-27567/qualified-mortgage-definition-under-the-truth-in-lending-act-regulation-z-general-qm-loan-definition",
+  "comment": "Hand-calc: apr=0.0700, apor=0.0500 -> spread = 2.00 pp. Loan = $250,000 (>= $110,260) -> first-lien high band -> threshold = 2.25 pp. 2.00 pp <= 2.25 pp -> general_qm_passes=True.",
+  "apr": "0.0700",
+  "apor": "0.0500",
+  "loan_amount": "250000",
+  "lien_position": "first",
+  "expected_general_qm_passes": true
+}

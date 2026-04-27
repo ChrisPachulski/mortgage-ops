@@ -1,0 +1,10 @@
+{
+  "citation": "12 CFR §1026.43(e)(2) - General-QM first-lien low band (loan < $66,156)",
+  "source_url": "https://www.federalregister.gov/documents/2020/12/29/2020-27567/qualified-mortgage-definition-under-the-truth-in-lending-act-regulation-z-general-qm-loan-definition",
+  "comment": "Hand-calc: apr=0.1100, apor=0.0500 -> spread = 6.00 pp. Loan = $60,000 (< $66,156) -> first-lien low band -> threshold = 6.5 pp. 6.00 pp <= 6.5 pp -> True. Pins the small-loan-higher-threshold logic.",
+  "apr": "0.1100",
+  "apor": "0.0500",
+  "loan_amount": "60000",
+  "lien_position": "first",
+  "expected_general_qm_passes": true
+}

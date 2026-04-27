@@ -1,0 +1,10 @@
+{
+  "citation": "12 CFR §1026.43(b)(4) - Safe-Harbor first-lien high band tighter threshold (1.5 pp)",
+  "source_url": "https://www.federalregister.gov/documents/2020/12/29/2020-27567/qualified-mortgage-definition-under-the-truth-in-lending-act-regulation-z-general-qm-loan-definition",
+  "comment": "Hand-calc: first-lien high band Safe-Harbor threshold = 1.5 pp (TIGHTER than 2.25 pp General-QM). apr=0.0640, apor=0.0500 -> spread = 1.40 pp <= 1.5 pp -> safe_harbor_qm_passes=True. Same loan would also pass General-QM (1.40 pp <= 2.25 pp). This fixture pins the second column lookup in the same YAML.",
+  "apr": "0.0640",
+  "apor": "0.0500",
+  "loan_amount": "250000",
+  "lien_position": "first",
+  "expected_safe_harbor_qm_passes": true
+}
