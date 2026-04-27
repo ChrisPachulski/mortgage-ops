@@ -1,0 +1,10 @@
+{
+  "citation": "IRC §163(h)(3) + IRS Pub 936 Table 1 — post-2017 single/MFJ/HoH cap",
+  "source_url": "https://www.irs.gov/pub/irs-pdf/p936.pdf",
+  "comment": "Hand-calc: filing_status=single, has_grandfathered_debt=False, no grace flags -> post-2017 cap = $750,000. TCJA reduced the cap from $1M (pre-2017) to $750k for debt incurred after 2017-12-15.",
+  "filing_status": "single",
+  "has_grandfathered_debt": false,
+  "binding_contract_signed_before_2017_12_15": false,
+  "binding_contract_closed_before_2018_04_01": false,
+  "expected_qualified_loan_limit": "750000"
+}

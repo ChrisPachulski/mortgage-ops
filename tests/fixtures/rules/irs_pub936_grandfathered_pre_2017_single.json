@@ -1,0 +1,10 @@
+{
+  "citation": "IRC §163(h)(3) + IRS Pub 936 Table 1 — pre-2017 grandfathered single/MFJ/HoH cap",
+  "source_url": "https://www.irs.gov/pub/irs-pdf/p936.pdf",
+  "comment": "Hand-calc: filing_status=single, has_grandfathered_debt=True (acquisition debt incurred on or before 2017-12-15) -> grandfathered cap = $1,000,000. This is the pre-TCJA cap, preserved for borrowers who took out their loan before TCJA.",
+  "filing_status": "single",
+  "has_grandfathered_debt": true,
+  "binding_contract_signed_before_2017_12_15": false,
+  "binding_contract_closed_before_2018_04_01": false,
+  "expected_qualified_loan_limit": "1000000"
+}

@@ -1,0 +1,10 @@
+{
+  "citation": "IRC §163(h)(3) + IRS Pub 936 Table 1 — post-2017 MFS half-cap",
+  "source_url": "https://www.irs.gov/pub/irs-pdf/p936.pdf",
+  "comment": "Hand-calc: filing_status=mfs (Married Filing Separately) -> cap is exactly HALF of the single/MFJ cap. Post-2017: 750000 / 2 = 375000. The half-cap is encoded directly in REF-07 (not divided in code) so future tax-law changes that break the symmetry can be expressed in YAML alone.",
+  "filing_status": "mfs",
+  "has_grandfathered_debt": false,
+  "binding_contract_signed_before_2017_12_15": false,
+  "binding_contract_closed_before_2018_04_01": false,
+  "expected_qualified_loan_limit": "375000"
+}

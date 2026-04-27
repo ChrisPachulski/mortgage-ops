@@ -1,0 +1,10 @@
+{
+  "citation": "IRC §163(h)(3) + IRS Pub 936 — TCJA binding-contract grace period (BOTH flags True)",
+  "source_url": "https://www.irs.gov/pub/irs-pdf/p936.pdf",
+  "comment": "Hand-calc: filing_status=single, has_grandfathered_debt=False, BUT binding contract signed before 2017-12-15 AND closed before 2018-04-01 (BOTH grace flags True) -> grace period applies -> grandfathered cap = $1,000,000. LOCKED DECISION (RESEARCH.md line 912): the grace period requires BOTH dates; a single origination_date can NOT capture this — predicate takes two booleans.",
+  "filing_status": "single",
+  "has_grandfathered_debt": false,
+  "binding_contract_signed_before_2017_12_15": true,
+  "binding_contract_closed_before_2018_04_01": true,
+  "expected_qualified_loan_limit": "1000000"
+}

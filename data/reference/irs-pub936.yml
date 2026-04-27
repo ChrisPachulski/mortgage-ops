@@ -1,0 +1,51 @@
+# data/reference/irs-pub936.yml
+source: "https://www.irs.gov/pub/irs-pdf/p936.pdf"
+effective: 2025-01-01
+notes: |
+  IRS Publication 936 — Home Mortgage Interest Deduction. Statutory authority:
+  IRC §163(h)(3) (mortgage interest deduction) as amended by the Tax Cuts and
+  Jobs Act of 2017 (TCJA). Pub 936 is republished annually; current edition is
+  for tax year 2025.
+
+  CAP STRUCTURE:
+  - Post-2017 acquisition debt (incurred AFTER 2017-12-15): $750,000 cap for
+    single / MFJ / HoH; $375,000 cap for MFS (Married Filing Separately, half).
+  - Pre-2017 grandfathered acquisition debt (incurred ON or BEFORE 2017-12-15):
+    $1,000,000 cap for single / MFJ / HoH; $500,000 cap for MFS (half).
+
+  BINDING-CONTRACT GRACE PERIOD (TCJA transition rule):
+  Debt qualifies as grandfathered if BOTH:
+    (a) the binding written contract was signed BEFORE 2017-12-15, AND
+    (b) the loan closed BEFORE 2018-04-01.
+  Both conditions must be met. RUL-11 encodes these as TWO booleans because a
+  single origination_date cannot capture the two-date requirement (per RESEARCH.md
+  Open Question / line 1369).
+
+  POINTS DEDUCTIBILITY (Pub 936 §3): OUT OF SCOPE for v1 RUL-11. Points
+  deductibility hinges on settlement-statement facts the predicate does not
+  have. RUL-11 returns the qualified-loan-limit cap only.
+
+  Effective: 2025-01-01 — fresh; no StaleReferenceWarning at import.
+
+caps:
+  post_2017:
+    single: "750000"
+    mfj: "750000"
+    hoh: "750000"
+    mfs: "375000"            # MFS = half of $750k
+    effective_for_debt_after: 2017-12-15
+  pre_2017_grandfathered:
+    single: "1000000"
+    mfj: "1000000"
+    hoh: "1000000"
+    mfs: "500000"            # MFS = half of $1M
+    effective_for_debt_on_or_before: 2017-12-15
+    binding_contract_grace_period:
+      contract_signed_before: 2017-12-15
+      close_before: 2018-04-01
+
+points_deductibility:
+  # Documented for completeness; RUL-11 does NOT compute points deductibility (out of scope).
+  must_be_secured_by_primary_residence: true
+  must_be_computed_as_pct_of_loan: true
+  must_be_on_settlement_statement: true
