@@ -28,12 +28,21 @@ Edge cases:
   - is_exempt=True: returns Decimal("0.00") immediately (no table lookup).
   - down_payment_pct < 0 or > 1: raises ValueError.
   - loan_purpose not in the literal set: raises ValueError.
-  - No matching down-payment band for purchase/cash_out: raises LookupError
+  - No matching down-payment band for purchase: raises LookupError
     (REF-04 schema gap).
 
 IRRRL note: IRRRL fee is a flat 0.50% regardless of use-count or down-payment;
 the predicate ignores is_first_use and down_payment_pct for loan_purpose="irrrl".
 Same for manufactured_home_non_permanent (1.00%) and loan_assumption (0.50%).
+
+Cash-out refi note: Per VA M26-7 Chapter 8, cash-out refi fees are FLAT —
+first-use 2.15% / subsequent-use 3.30% — and do NOT depend on
+down_payment_pct (the very concept is incoherent for a refi). The predicate
+ignores down_payment_pct for loan_purpose="cash_out_refi" and looks up
+flat_fees.cash_out_{first,subsequent}_use directly. Fix for BL-02
+(02-REVIEW.md): pre-fix code routed cash-out through the purchase
+down-payment-banded table and could understate the fee by ~$3,600 on a
+$400k 10%-down example.
 """
 
 from __future__ import annotations
@@ -76,16 +85,22 @@ def compute(
     ref = load_reference("va-funding-fees")
 
     fee_pct: Decimal
-    # Flat-fee branches: IRRRL, manufactured home, assumption — table lookup not used.
+    # Flat-fee branches: IRRRL, manufactured home, assumption, cash-out refi —
+    # table lookup not used. Cash-out refi fees are flat per M26-7 Chapter 8
+    # (BL-02 02-REVIEW.md): use-count selects the rate; down_payment_pct is
+    # ignored.
     if loan_purpose == "irrrl":
         fee_pct = Decimal(ref["flat_fees"]["irrrl"])
     elif loan_purpose == "manufactured_home_non_permanent":
         fee_pct = Decimal(ref["flat_fees"]["manufactured_home_non_permanent"])
     elif loan_purpose == "loan_assumption":
         fee_pct = Decimal(ref["flat_fees"]["loan_assumption"])
-    elif loan_purpose in ("purchase", "cash_out_refi"):
-        fee_pct = _lookup_purchase_or_cashout_pct(
-            table=ref["purchase_and_cash_out"],
+    elif loan_purpose == "cash_out_refi":
+        key = "cash_out_first_use" if is_first_use else "cash_out_subsequent_use"
+        fee_pct = Decimal(ref["flat_fees"][key])
+    elif loan_purpose == "purchase":
+        fee_pct = _lookup_purchase_pct(
+            table=ref["purchase"],
             down_payment_pct=down_payment_pct,
             is_first_use=is_first_use,
         )
@@ -95,15 +110,19 @@ def compute(
     return quantize_cents(loan_amount * fee_pct)
 
 
-def _lookup_purchase_or_cashout_pct(
+def _lookup_purchase_pct(
     table: list[dict[str, Any]],
     down_payment_pct: Decimal,
     is_first_use: bool,
 ) -> Decimal:
-    """Find the purchase/cash-out row whose down-payment band brackets the input.
+    """Find the purchase row whose down-payment band brackets the input.
 
     Bands are inclusive lower / EXCLUSIVE upper: 0..<5, 5..<10, >=10. The >=10 row
     has down_payment_max=1.00 which we treat as inclusive (1.00 = 100% down).
+
+    Cash-out refi does NOT use this table per M26-7 Ch 8 (see BL-02 fix in
+    02-REVIEW.md / module docstring); it is flat-fee and routes through
+    `flat_fees.cash_out_*` instead.
 
     Raises LookupError if no row matches (indicates REF-04 schema regression).
     """
@@ -119,6 +138,5 @@ def _lookup_purchase_or_cashout_pct(
             key = "first_use_pct" if is_first_use else "subsequent_use_pct"
             return Decimal(row[key])
     raise LookupError(
-        f"No purchase_and_cash_out row matched down_payment_pct={down_payment_pct}. "
-        f"REF-04 schema gap."
+        f"No purchase row matched down_payment_pct={down_payment_pct}. REF-04 schema gap."
     )

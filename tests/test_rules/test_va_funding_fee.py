@@ -11,7 +11,10 @@ Coverage:
   - Purchase first-use, 5..<10% down: 1.50%
   - Purchase first-use, >=10% down: 1.25% (boundary at exactly 10%)
   - IRRRL streamline: flat 0.50% (ignores use-count + down-payment)
-  - Cash-out refi subsequent-use, 0% down: 3.30% (shares purchase table)
+  - Cash-out refi subsequent-use, 0% down: 3.30% (flat per M26-7; no DP tier)
+  - Cash-out refi first-use ignores down_payment_pct: 2.15% regardless (BL-02
+    02-REVIEW.md regression — pre-fix code routed cash-out through purchase
+    DP-banded table and silently understated fee)
   - Exempt (VA disability comp): $0.00 by statute (short-circuits)
   - Money discipline: result quantized to 2 decimal places exactly
   - Negative down-payment: raises ValueError (loud failure on invalid input)
@@ -104,8 +107,8 @@ def test_irrrl_streamline_50_bps_regardless_of_use_or_down() -> None:
 
 
 def test_cash_out_subsequent_use_330_pct() -> None:
-    # Hand: cash-out shares purchase table; subsequent-use 0% down → 0.0330.
-    # $400k * 0.0330 = $13,200.00.
+    # Hand: cash-out is FLAT per M26-7 Ch 8; subsequent-use → 0.0330.
+    # $400k * 0.0330 = $13,200.00. Down-payment_pct is ignored.
     fx = _fx("va_funding_fee_cash_out_subsequent.json")
     result = compute(
         loan_amount=Decimal(fx["loan_amount"]),
@@ -115,6 +118,41 @@ def test_cash_out_subsequent_use_330_pct() -> None:
         is_exempt_from_funding_fee=fx["is_exempt_from_funding_fee"],
     )
     assert result == Decimal(fx["expected_fee"])
+
+
+def test_cash_out_refi_ignores_down_payment_pct() -> None:
+    # Regression for BL-02 (02-REVIEW.md): cash-out refi fees are FLAT per
+    # M26-7 Chapter 8 (first-use 2.15% / subsequent-use 3.30%). Pre-fix code
+    # routed cash-out through the purchase down-payment-banded table; a 10%
+    # down payment then fetched the purchase 10%-down rate (1.25%) instead of
+    # the correct flat first-use rate (2.15%) — silently understating the
+    # federally-mandated fee by $3,600 on $400k.
+    # Hand: $400,000 cash-out, first-use, 10% down -> 0.0215 (FLAT, NOT 0.0125).
+    # Fee = $400,000 * 0.0215 = $8,600.00.
+    fee = compute(
+        loan_amount=Decimal("400000.00"),
+        down_payment_pct=Decimal("0.10"),
+        is_first_use=True,
+        loan_purpose="cash_out_refi",
+        is_exempt_from_funding_fee=False,
+    )
+    assert fee == Decimal("8600.00")  # NOT $5,000 (purchase 10%-down)
+
+
+def test_cash_out_refi_subsequent_use_ignores_down_payment_pct() -> None:
+    # Regression for BL-02 (02-REVIEW.md): cash-out subsequent-use is flat
+    # 3.30% regardless of down_payment_pct. With 5% "down" the pre-fix path
+    # would have returned 0.0150 (purchase subsequent 5%-down) silently.
+    # Hand: $400,000 cash-out, subsequent-use, 5% down -> 0.0330.
+    # Fee = $400,000 * 0.0330 = $13,200.00.
+    fee = compute(
+        loan_amount=Decimal("400000.00"),
+        down_payment_pct=Decimal("0.05"),
+        is_first_use=False,
+        loan_purpose="cash_out_refi",
+        is_exempt_from_funding_fee=False,
+    )
+    assert fee == Decimal("13200.00")  # NOT $6,000 (purchase 5%-down sub)
 
 
 def test_exempt_returns_zero() -> None:

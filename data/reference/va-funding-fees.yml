@@ -12,17 +12,25 @@ notes: |
   these rates.
 
   Fee structure:
-    - Purchase + cash-out refi: fee % depends on (first_use vs subsequent_use,
-      down_payment_pct band: 0..<5 / 5..<10 / >=10).
-    - IRRRL (Interest Rate Reduction Refi Loan, "streamline"): flat 0.50% regardless
-      of use-count or down-payment.
+    - Purchase: fee % depends on (first_use vs subsequent_use, down_payment_pct
+      band: 0..<5 / 5..<10 / >=10). Down-payment tier is meaningful for
+      purchase only.
+    - Cash-out refi: FLAT fees per M26-7 Chapter 8 — first-use 2.15% /
+      subsequent-use 3.30% — INDEPENDENT of down_payment_pct. (Cash-out refis
+      convert equity into cash; there is no "down payment" in the traditional
+      sense.) Fix for BL-02 (02-REVIEW.md): previously cash-out shared the
+      purchase down-payment-banded table, which silently understated the fee
+      for any cash-out refi with a non-zero "down payment" parameter.
+    - IRRRL (Interest Rate Reduction Refi Loan, "streamline"): flat 0.50%
+      regardless of use-count or down-payment.
     - Manufactured home (NOT on permanent foundation): flat 1.00%.
     - Loan assumption: flat 0.50%.
     - Veterans receiving VA disability compensation are EXEMPT (fee = $0).
 
   Down-payment bands are EXCLUSIVE of upper bound: 0..<5 means "less than 5%",
   5..<10 means "5% up to but not including 10%", >=10 means "10% or greater".
-purchase_and_cash_out:
+purchase:
+  # Purchase-only down-payment-banded fee table per M26-7 Ch 8.
   # Each row: down_payment_band, first_use_pct, subsequent_use_pct
   - {down_payment_min: "0.00", down_payment_max: "0.05", first_use_pct: "0.0215", subsequent_use_pct: "0.0330"}
   - {down_payment_min: "0.05", down_payment_max: "0.10", first_use_pct: "0.0150", subsequent_use_pct: "0.0150"}
@@ -31,5 +39,7 @@ flat_fees:
   irrrl: "0.0050"                # IRRRL streamline — flat regardless of use-count or down-payment
   manufactured_home_non_permanent: "0.0100"
   loan_assumption: "0.0050"
+  cash_out_first_use: "0.0215"        # M26-7 Ch 8 — flat, no down-payment tier
+  cash_out_subsequent_use: "0.0330"   # M26-7 Ch 8 — flat, no down-payment tier
 exemption:
   va_disability_compensation_recipient: true   # is_exempt=True → fee = $0.00
