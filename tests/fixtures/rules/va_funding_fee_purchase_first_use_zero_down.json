@@ -1,0 +1,11 @@
+{
+  "citation": "VA M26-7 Chapter 8 Table — Purchase, first use, 0% down",
+  "source_url": "https://benefits.va.gov/WARMS/docs/admin26/m26-07/m26-7-chapter8-borrower-fees-and-charges-and-the-va-funding-fee.pdf",
+  "comment": "Hand-calc: $400,000 loan, 0% down, first VA use, purchase. Down-payment band [0..<5%) → first_use_pct=0.0215. Fee = $400,000 × 0.0215 = $8,600.00.",
+  "loan_amount": "400000.00",
+  "down_payment_pct": "0.00",
+  "is_first_use": true,
+  "loan_purpose": "purchase",
+  "is_exempt_from_funding_fee": false,
+  "expected_fee": "8600.00"
+}

@@ -1,0 +1,11 @@
+{
+  "citation": "VA M26-7 Chapter 8 — IRRRL flat 0.50% regardless of use-count or down-payment",
+  "source_url": "https://benefits.va.gov/WARMS/docs/admin26/m26-07/m26-7-chapter8-borrower-fees-and-charges-and-the-va-funding-fee.pdf",
+  "comment": "Hand-calc: $400,000 loan, IRRRL streamline refi. Flat 0.50% IRRRL fee — predicate must IGNORE is_first_use and down_payment_pct (IRRRL has its own flat tier per M26-7). Fee = $400,000 × 0.0050 = $2,000.00.",
+  "loan_amount": "400000.00",
+  "down_payment_pct": "0.00",
+  "is_first_use": false,
+  "loan_purpose": "irrrl",
+  "is_exempt_from_funding_fee": false,
+  "expected_fee": "2000.00"
+}

@@ -1,0 +1,11 @@
+{
+  "citation": "38 USC §3729(c) — exemption for veterans receiving VA disability compensation",
+  "source_url": "https://benefits.va.gov/WARMS/docs/admin26/m26-07/m26-7-chapter8-borrower-fees-and-charges-and-the-va-funding-fee.pdf",
+  "comment": "Hand-calc: ANY loan, exempt-flag set, ANY purpose → fee = $0.00 by statute. Predicate must short-circuit BEFORE any table lookup. Money-discipline check: returned Decimal must have exactly 2 decimal places ($0.00, not $0).",
+  "loan_amount": "400000.00",
+  "down_payment_pct": "0.00",
+  "is_first_use": true,
+  "loan_purpose": "purchase",
+  "is_exempt_from_funding_fee": true,
+  "expected_fee": "0.00"
+}

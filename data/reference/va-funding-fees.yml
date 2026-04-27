@@ -1,0 +1,35 @@
+# data/reference/va-funding-fees.yml
+source: "https://benefits.va.gov/WARMS/docs/admin26/m26-07/m26-7-chapter8-borrower-fees-and-charges-and-the-va-funding-fee.pdf"
+effective: 2023-04-07
+notes: |
+  VA Lender Handbook M26-7 Chapter 8 — Borrower Fees, Charges, and the VA Funding
+  Fee. Effective for VA-guaranteed loans closed on or after 2023-04-07 (the date
+  VA last republished the fee table). Per 38 USC §3729.
+
+  IMPORTANT: This effective date (2023-04-07) is older than the 12-month staleness
+  threshold; StaleReferenceWarning will fire on import. This is CORRECT behavior —
+  VA has not republished. Re-verify annually that no new VA Circular has changed
+  these rates.
+
+  Fee structure:
+    - Purchase + cash-out refi: fee % depends on (first_use vs subsequent_use,
+      down_payment_pct band: 0..<5 / 5..<10 / >=10).
+    - IRRRL (Interest Rate Reduction Refi Loan, "streamline"): flat 0.50% regardless
+      of use-count or down-payment.
+    - Manufactured home (NOT on permanent foundation): flat 1.00%.
+    - Loan assumption: flat 0.50%.
+    - Veterans receiving VA disability compensation are EXEMPT (fee = $0).
+
+  Down-payment bands are EXCLUSIVE of upper bound: 0..<5 means "less than 5%",
+  5..<10 means "5% up to but not including 10%", >=10 means "10% or greater".
+purchase_and_cash_out:
+  # Each row: down_payment_band, first_use_pct, subsequent_use_pct
+  - {down_payment_min: "0.00", down_payment_max: "0.05", first_use_pct: "0.0215", subsequent_use_pct: "0.0330"}
+  - {down_payment_min: "0.05", down_payment_max: "0.10", first_use_pct: "0.0150", subsequent_use_pct: "0.0150"}
+  - {down_payment_min: "0.10", down_payment_max: "1.00", first_use_pct: "0.0125", subsequent_use_pct: "0.0125"}
+flat_fees:
+  irrrl: "0.0050"                # IRRRL streamline — flat regardless of use-count or down-payment
+  manufactured_home_non_permanent: "0.0100"
+  loan_assumption: "0.0050"
+exemption:
+  va_disability_compensation_recipient: true   # is_exempt=True → fee = $0.00
