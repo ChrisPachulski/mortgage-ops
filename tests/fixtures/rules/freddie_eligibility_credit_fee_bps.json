@@ -1,0 +1,12 @@
+{
+  "citation": "Freddie SF Seller/Servicer Guide §4203.4 (Credit Fee Cap numeric assertion)",
+  "source_url": "https://sf.freddiemac.com/working-with-us/origination-underwriting/eligibility-criteria",
+  "comment": "Hand-calc: credit_score=680 -> '680-699'; LTV=80 -> '75.01-80'; primary, cash_out_refi, 1-unit. Base eligible=true, credit_fee_bps=175 + cash_out 275 + 0 + 0 = 450 bps. Confirms Decimal-from-string discipline holds across YAML -> loader -> predicate -> output (no precision drift).",
+  "credit_score": 680,
+  "ltv_pct": "80.00",
+  "loan_purpose": "cash_out_refi",
+  "occupancy": "primary",
+  "unit_count": 1,
+  "expected_eligible": true,
+  "expected_credit_fee_bps": "450"
+}

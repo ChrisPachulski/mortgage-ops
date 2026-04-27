@@ -1,0 +1,137 @@
+# data/reference/freddie-eligibility-matrix.yml
+# RUL-03 reference data. Implementation-detail under RUL-03 per CONTEXT.md D-05;
+# NOT a new REF-ID. Annual refresh = re-extract matrix from Freddie + bump
+# `effective:` + commit (no code change).
+source: "https://sf.freddiemac.com/working-with-us/origination-underwriting/eligibility-criteria"
+effective: 2026-01-15
+notes: |
+  Freddie Mac Single-Family Seller/Servicer Guide §4203.4 + Credit Fee Cap matrix.
+  Models Freddie's PUBLISHED eligibility matrix only — does NOT replicate Freddie's
+  proprietary LPA AUS decision (per CONTEXT.md `<deferred>` line 188; PROJECT.md
+  "Out of Scope"). Per CONTEXT.md D-05: this YAML is implementation-detail under
+  RUL-03; NOT a new REF-ID. Quoted-string numeric values per Pitfall 1.
+  Bucket boundaries follow same conventions as Fannie LLPA YAML
+  (LOW/HIGH-INCLUSIVE for credit_score; HIGH-INCLUSIVE for ltv).
+
+  Common cells match Fannie outcomes (per RESEARCH §RUL-03 line 810); overlay
+  cells (notably 620-639 at LTV>90 and the entire below-620 row) differ —
+  Freddie's published matrix marks them ineligible whereas Fannie generally
+  permits them with a price adjustment. The overlay-diff cell is what makes
+  this predicate meaningfully different from RUL-02 (citation discipline).
+
+# Bucket definitions — mirror Fannie's structure for predictable interop
+# (Phase 4 affordability composes Fannie + Freddie outcomes).
+credit_score_buckets:
+  - {min: "740", max: "850", id: "740-or-better"}
+  - {min: "720", max: "739", id: "720-739"}
+  - {min: "700", max: "719", id: "700-719"}
+  - {min: "680", max: "699", id: "680-699"}
+  - {min: "660", max: "679", id: "660-679"}
+  - {min: "640", max: "659", id: "640-659"}
+  - {min: "620", max: "639", id: "620-639"}
+  - {min: "300", max: "619", id: "below-620"}
+
+ltv_buckets:
+  - {min: "0", max: "60.00", id: "0-60"}
+  - {min: "60.01", max: "70.00", id: "60.01-70"}
+  - {min: "70.01", max: "75.00", id: "70.01-75"}
+  - {min: "75.01", max: "80.00", id: "75.01-80"}
+  - {min: "80.01", max: "85.00", id: "80.01-85"}
+  - {min: "85.01", max: "90.00", id: "85.01-90"}
+  - {min: "90.01", max: "95.00", id: "90.01-95"}
+  - {min: "95.01", max: "97.00", id: "95.01-97"}
+
+# Eligibility table: rows keyed by [credit_score_bucket][ltv_bucket] -> {eligible, credit_fee_bps}.
+# Common cells match Fannie outcomes (RESEARCH §RUL-03 line 810); overlay cells differ.
+# Fail-loud: missing cells raise LookupError in the predicate.
+eligibility:
+  "740-or-better":
+    "0-60":      {eligible: true,  credit_fee_bps: "0"}
+    "60.01-70":  {eligible: true,  credit_fee_bps: "0"}
+    "70.01-75":  {eligible: true,  credit_fee_bps: "0"}
+    "75.01-80":  {eligible: true,  credit_fee_bps: "0"}
+    "80.01-85":  {eligible: true,  credit_fee_bps: "25"}
+    "85.01-90":  {eligible: true,  credit_fee_bps: "25"}
+    "90.01-95":  {eligible: true,  credit_fee_bps: "25"}
+    "95.01-97":  {eligible: true,  credit_fee_bps: "75"}
+  "720-739":
+    "0-60":      {eligible: true,  credit_fee_bps: "0"}
+    "60.01-70":  {eligible: true,  credit_fee_bps: "25"}
+    "70.01-75":  {eligible: true,  credit_fee_bps: "25"}
+    "75.01-80":  {eligible: true,  credit_fee_bps: "50"}
+    "80.01-85":  {eligible: true,  credit_fee_bps: "50"}
+    "85.01-90":  {eligible: true,  credit_fee_bps: "50"}
+    "90.01-95":  {eligible: true,  credit_fee_bps: "50"}
+    "95.01-97":  {eligible: true,  credit_fee_bps: "75"}
+  "700-719":
+    "0-60":      {eligible: true,  credit_fee_bps: "0"}
+    "60.01-70":  {eligible: true,  credit_fee_bps: "50"}
+    "70.01-75":  {eligible: true,  credit_fee_bps: "100"}
+    "75.01-80":  {eligible: true,  credit_fee_bps: "125"}
+    "80.01-85":  {eligible: true,  credit_fee_bps: "125"}
+    "85.01-90":  {eligible: true,  credit_fee_bps: "125"}
+    "90.01-95":  {eligible: true,  credit_fee_bps: "125"}
+    "95.01-97":  {eligible: true,  credit_fee_bps: "125"}
+  "680-699":
+    "0-60":      {eligible: true,  credit_fee_bps: "0"}
+    "60.01-70":  {eligible: true,  credit_fee_bps: "50"}
+    "70.01-75":  {eligible: true,  credit_fee_bps: "125"}
+    "75.01-80":  {eligible: true,  credit_fee_bps: "175"}
+    "80.01-85":  {eligible: true,  credit_fee_bps: "275"}
+    "85.01-90":  {eligible: true,  credit_fee_bps: "275"}
+    "90.01-95":  {eligible: true,  credit_fee_bps: "275"}
+    "95.01-97":  {eligible: true,  credit_fee_bps: "275"}
+  "660-679":
+    "0-60":      {eligible: true,  credit_fee_bps: "0"}
+    "60.01-70":  {eligible: true,  credit_fee_bps: "100"}
+    "70.01-75":  {eligible: true,  credit_fee_bps: "250"}
+    "75.01-80":  {eligible: true,  credit_fee_bps: "275"}
+    "80.01-85":  {eligible: true,  credit_fee_bps: "300"}
+    "85.01-90":  {eligible: true,  credit_fee_bps: "300"}
+    "90.01-95":  {eligible: true,  credit_fee_bps: "300"}
+    "95.01-97":  {eligible: true,  credit_fee_bps: "275"}
+  "640-659":
+    "0-60":      {eligible: true,  credit_fee_bps: "50"}
+    "60.01-70":  {eligible: true,  credit_fee_bps: "150"}
+    "70.01-75":  {eligible: true,  credit_fee_bps: "275"}
+    "75.01-80":  {eligible: true,  credit_fee_bps: "300"}
+    "80.01-85":  {eligible: true,  credit_fee_bps: "325"}
+    "85.01-90":  {eligible: true,  credit_fee_bps: "325"}
+    "90.01-95":  {eligible: true,  credit_fee_bps: "325"}
+    "95.01-97":  {eligible: true,  credit_fee_bps: "300"}
+  "620-639":
+    "0-60":      {eligible: true,  credit_fee_bps: "50"}
+    "60.01-70":  {eligible: true,  credit_fee_bps: "150"}
+    "70.01-75":  {eligible: true,  credit_fee_bps: "300"}
+    "75.01-80":  {eligible: true,  credit_fee_bps: "300"}
+    "80.01-85":  {eligible: true,  credit_fee_bps: "325"}
+    "85.01-90":  {eligible: true,  credit_fee_bps: "325"}
+    "90.01-95":  {eligible: false, credit_fee_bps: "325"}  # Freddie overlay: 620-639 x >90 LTV INELIGIBLE
+    "95.01-97":  {eligible: false, credit_fee_bps: "300"}
+  "below-620":
+    "0-60":      {eligible: false, credit_fee_bps: "300"}
+    "60.01-70":  {eligible: false, credit_fee_bps: "300"}
+    "70.01-75":  {eligible: false, credit_fee_bps: "300"}
+    "75.01-80":  {eligible: false, credit_fee_bps: "325"}
+    "80.01-85":  {eligible: false, credit_fee_bps: "325"}
+    "85.01-90":  {eligible: false, credit_fee_bps: "325"}
+    "90.01-95":  {eligible: false, credit_fee_bps: "325"}
+    "95.01-97":  {eligible: false, credit_fee_bps: "325"}
+
+# Loan-purpose / occupancy / unit-count: mirror Fannie's add-on convention so
+# Phase 4 can compose Fannie + Freddie scoring.
+loan_purpose_addons:
+  purchase:        "0"
+  rate_term_refi:  "0"
+  cash_out_refi:   "275"
+
+occupancy_addons:
+  primary:      "0"
+  second_home:  "162.5"
+  investment:   "200"
+
+unit_count_addons:
+  "1": "0"
+  "2": "100"
+  "3": "100"
+  "4": "100"

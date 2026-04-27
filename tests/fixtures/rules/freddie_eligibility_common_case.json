@@ -1,0 +1,12 @@
+{
+  "citation": "Freddie SF Seller/Servicer Guide §4203.4 (common case: matches Fannie at top tier)",
+  "source_url": "https://sf.freddiemac.com/working-with-us/origination-underwriting/eligibility-criteria",
+  "comment": "Hand-calc: credit_score=740 -> '740-or-better'; LTV=80 -> '75.01-80'; primary, purchase, 1-unit. Base eligible=true, credit_fee_bps=0 + 0 + 0 + 0 = 0 bps. Same outcome as Fannie at this cell -- confirms the GSEs converge on top-tier eligibility per RESEARCH §RUL-03.",
+  "credit_score": 740,
+  "ltv_pct": "80.00",
+  "loan_purpose": "purchase",
+  "occupancy": "primary",
+  "unit_count": 1,
+  "expected_eligible": true,
+  "expected_credit_fee_bps": "0"
+}

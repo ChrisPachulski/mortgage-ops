@@ -1,0 +1,12 @@
+{
+  "citation": "Freddie SF Seller/Servicer Guide §4203.4 (overlay diff cell -- Freddie ineligible where Fannie is generally eligible at the same inputs)",
+  "source_url": "https://sf.freddiemac.com/working-with-us/origination-underwriting/eligibility-criteria",
+  "comment": "Hand-calc: credit_score=625 -> '620-639'; LTV=92 -> '90.01-95'; primary, purchase, 1-unit. Per Freddie published matrix: eligible=false (overlay restriction at low-credit + high-LTV combo). Confirms Freddie != Fannie on at least one cell -- predicate exists separately for citation discipline (RESEARCH §RUL-03 line 810). credit_fee_bps = base 325 + 0 + 0 + 0 = 325.",
+  "credit_score": 625,
+  "ltv_pct": "92.00",
+  "loan_purpose": "purchase",
+  "occupancy": "primary",
+  "unit_count": 1,
+  "expected_eligible": false,
+  "expected_credit_fee_bps": "325"
+}
