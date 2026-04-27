@@ -1,0 +1,11 @@
+{
+  "citation": "12 USC §4902(g)",
+  "source_url": "https://www.fdic.gov/consumer-compliance-examination-manual/v-5-homeowners-protection-act",
+  "comment": "Hand-calc: high-risk loan, 360-month term -> midpoint=180. months_elapsed=181 (past midpoint) -> terminates per §4902(g) carve-out regardless of LTV. LTV here is 0.95 ($380k balance / $400k orig value) -- would otherwise be in_force.",
+  "loan": {"principal": "400000.00", "annual_rate": "0.085000", "term_months": 360},
+  "scheduled_balance": "380000.00",
+  "original_property_value": "400000.00",
+  "is_high_risk": true,
+  "months_elapsed": 181,
+  "expected_status": "high_risk_midpoint_terminated"
+}

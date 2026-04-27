@@ -1,0 +1,11 @@
+{
+  "citation": "12 USC §4902(a)",
+  "source_url": "https://www.consumerfinance.gov/compliance/supervision-examinations/homeowners-protection-act-hpa-or-pmi-cancellation-act-examination-procedures/",
+  "comment": "Hand-calc: $200,000 orig value, $160,000 scheduled balance = 0.80 LTV exactly -> request_eligible per HPA §4902(a). Borrower may request cancellation at this point.",
+  "loan": {"principal": "200000.00", "annual_rate": "0.065000", "term_months": 360},
+  "scheduled_balance": "160000.00",
+  "original_property_value": "200000.00",
+  "is_high_risk": false,
+  "months_elapsed": null,
+  "expected_status": "request_eligible"
+}

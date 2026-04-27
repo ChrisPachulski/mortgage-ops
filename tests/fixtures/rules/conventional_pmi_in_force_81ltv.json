@@ -1,0 +1,11 @@
+{
+  "citation": "12 USC §4902 (negative case — neither auto nor request triggered)",
+  "source_url": "https://www.consumerfinance.gov/compliance/supervision-examinations/homeowners-protection-act-hpa-or-pmi-cancellation-act-examination-procedures/",
+  "comment": "Hand-calc: $200,000 orig value, $162,000 scheduled balance = 0.81 LTV -> in_force. PMI continues until balance reaches 0.80 (request) or 0.78 (auto).",
+  "loan": {"principal": "200000.00", "annual_rate": "0.065000", "term_months": 360},
+  "scheduled_balance": "162000.00",
+  "original_property_value": "200000.00",
+  "is_high_risk": false,
+  "months_elapsed": null,
+  "expected_status": "in_force"
+}
