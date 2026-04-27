@@ -1,0 +1,10 @@
+{
+  "citation": "12 USC §1717 + FHFA news release 2025-12-04",
+  "source_url": "https://www.fhfa.gov/news/news-release/fhfa-announces-conforming-loan-limit-values-for-2026",
+  "comment": "Hand-calc: $800,000 loan <= $832,750 FHFA 2026 baseline -> conforming; no county lookup needed because every county's limit >= baseline.",
+  "loan_amount": "800000.00",
+  "county": null,
+  "program": "conventional",
+  "unit_count": 1,
+  "expected_loan_type": "conforming"
+}

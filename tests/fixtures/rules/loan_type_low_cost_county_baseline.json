@@ -1,0 +1,10 @@
+{
+  "citation": "12 USC §1717 + FHFA county XLSX 2026 (Pitfall 7)",
+  "source_url": "https://www.fhfa.gov/news/news-release/fhfa-announces-conforming-loan-limit-values-for-2026",
+  "comment": "Hand-calc: $750,000 loan in Autauga AL (01/001 - NOT in high_cost_counties subset, so its limit IS baseline=$832,750). $750k < $832,750 -> conforming. Pitfall 7 protection: a $830k loan in this county would be jumbo despite being below the FHFA baseline because its county's limit IS the baseline.",
+  "loan_amount": "750000.00",
+  "county": {"state_fips": "01", "county_fips": "001", "name": "Autauga AL"},
+  "program": "conventional",
+  "unit_count": 1,
+  "expected_loan_type": "conforming"
+}

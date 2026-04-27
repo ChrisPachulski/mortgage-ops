@@ -1,0 +1,91 @@
+# data/reference/conforming-limits-2026.yml
+source: "https://www.fhfa.gov/news/news-release/fhfa-announces-conforming-loan-limit-values-for-2026"
+effective: 2026-01-01
+notes: |
+  FHFA news release of 2025-12-04: "FHFA Announces Conforming Loan Limit Values
+  for 2026." Effective for loans with pool issue dates on or after 2026-01-01.
+  Baseline 1-unit = $832,750; ceiling 1-unit = $1,249,125 (= 150% x baseline).
+  This file ships a SUBSET of the FHFA county XLSX: high-cost counties spanning
+  CA / NY / DC / FL / WA / MA / VA / NJ / CT / HI / AK metros (~232 high-cost
+  counties exist nationwide; we ship the highest-volume subset per Phase 2
+  decision D-PHASE2-Q2). Counties NOT listed below get the BASELINE limit; if a
+  loan exceeds baseline AND its county is not listed, lib.rules.loan_type
+  raises MissingCountyDataError so the user knows to extend the table.
+  All numeric scalars are quoted strings so PyYAML emits str (not float);
+  loader callers wrap in Decimal(...) at consumption time (Pitfall 1).
+limits:
+  baseline:
+    one_unit: "832750"
+    two_unit: "1066250"
+    three_unit: "1289100"
+    four_unit: "1601650"
+  ceiling:
+    one_unit: "1249125"
+    two_unit: "1599375"
+    three_unit: "1933200"
+    four_unit: "2402625"
+  high_cost_counties:
+    # California - Bay Area + LA at full ceiling
+    - {state_fips: "06", county_fips: "001", county_name: "Alameda CA", one_unit: "1249125"}
+    - {state_fips: "06", county_fips: "013", county_name: "Contra Costa CA", one_unit: "1249125"}
+    - {state_fips: "06", county_fips: "037", county_name: "Los Angeles CA", one_unit: "1249125"}
+    - {state_fips: "06", county_fips: "041", county_name: "Marin CA", one_unit: "1249125"}
+    - {state_fips: "06", county_fips: "055", county_name: "Napa CA", one_unit: "1249125"}
+    - {state_fips: "06", county_fips: "059", county_name: "Orange CA", one_unit: "1249125"}
+    - {state_fips: "06", county_fips: "067", county_name: "Sacramento CA", one_unit: "832750"}
+    - {state_fips: "06", county_fips: "073", county_name: "San Diego CA", one_unit: "1249125"}
+    - {state_fips: "06", county_fips: "075", county_name: "San Francisco CA", one_unit: "1249125"}
+    - {state_fips: "06", county_fips: "081", county_name: "San Mateo CA", one_unit: "1249125"}
+    - {state_fips: "06", county_fips: "085", county_name: "Santa Clara CA", one_unit: "1249125"}
+    - {state_fips: "06", county_fips: "087", county_name: "Santa Cruz CA", one_unit: "1249125"}
+    - {state_fips: "06", county_fips: "095", county_name: "Solano CA", one_unit: "832750"}
+    - {state_fips: "06", county_fips: "097", county_name: "Sonoma CA", one_unit: "1249125"}
+    - {state_fips: "06", county_fips: "111", county_name: "Ventura CA", one_unit: "1249125"}
+    # New York - NYC metro at ceiling
+    - {state_fips: "36", county_fips: "005", county_name: "Bronx NY", one_unit: "1249125"}
+    - {state_fips: "36", county_fips: "047", county_name: "Kings NY", one_unit: "1249125"}
+    - {state_fips: "36", county_fips: "059", county_name: "Nassau NY", one_unit: "1249125"}
+    - {state_fips: "36", county_fips: "061", county_name: "New York NY", one_unit: "1249125"}
+    - {state_fips: "36", county_fips: "071", county_name: "Orange NY", one_unit: "1249125"}
+    - {state_fips: "36", county_fips: "079", county_name: "Putnam NY", one_unit: "1249125"}
+    - {state_fips: "36", county_fips: "081", county_name: "Queens NY", one_unit: "1249125"}
+    - {state_fips: "36", county_fips: "085", county_name: "Richmond NY", one_unit: "1249125"}
+    - {state_fips: "36", county_fips: "087", county_name: "Rockland NY", one_unit: "1249125"}
+    - {state_fips: "36", county_fips: "103", county_name: "Suffolk NY", one_unit: "1249125"}
+    - {state_fips: "36", county_fips: "119", county_name: "Westchester NY", one_unit: "1249125"}
+    # Washington DC + Northern Virginia + suburban Maryland
+    - {state_fips: "11", county_fips: "001", county_name: "District of Columbia", one_unit: "1249125"}
+    - {state_fips: "51", county_fips: "013", county_name: "Arlington VA", one_unit: "1249125"}
+    - {state_fips: "51", county_fips: "059", county_name: "Fairfax VA", one_unit: "1249125"}
+    - {state_fips: "51", county_fips: "510", county_name: "Alexandria VA", one_unit: "1249125"}
+    - {state_fips: "51", county_fips: "600", county_name: "Fairfax City VA", one_unit: "1249125"}
+    - {state_fips: "24", county_fips: "031", county_name: "Montgomery MD", one_unit: "1249125"}
+    - {state_fips: "24", county_fips: "033", county_name: "Prince Georges MD", one_unit: "1249125"}
+    # Massachusetts - Boston metro
+    - {state_fips: "25", county_fips: "009", county_name: "Essex MA", one_unit: "928000"}
+    - {state_fips: "25", county_fips: "017", county_name: "Middlesex MA", one_unit: "928000"}
+    - {state_fips: "25", county_fips: "021", county_name: "Norfolk MA", one_unit: "928000"}
+    - {state_fips: "25", county_fips: "023", county_name: "Plymouth MA", one_unit: "928000"}
+    - {state_fips: "25", county_fips: "025", county_name: "Suffolk MA", one_unit: "928000"}
+    # New Jersey - NYC commuter belt at ceiling
+    - {state_fips: "34", county_fips: "003", county_name: "Bergen NJ", one_unit: "1249125"}
+    - {state_fips: "34", county_fips: "013", county_name: "Essex NJ", one_unit: "1249125"}
+    - {state_fips: "34", county_fips: "017", county_name: "Hudson NJ", one_unit: "1249125"}
+    - {state_fips: "34", county_fips: "031", county_name: "Passaic NJ", one_unit: "1249125"}
+    - {state_fips: "34", county_fips: "039", county_name: "Union NJ", one_unit: "1249125"}
+    # Connecticut - Fairfield County
+    - {state_fips: "09", county_fips: "001", county_name: "Fairfield CT", one_unit: "928250"}
+    # Florida - Monroe (Keys), Miami-Dade above baseline
+    - {state_fips: "12", county_fips: "086", county_name: "Miami-Dade FL", one_unit: "832750"}
+    - {state_fips: "12", county_fips: "087", county_name: "Monroe FL", one_unit: "929000"}
+    # Washington - King + Snohomish at high-balance tier
+    - {state_fips: "53", county_fips: "033", county_name: "King WA", one_unit: "1027000"}
+    - {state_fips: "53", county_fips: "061", county_name: "Snohomish WA", one_unit: "1027000"}
+    # Hawaii - all counties at high-cost tier (statutory)
+    - {state_fips: "15", county_fips: "001", county_name: "Hawaii HI", one_unit: "1249125"}
+    - {state_fips: "15", county_fips: "003", county_name: "Honolulu HI", one_unit: "1249125"}
+    - {state_fips: "15", county_fips: "007", county_name: "Kauai HI", one_unit: "1249125"}
+    - {state_fips: "15", county_fips: "009", county_name: "Maui HI", one_unit: "1249125"}
+    # Alaska - all counties at high-cost tier (statutory)
+    - {state_fips: "02", county_fips: "020", county_name: "Anchorage AK", one_unit: "1249125"}
+    - {state_fips: "02", county_fips: "090", county_name: "Fairbanks North Star AK", one_unit: "1249125"}
