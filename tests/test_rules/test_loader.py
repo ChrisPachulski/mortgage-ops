@@ -80,6 +80,31 @@ def test_load_reference_returns_dict(tmp_path: Path, monkeypatch: pytest.MonkeyP
     assert result["body"] == {"k": "v"}
 
 
+@pytest.mark.parametrize(
+    "bad_name",
+    [
+        "../../etc/passwd",  # path traversal
+        "../escape",  # path traversal (relative)
+        "/absolute/path",  # absolute path
+        "with spaces",  # space
+        "UPPERCASE",  # uppercase
+        "trailing/slash",  # path separator
+        "-leading-hyphen",  # leading hyphen (RX requires alnum start)
+        "",  # empty
+        "name.yml",  # dot
+        "name_with_underscore",  # underscore (not in RX)
+    ],
+)
+def test_load_reference_rejects_invalid_names(bad_name: str) -> None:
+    # Regression for WR-06 (02-REVIEW.md): loader rejects any name that does
+    # not match the allowed naming pattern, defending against path-traversal
+    # payloads even though no internal caller currently passes one. The
+    # loader is the documented single source of truth and a defensive check
+    # costs almost nothing.
+    with pytest.raises(ValueError, match="reference name must match"):
+        load_reference(bad_name)
+
+
 def test_quoted_effective_string_raises_missing_reference_field(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

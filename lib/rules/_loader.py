@@ -10,6 +10,7 @@ because lru_cache lives across tests but resets per pytest session.
 
 from __future__ import annotations
 
+import re
 import warnings
 from datetime import date
 from functools import lru_cache
@@ -21,6 +22,13 @@ from dateutil.relativedelta import relativedelta
 
 REFERENCE_DIR: Final[Path] = Path(__file__).parent.parent.parent / "data" / "reference"
 STALENESS_THRESHOLD: Final[relativedelta] = relativedelta(months=12)
+
+# WR-06 (02-REVIEW.md): validate `name` argument so a caller passing
+# "../../etc/passwd" (or any other path-traversal payload) does not escape
+# REFERENCE_DIR. All shipped reference YAMLs use lowercase-and-hyphens-only
+# stems (e.g. "fha-mip-rates", "atr-qm-thresholds"); this regex matches the
+# established naming convention.
+_NAME_RX: Final[re.Pattern[str]] = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 
 
 class StaleReferenceWarning(UserWarning):
@@ -39,15 +47,25 @@ def load_reference(name: str) -> dict[str, Any]:
     """Load data/reference/{name}.yml, validate top-level fields, warn if stale.
 
     Args:
-        name: stem of the YAML file (e.g. "conforming-limits-2026").
+        name: stem of the YAML file (e.g. "conforming-limits-2026"). Must
+            match `[a-z0-9][a-z0-9-]*` per WR-06 (02-REVIEW.md) — defends
+            against path-traversal payloads like "../../etc/passwd".
 
     Returns:
         Parsed dict. `source` is str; `effective` is datetime.date.
 
     Raises:
+        ValueError: if `name` does not match the allowed naming pattern.
         FileNotFoundError: if the file does not exist.
-        MissingReferenceFieldError: if `source:` or `effective:` is missing.
+        MissingReferenceFieldError: if `source:` or `effective:` is missing,
+            or `effective` is not a `datetime.date`.
     """
+    if not _NAME_RX.match(name):
+        raise ValueError(
+            f"reference name must match {_NAME_RX.pattern!r} "
+            f"(lowercase alnum + hyphens, no leading hyphen, no path "
+            f"separators); got {name!r}"
+        )
     path = REFERENCE_DIR / f"{name}.yml"
     raw: dict[str, Any] = yaml.safe_load(path.read_text())
     if "source" not in raw:
