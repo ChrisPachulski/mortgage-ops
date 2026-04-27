@@ -1,0 +1,9 @@
+{
+  "citation": "12 CFR §1026.22(a)(3) - irregular transaction outside +/- 1/4 pp tolerance",
+  "source_url": "https://www.consumerfinance.gov/rules-policy/regulations/1026/22/",
+  "comment": "Hand-calc: |0.0700 - 0.0730| = 0.003 fractional. TOLERANCE_IRREGULAR = 0.0025. 0.003 > 0.0025 -> within_apr_tolerance=False. Pins the irregular-transaction outside-tolerance branch.",
+  "disclosed_apr": "0.0700",
+  "actual_apr": "0.0730",
+  "is_irregular_transaction": true,
+  "expected_within_tolerance": false
+}

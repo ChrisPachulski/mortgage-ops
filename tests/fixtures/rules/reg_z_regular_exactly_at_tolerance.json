@@ -1,0 +1,9 @@
+{
+  "citation": "12 CFR §1026.22(a)(2) - regular transaction exactly at +/- 1/8 pp boundary (`<=` semantics)",
+  "source_url": "https://www.consumerfinance.gov/rules-policy/regulations/1026/22/",
+  "comment": "Hand-calc: Decimal('0.0700') - Decimal('0.07125') = Decimal('-0.00125'); abs(-0.00125) = Decimal('0.00125') EXACTLY (Decimal arithmetic is exact, no float drift). TOLERANCE_REGULAR = 0.00125. 0.00125 <= 0.00125 -> True (regulation uses `does not exceed` = `<=`). Pins Pitfall 11 + the at-boundary semantics.",
+  "disclosed_apr": "0.0700",
+  "actual_apr": "0.07125",
+  "is_irregular_transaction": false,
+  "expected_within_tolerance": true
+}

@@ -1,0 +1,9 @@
+{
+  "citation": "12 CFR §1026.22(a)(2) - regular transaction outside +/- 1/8 pp tolerance",
+  "source_url": "https://www.consumerfinance.gov/rules-policy/regulations/1026/22/",
+  "comment": "Hand-calc: |0.0700 - 0.0715| = 0.0015 fractional. TOLERANCE_REGULAR = 0.00125. 0.0015 > 0.00125 -> within_apr_tolerance=False. Pins the regular-transaction outside-tolerance branch.",
+  "disclosed_apr": "0.0700",
+  "actual_apr": "0.0715",
+  "is_irregular_transaction": false,
+  "expected_within_tolerance": false
+}
