@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: Phase 2 paused after code review — 5 BLOCKER findings flagged; running /gsd-code-review-fix before verification
-last_updated: "2026-04-26T20:50:00.000Z"
-last_activity: 2026-04-26 -- Phase 2 all 7 plans executed; code review surfaced 5 blockers + 9 warnings
+stopped_at: Phase 2 complete — verifier PASSED 5/5 must_haves, 22/22 requirements satisfied, 254/254 tests pass; ready to advance to Phase 3 (Core Amortization)
+last_updated: "2026-04-26T22:50:00.000Z"
+last_activity: 2026-04-26 -- Phase 2 verification PASSED; code review 14/14 fixed; phase marked complete
 progress:
   total_phases: 12
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 13
   completed_plans: 13
-  percent: 50
+  percent: 17
 ---
 
 # Project State
@@ -21,24 +21,25 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-26)
 
 **Core value:** Math correctness first — every dollar figure traces to a tested, deterministic Python function; the LLM is a router and narrator that never owns numbers.
-**Current focus:** Phase 2 — execution complete, code review flagged 5 blockers; running fix-pass before verification
+**Current focus:** Phase 2 complete — ready to start Phase 3 (Core Amortization)
 
 ## Current Position
 
-Phase: 2 of 12 — execution complete, awaiting fix-pass + verification (NOT yet marked complete)
-Plan: 7 of 7 in Phase 2 executed (224/224 tests pass)
-Status: Code review found 5 BLOCKER findings (FHA classification, VA cash-out fee, FHA MIP coverage, multi-unit limits) + 9 warnings. User chose to pause and run /gsd-code-review-fix 2 before verification.
-Last activity: 2026-04-26 -- Phase 2 execution complete; paused at code review gate
+Phase: 3 of 12 — Core Amortization (not yet started)
+Plan: 0 of TBD — discuss/plan/execute pending
+Status: Phase 2 verified PASSED. 11 predicates + 10 reference YAMLs shipped; mutation harness ratified; 254/254 tests pass; all 22 requirements (REF-01..09, RUL-01..13) SATISFIED in REQUIREMENTS.md.
+Last activity: 2026-04-26 -- Phase 2 verification PASSED; phase marked complete in ROADMAP
 
-Progress: [█░░░░░░░░░] 8% (1/12 phases complete; phase 2 pending verification)
+Progress: [██░░░░░░░░] 17% (2/12 phases complete)
 
 ### Resume instructions
 
-1. Run `/gsd-code-review-fix 2` to auto-fix the blockers in `.planning/phases/02-regulatory-reference-data-rules-predicates/02-REVIEW.md`
-2. Re-run `/gsd-execute-phase 2` — it will detect all plans have SUMMARY.md and skip execution, then proceed directly to regression gate + verification
-3. After verification passes, ROADMAP/STATE will be auto-updated and phase 2 marked complete
+Phase 3 is up next. Recommended path:
+1. `/gsd-discuss-phase 3` — gather context for amortization design (numpy-financial wrap, biweekly cadence, extra-principal handling)
+2. `/gsd-plan-phase 3` — create executable plan
+3. `/gsd-execute-phase 3` — implement and verify
 
-The 5 blockers are in regulatory-compliance code (FHA, VA, MIP, multi-unit county data) — addressing them is non-optional given the project's "math correctness first" core value.
+Or skip discuss-phase and go straight to `/gsd-plan-phase 3` if Phase 1's amortization-baseline pattern is sufficient guidance.
 
 ## Performance Metrics
 
@@ -162,6 +163,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-04-27T04:37:15.000Z
-Stopped at: Phase 2 COMPLETE (Wave 4 plan 02-07 audit gate ratified; 11 predicates + 10 reference YAMLs; mutation harness proves meta-tests have teeth; 224/224 tests green; Phase 4 affordability is unblocked)
-Resume file: .planning/phases/02-regulatory-reference-data-rules-predicates/02-07-SUMMARY.md
+Last session: 2026-04-26T22:50:00.000Z
+Stopped at: Phase 2 VERIFIED & MARKED COMPLETE (5/5 must_haves PASSED; 22/22 requirements SATISFIED; 254/254 tests; code review 14/14 fixed; ready to start Phase 3 Core Amortization)
+Resume file: .planning/phases/02-regulatory-reference-data-rules-predicates/02-VERIFICATION.md

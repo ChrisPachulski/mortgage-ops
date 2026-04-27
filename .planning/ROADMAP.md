@@ -188,7 +188,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundations & Money Discipline | 6/6 | Complete (PASS-WITH-CAVEATS) | 2026-04-26 |
-| 2. Regulatory Reference Data & Rules Predicates | 7/7 | Complete (02-01..02-07 green; Wave 4 plan 02-07 audit gate ratified — mutation harness proves citation-coverage + schema meta-tests have teeth; 11 predicates + 10 reference YAMLs; 224/224 tests pass) | 2026-04-27 |
+| 2. Regulatory Reference Data & Rules Predicates | 7/7 | Complete (PASSED) — 02-01..02-07 green; mutation harness proves citation-coverage + schema meta-tests have teeth; 11 predicates + 10 reference YAMLs; code review 14/14 fixed; 254/254 tests pass; verifier 5/5 must_haves PASSED 22/22 requirements SATISFIED | 2026-04-26 |
 | 3. Core Amortization | 0/TBD | Not started | - |
 | 4. Affordability | 0/TBD | Not started | - |
 | 5. ARM Modeling | 0/TBD | Not started | - |
