@@ -137,6 +137,7 @@ dependencies = [
     { name = "numpy-financial" },
     { name = "pydantic" },
     { name = "python-dateutil" },
+    { name = "pyyaml" },
 ]
 
 [package.dev-dependencies]
@@ -152,6 +153,7 @@ requires-dist = [
     { name = "numpy-financial", specifier = "==1.0.0" },
     { name = "pydantic", specifier = ">=2.13.3" },
     { name = "python-dateutil", specifier = ">=2.9.0" },
+    { name = "pyyaml", specifier = ">=6.0.2" },
 ]
 
 [package.metadata.requires-dev]

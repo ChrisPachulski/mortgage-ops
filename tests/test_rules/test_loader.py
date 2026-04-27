@@ -1,0 +1,80 @@
+"""REF-08: StaleReferenceWarning fires when effective > 12 months old.
+REF-09 (loader-side): MissingReferenceFieldError raised on missing source/effective.
+
+Every assertion includes the hand-calculated expected behavior and why.
+
+Coverage:
+  - test_staleness_warning_fires_for_old_yaml: 730-day-old YAML → warns
+  - test_no_warning_for_fresh_yaml: 30-day-old YAML → no warn
+  - test_missing_source_raises: REF-09 enforcement at load time
+  - test_missing_effective_raises: REF-09 enforcement at load time
+  - test_load_reference_returns_dict: smoke-check happy path
+"""
+
+from __future__ import annotations
+
+import warnings
+from datetime import date, timedelta
+from pathlib import Path  # noqa: TC003  # used as pytest fixture annotation at runtime
+
+import pytest
+from lib.rules._loader import (
+    MissingReferenceFieldError,
+    StaleReferenceWarning,
+    load_reference,
+)
+
+
+def test_staleness_warning_fires_for_old_yaml(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Hand: 730 days = 24 months; well past the 12-month threshold.
+    old = (date.today() - timedelta(days=730)).isoformat()
+    fake = tmp_path / "synthetic-old.yml"
+    fake.write_text(f"source: 'https://example.test/'\neffective: {old}\nbody: stub\n")
+    monkeypatch.setattr("lib.rules._loader.REFERENCE_DIR", tmp_path)
+    load_reference.cache_clear()
+    with pytest.warns(StaleReferenceWarning, match="more than 12 months old"):
+        load_reference("synthetic-old")
+
+
+def test_no_warning_for_fresh_yaml(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Hand: 30 days old; well within the 12-month threshold.
+    fresh = (date.today() - timedelta(days=30)).isoformat()
+    fake = tmp_path / "synthetic-fresh.yml"
+    fake.write_text(f"source: 'https://example.test/'\neffective: {fresh}\nbody: stub\n")
+    monkeypatch.setattr("lib.rules._loader.REFERENCE_DIR", tmp_path)
+    load_reference.cache_clear()
+    with warnings.catch_warnings():
+        warnings.simplefilter("error", StaleReferenceWarning)
+        # Will raise if any StaleReferenceWarning fires.
+        load_reference("synthetic-fresh")
+
+
+def test_missing_source_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = tmp_path / "no-source.yml"
+    fake.write_text("effective: 2026-01-01\nbody: stub\n")
+    monkeypatch.setattr("lib.rules._loader.REFERENCE_DIR", tmp_path)
+    load_reference.cache_clear()
+    with pytest.raises(MissingReferenceFieldError, match="missing required `source:` field"):
+        load_reference("no-source")
+
+
+def test_missing_effective_raises(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = tmp_path / "no-effective.yml"
+    fake.write_text("source: 'https://example.test/'\nbody: stub\n")
+    monkeypatch.setattr("lib.rules._loader.REFERENCE_DIR", tmp_path)
+    load_reference.cache_clear()
+    with pytest.raises(MissingReferenceFieldError, match="missing required `effective:` field"):
+        load_reference("no-effective")
+
+
+def test_load_reference_returns_dict(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    fresh = (date.today() - timedelta(days=30)).isoformat()
+    fake = tmp_path / "smoke.yml"
+    fake.write_text(f"source: 'https://example.test/'\neffective: {fresh}\nbody:\n  k: v\n")
+    monkeypatch.setattr("lib.rules._loader.REFERENCE_DIR", tmp_path)
+    load_reference.cache_clear()
+    result = load_reference("smoke")
+    assert isinstance(result, dict)
+    assert result["body"] == {"k": "v"}

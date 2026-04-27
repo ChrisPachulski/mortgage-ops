@@ -17,9 +17,16 @@ repos:
         additional_dependencies:
           - pydantic>=2.13.3
           - python-dateutil>=2.9.0
+          - pyyaml>=6.0.2
           - pytest>=9.0
         args: [--strict]
         # mypy hook runs on changed files only by default — CI catches the rest.
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-yaml
+        files: ^data/reference/.*\.yml$
 
   - repo: local
     hooks:
