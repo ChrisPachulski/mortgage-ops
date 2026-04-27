@@ -14,6 +14,7 @@ Coverage:
 from __future__ import annotations
 
 import warnings
+from collections.abc import Iterator  # noqa: TC003  # used as fixture return annotation at runtime
 from datetime import date, timedelta
 from pathlib import Path  # noqa: TC003  # used as pytest fixture annotation at runtime
 
@@ -23,6 +24,18 @@ from lib.rules._loader import (
     StaleReferenceWarning,
     load_reference,
 )
+
+
+@pytest.fixture(autouse=True)
+def _clear_loader_cache() -> Iterator[None]:
+    # WR-07 (02-REVIEW.md): clear the lru_cache BOTH before AND after each
+    # test, so synthetic-tmp-path entries from one test never bleed into
+    # another. Pre-fix tests cleared explicitly before but not after; this
+    # auto-use fixture eliminates the contamination risk and removes the
+    # explicit cache_clear() calls scattered through individual tests.
+    load_reference.cache_clear()
+    yield
+    load_reference.cache_clear()
 
 
 def test_staleness_warning_fires_for_old_yaml(
