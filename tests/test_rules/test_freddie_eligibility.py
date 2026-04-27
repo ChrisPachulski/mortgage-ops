@@ -15,6 +15,7 @@ Coverage:
 from __future__ import annotations
 
 import json
+from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -146,3 +147,76 @@ def test_ltv_bucket_rejects_more_than_two_decimal_places() -> None:
 def test_ltv_bucket_accepts_exactly_two_decimal_places() -> None:
     # Regression for WR-03: ensure the >2-decimal guard does not over-trigger.
     assert _ltv_bucket(Decimal("60.00")) == "0-60"
+
+
+def test_freddie_eligibility_yaml_every_eligible_field_is_python_bool() -> None:
+    # Regression for WR-04 (02-REVIEW.md): a future YAML edit that quotes
+    # the eligibility flag (e.g., 'false' instead of unquoted false) would
+    # be silently truthy under bool(). Pin the YAML's actual cell types so
+    # such an edit fails this schema test.
+    import yaml as _yaml
+
+    yaml_path = (
+        Path(__file__).resolve().parent.parent.parent
+        / "data"
+        / "reference"
+        / "freddie-eligibility-matrix.yml"
+    )
+    raw = _yaml.safe_load(yaml_path.read_text())
+    for cs_bucket, by_ltv in raw["eligibility"].items():
+        for ltv_bucket, cell in by_ltv.items():
+            value = cell["eligible"]
+            assert isinstance(value, bool), (
+                f"freddie-eligibility-matrix.yml eligibility[{cs_bucket!r}]"
+                f"[{ltv_bucket!r}].eligible must be a YAML bool (true/false "
+                f"unquoted); got {type(value).__name__} with value {value!r}"
+            )
+
+
+def test_freddie_evaluate_raises_typeerror_on_quoted_eligibility_flag(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Regression for WR-04 (02-REVIEW.md): if a future YAML accidentally
+    # quoted the eligibility flag, the predicate must fail loud rather than
+    # silently flip every 'ineligible' cell to 'eligible' via bool('false')==True.
+
+    from lib.rules._loader import load_reference
+
+    # Build a minimal but schema-valid Freddie YAML with a QUOTED 'false' flag.
+    today = date.today().isoformat()
+    fake_yaml = (
+        f"source: 'https://example.test/'\n"
+        f"effective: {today}\n"
+        f"credit_score_buckets:\n"
+        f"  - {{id: '740-or-better', min: '740', max: '850'}}\n"
+        f"ltv_buckets:\n"
+        f"  - {{id: '0-60', min: '0', max: '60.00'}}\n"
+        f"eligibility:\n"
+        f"  '740-or-better':\n"
+        f"    '0-60':\n"
+        f"      eligible: 'false'   # QUOTED — pre-fix this would have been truthy\n"
+        f"      credit_fee_bps: '0'\n"
+        f"loan_purpose_addons:\n"
+        f"  purchase: '0'\n"
+        f"occupancy_addons:\n"
+        f"  primary: '0'\n"
+        f"unit_count_addons:\n"
+        f"  '1': '0'\n"
+    )
+    fake_path = tmp_path / "freddie-eligibility-matrix.yml"
+    fake_path.write_text(fake_yaml)
+    monkeypatch.setattr("lib.rules._loader.REFERENCE_DIR", tmp_path)
+    load_reference.cache_clear()
+
+    with pytest.raises(TypeError, match="must be a YAML bool"):
+        evaluate(
+            credit_score=750,
+            ltv_pct=Decimal("60.00"),
+            loan_purpose="purchase",
+            occupancy="primary",
+            unit_count=1,
+        )
+
+    # Reset the cache so other tests in this session see the real YAML.
+    load_reference.cache_clear()

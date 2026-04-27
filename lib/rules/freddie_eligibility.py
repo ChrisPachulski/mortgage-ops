@@ -146,7 +146,19 @@ def evaluate(
             f"(CONTEXT.md fail-loud discipline; check YAML)"
         ) from exc
 
-    base_eligible = bool(cell["eligible"])
+    # WR-04 (02-REVIEW.md): strict isinstance check rather than bool() coercion.
+    # bool('false') is True (non-empty string is truthy), so a future YAML edit
+    # that accidentally quotes the eligibility flag would silently flip every
+    # 'ineligible' cell to 'eligible'. Fail loud instead.
+    raw_eligible = cell["eligible"]
+    if not isinstance(raw_eligible, bool):
+        raise TypeError(
+            f"freddie-eligibility-matrix.yml eligibility cell "
+            f"[{cs_bucket!r}][{ltv_b!r}] 'eligible' must be a YAML bool "
+            f"(true/false unquoted); got {type(raw_eligible).__name__} "
+            f"with value {raw_eligible!r}."
+        )
+    base_eligible = raw_eligible
     base_bps = Decimal(cell["credit_fee_bps"])
 
     try:
