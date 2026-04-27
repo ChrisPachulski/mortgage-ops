@@ -10,6 +10,15 @@ notes: |
   symmetry. Counties NOT listed get the FLOOR limit. Per Phase 2 decision
   D-PHASE2-Q2: subset of high-cost counties shipped (CA / NY / DC / MA / NJ /
   HI / AK metros); unlisted high-cost counties → MissingCountyDataError.
+
+  BL-04 (02-REVIEW.md) data-shape note: high_cost_counties entries below carry
+  ONLY `one_unit`. The floor + ceiling blocks declare two/three/four_unit
+  values, but per-county multi-unit data is NOT shipped because v1 only supports
+  unit_count=1 (lib.rules.loan_type.classify rejects unit_count > 1). The
+  _county_limit_fha helper asserts unit_key == "one_unit" so any future
+  relaxation surfaces a clear NotImplementedError; before adding multi-unit
+  support, fill in two_unit / three_unit / four_unit from HUD's published
+  county tables.
 limits:
   floor:
     one_unit: "541287"

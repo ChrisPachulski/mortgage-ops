@@ -35,7 +35,13 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from lib.rules.loan_type import MissingCountyDataError, classify
+from lib.rules._loader import load_reference
+from lib.rules.loan_type import (
+    MissingCountyDataError,
+    _county_limit,
+    _county_limit_fha,
+    classify,
+)
 from lib.rules.types import County
 
 FIX: Path = Path(__file__).resolve().parent.parent / "fixtures" / "rules"
@@ -233,3 +239,24 @@ def test_unit_count_above_one_raises_not_implemented() -> None:
     # Multi-family classification is deferred to v2.
     with pytest.raises(NotImplementedError, match="unit_count"):
         classify(Decimal("400000.00"), county=None, program="conventional", unit_count=2)
+
+
+def test_county_limit_conventional_helper_rejects_non_one_unit_key() -> None:
+    # Regression for BL-04 (02-REVIEW.md): the conforming-limits-2026.yml
+    # high_cost_counties entries only ship `one_unit` keys. The runtime
+    # `classify` unit_count guard prevents this helper from being called with
+    # any other key today, but defend in depth so a future code change that
+    # drops or relaxes the guard surfaces a documented NotImplementedError
+    # instead of a confusing KeyError("two_unit") deep in the data path.
+    ref = load_reference("conforming-limits-2026")
+    sf = County(state_fips="06", county_fips="075", name="San Francisco CA")
+    with pytest.raises(NotImplementedError, match="multi-unit limits"):
+        _county_limit(ref, sf, "two_unit", Decimal("832750"))
+
+
+def test_county_limit_fha_helper_rejects_non_one_unit_key() -> None:
+    # Regression for BL-04 (02-REVIEW.md): symmetric guard on the FHA helper.
+    ref = load_reference("fha-limits-2026")
+    sf = County(state_fips="06", county_fips="075", name="San Francisco CA")
+    with pytest.raises(NotImplementedError, match="multi-unit FHA limits"):
+        _county_limit_fha(ref, sf, "three_unit", Decimal("541287"))

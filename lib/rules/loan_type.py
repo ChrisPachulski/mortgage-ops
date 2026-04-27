@@ -170,7 +170,23 @@ def _classify_va(loan_amount: Decimal, county: County | None, unit_count: int) -
 
 def _county_limit(ref: dict[str, Any], county: County, unit_key: str, baseline: Decimal) -> Decimal:
     """Return county-specific limit, falling back to baseline if county is not
-    in the high-cost subset."""
+    in the high-cost subset.
+
+    BL-04 contract (02-REVIEW.md): the conforming-limits-2026.yml
+    high_cost_counties entries currently ship only `one_unit` keys. The runtime
+    `classify` guard (unit_count != 1 -> NotImplementedError) prevents this
+    helper from being called with non-one_unit keys today, but defend in depth
+    here so any future drop of that guard surfaces a documented gap rather
+    than a confusing KeyError.
+    """
+    if unit_key != "one_unit":
+        raise NotImplementedError(
+            f"county-level multi-unit limits not yet shipped in "
+            f"data/reference/conforming-limits-2026.yml; got unit_key={unit_key!r}. "
+            f"Per Phase 2 decision D-PHASE2-Q2 only one_unit county data is shipped; "
+            f"add per-unit columns from FHFA county XLSX before relaxing the "
+            f"unit_count guard in classify()."
+        )
     for entry in ref["limits"]["high_cost_counties"]:
         if entry["state_fips"] == county.state_fips and entry["county_fips"] == county.county_fips:
             return Decimal(entry[unit_key])
@@ -191,7 +207,19 @@ def _county_limit_fha(
 
     Note: callers MUST only invoke this helper when loan_amount > floor; loans
     at or below floor are classified as fha_standard without any county lookup.
+
+    BL-04 contract (02-REVIEW.md): fha-limits-2026.yml high_cost_counties
+    entries currently ship only `one_unit` keys. Defend in depth in case the
+    `unit_count != 1` guard in classify() is ever relaxed.
     """
+    if unit_key != "one_unit":
+        raise NotImplementedError(
+            f"county-level multi-unit FHA limits not yet shipped in "
+            f"data/reference/fha-limits-2026.yml; got unit_key={unit_key!r}. "
+            f"Per Phase 2 decision D-PHASE2-Q2 only one_unit county data is shipped; "
+            f"add per-unit columns from HUD county tables before relaxing the "
+            f"unit_count guard in classify()."
+        )
     for entry in ref["limits"]["high_cost_counties"]:
         if entry["state_fips"] == county.state_fips and entry["county_fips"] == county.county_fips:
             return Decimal(entry[unit_key])

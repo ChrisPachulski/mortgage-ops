@@ -13,6 +13,14 @@ notes: |
   raises MissingCountyDataError so the user knows to extend the table.
   All numeric scalars are quoted strings so PyYAML emits str (not float);
   loader callers wrap in Decimal(...) at consumption time (Pitfall 1).
+
+  BL-04 (02-REVIEW.md) data-shape note: high_cost_counties entries below carry
+  ONLY `one_unit`. The baseline + ceiling blocks declare two/three/four_unit
+  values, but per-county multi-unit data is NOT shipped because v1 only supports
+  unit_count=1 (lib.rules.loan_type.classify rejects unit_count > 1). The
+  _county_limit helper asserts unit_key == "one_unit" so any future relaxation
+  surfaces a clear NotImplementedError; before adding multi-unit support, fill
+  in two_unit / three_unit / four_unit from FHFA's published county XLSX.
 limits:
   baseline:
     one_unit: "832750"
