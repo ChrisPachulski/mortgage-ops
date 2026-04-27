@@ -78,3 +78,22 @@ def test_load_reference_returns_dict(tmp_path: Path, monkeypatch: pytest.MonkeyP
     result = load_reference("smoke")
     assert isinstance(result, dict)
     assert result["body"] == {"k": "v"}
+
+
+def test_quoted_effective_string_raises_missing_reference_field(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Regression for WR-05 (02-REVIEW.md): if a YAML accidentally quotes the
+    # effective date (effective: "2026-01-01") PyYAML returns it as a str, not
+    # a date. Pre-fix the loader passed it through to _check_staleness which
+    # raised a confusing TypeError on the < comparison. Post-fix, the loader
+    # itself raises MissingReferenceFieldError with a clear schema message.
+    fake = tmp_path / "quoted-effective.yml"
+    fake.write_text("source: 'https://example.test/'\neffective: '2026-01-01'\nbody: stub\n")
+    monkeypatch.setattr("lib.rules._loader.REFERENCE_DIR", tmp_path)
+    load_reference.cache_clear()
+    with pytest.raises(
+        MissingReferenceFieldError,
+        match="effective:` must be an unquoted YAML date",
+    ):
+        load_reference("quoted-effective")

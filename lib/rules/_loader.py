@@ -54,6 +54,17 @@ def load_reference(name: str) -> dict[str, Any]:
         raise MissingReferenceFieldError(f"{name}.yml missing required `source:` field")
     if "effective" not in raw:
         raise MissingReferenceFieldError(f"{name}.yml missing required `effective:` field")
+    # WR-05 (02-REVIEW.md): validate `effective` is an unquoted YAML date here
+    # — the loader is the documented single source of truth. Without this guard
+    # an accidentally quoted "2026-01-01" would slip past `if "effective" in raw`
+    # and produce a confusing TypeError deep in _check_staleness's `<` comparison
+    # rather than a clear schema-violation message.
+    if not isinstance(raw["effective"], date):
+        raise MissingReferenceFieldError(
+            f"{name}.yml `effective:` must be an unquoted YAML date "
+            f"(YYYY-MM-DD); got {type(raw['effective']).__name__} "
+            f"with value {raw['effective']!r}. Quoted strings are not accepted."
+        )
     _check_staleness(name, raw["effective"])
     return raw
 
