@@ -1,0 +1,13 @@
+{
+  "citation": "USDA SFH GLP — county-specific high-cost-area override (San Francisco CA)",
+  "source_url": "https://eligibility.sc.egov.usda.gov/eligibility/incomeEligibilityAction.do",
+  "comment": "Hand-calc: household_income=$200,000, household_size=4, county=San Francisco (state_fips=06, county_fips=075) -> by_county override found -> applicable_income_limit = $211,800 (override 1-4-person value). 200000 <= 211800 -> income_eligible=True. This pins the override-resolution path: the predicate MUST find the by_county row before falling back to default.",
+  "household_income": "200000",
+  "household_size": 4,
+  "county": {"state_fips": "06", "county_fips": "075", "name": "San Francisco"},
+  "loan_amount": "400000",
+  "expected_income_eligible": true,
+  "expected_applicable_income_limit": "211800",
+  "expected_guarantee_fee_upfront": "4000.00",
+  "expected_guarantee_fee_annual": "1400.00"
+}

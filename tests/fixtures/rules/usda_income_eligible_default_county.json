@@ -1,0 +1,13 @@
+{
+  "citation": "7 CFR Part 3555 + USDA SFH GLP — default 1-4-person income limit",
+  "source_url": "https://eligibility.sc.egov.usda.gov/eligibility/incomeEligibilityAction.do",
+  "comment": "Hand-calc: household_income = $119,850 (exactly equal to default 1-4-person limit), household_size=4, county=Autauga AL (NOT in by_county list -> silent fallback to default per D-PHASE2-Q5). 119850 <= 119850 -> income_eligible=True. Guarantee fees: $200,000 * 0.0100 = $2,000.00 upfront; $200,000 * 0.0035 = $700.00 annual.",
+  "household_income": "119850",
+  "household_size": 4,
+  "county": {"state_fips": "01", "county_fips": "001", "name": "Autauga"},
+  "loan_amount": "200000",
+  "expected_income_eligible": true,
+  "expected_applicable_income_limit": "119850",
+  "expected_guarantee_fee_upfront": "2000.00",
+  "expected_guarantee_fee_annual": "700.00"
+}

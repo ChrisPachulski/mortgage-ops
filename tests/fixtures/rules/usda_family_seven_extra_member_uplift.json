@@ -1,0 +1,13 @@
+{
+  "citation": "7 CFR Part 3555 + USDA SFH GLP — 5-8-person band (no uplift)",
+  "source_url": "https://eligibility.sc.egov.usda.gov/eligibility/incomeEligibilityAction.do",
+  "comment": "Hand-calc: household_size=7 falls in the 5-8 band (NOT > 8) -> applicable_income_limit = persons_5_to_8 = $158,250 with NO per-extra-member uplift (uplift only applies for sizes > 8). household_income=$165,000 > $158,250 -> income_eligible=False. This pins the band-boundary behavior so future readers do not accidentally apply uplift at family-size 6 or 7.",
+  "household_income": "165000",
+  "household_size": 7,
+  "county": {"state_fips": "01", "county_fips": "001", "name": "Autauga"},
+  "loan_amount": "200000",
+  "expected_income_eligible": false,
+  "expected_applicable_income_limit": "158250",
+  "expected_guarantee_fee_upfront": "2000.00",
+  "expected_guarantee_fee_annual": "700.00"
+}

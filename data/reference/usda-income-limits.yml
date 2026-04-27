@@ -1,0 +1,49 @@
+# data/reference/usda-income-limits.yml
+source: "https://www.rd.usda.gov/files/rd-grhlimitmap.pdf"
+effective: 2025-10-01
+notes: |
+  USDA Rural Development Single Family Housing Guaranteed Loan Program (SFH GLP)
+  income limits and guarantee fees per 7 CFR Part 3555. Income limits are 115% of
+  area median income (AMI). Two bands per county: 1-4-person households and
+  5-8-person households. For households larger than 8 persons, USDA RD adds an
+  8% increment per extra person above 8 (encoded here as per_extra_member_pct).
+
+  USDA Source: https://eligibility.sc.egov.usda.gov/eligibility/incomeEligibilityAction.do
+  (interactive eligibility worksheet; current published table)
+
+  Effective: 2025-10-01 (USDA fiscal year start; USDA typically republishes in
+  Q3-Q4 each fiscal year). This effective date is within the 12-month staleness
+  window — no StaleReferenceWarning at import.
+
+  COUNTY SUBSET POLICY (per Phase 2 D-PHASE2-Q5 / RESEARCH.md Pitfall 10):
+  This file ships the DEFAULT income limits + a small subset of counties where
+  the published limit DIFFERS from the default. PER USDA POLICY, counties not in
+  the by_county list use the default limits (USDA's actual published behavior).
+  This is INTENTIONALLY DIFFERENT from REF-01 (FHFA), where unlisted counties
+  trigger MissingCountyDataError — REF-01 asks "is this county high-cost?" while
+  REF-06 asks "what is this county's limit?" and the default IS the answer for
+  most counties.
+
+  Guarantee fees per USDA SFH GLP: 1.0% upfront guarantee fee (charged at
+  closing, can be financed) + 0.35% annual fee (charged on the average annual
+  outstanding balance). Source: 7 CFR §3555.107 + USDA RD published rate sheet.
+
+guarantee_fee:
+  upfront_pct: "0.0100"          # 1.0% upfront — financed at closing per 7 CFR §3555.107(g)
+  annual_pct: "0.0035"           # 0.35% annual — charged on average outstanding balance
+
+income_limits:
+  default:
+    persons_1_to_4: "119850"     # default 1-4-person 115%-AMI limit (most US counties)
+    persons_5_to_8: "158250"     # default 5-8-person 115%-AMI limit
+    per_extra_member_pct: "0.08" # USDA RD adds 8% of 8-person limit per extra person above 8
+  by_county:
+    # Per-county overrides where published limit != default. Source: USDA RD income limit map.
+    # Subset policy per RESEARCH.md Pitfall 10 + D-PHASE2-Q5: ship San Francisco as the
+    # canonical high-cost USDA-eligible county override; future YAML edits add more counties
+    # without code changes.
+    - state_fips: "06"           # California
+      county_fips: "075"         # San Francisco County
+      county_name: "San Francisco"
+      persons_1_to_4: "211800"   # per USDA RD published high-cost-area override
+      persons_5_to_8: "279600"
