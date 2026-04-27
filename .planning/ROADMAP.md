@@ -15,7 +15,7 @@ User selected **fine** (8-12 phases). This roadmap is **12 phases** — each cal
 - Decimal phases (2.1, 2.2): Urgent insertions (marked with INSERTED)
 
 - [x] **Phase 1: Foundations & Money Discipline** - Lock Decimal/Pydantic v2 models, CI pipeline, DATA_CONTRACT, golden-value fixtures
-- [ ] **Phase 2: Regulatory Reference Data & Rules Predicates** - Cited YAML + one-predicate-per-citation library (1/7 plans complete)
+- [ ] **Phase 2: Regulatory Reference Data & Rules Predicates** - Cited YAML + one-predicate-per-citation library (2/7 plans complete)
 - [ ] **Phase 3: Core Amortization** - Wrap numpy-financial; fixed-rate, biweekly, extra-principal schedules
 - [ ] **Phase 4: Affordability** - DTI/LTV/CLTV/PITI + household-aware joint-applicant model
 - [ ] **Phase 5: ARM Modeling** - 5/1, 7/1, 10/1, 5/6 with caps/floor/margin/reset and re-amortization
@@ -188,7 +188,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 1. Foundations & Money Discipline | 6/6 | Complete (PASS-WITH-CAVEATS) | 2026-04-26 |
-| 2. Regulatory Reference Data & Rules Predicates | 1/7 | In progress (Wave 1 complete) | - |
+| 2. Regulatory Reference Data & Rules Predicates | 2/7 | In progress (02-01 + 02-02 green; FHA branch wired) | - |
 | 3. Core Amortization | 0/TBD | Not started | - |
 | 4. Affordability | 0/TBD | Not started | - |
 | 5. ARM Modeling | 0/TBD | Not started | - |

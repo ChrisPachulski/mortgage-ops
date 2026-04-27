@@ -23,8 +23,8 @@ User selected "all" scope; everything below is in v1.
 ### Regulatory Reference Data
 
 - [x] **REF-01**: `data/reference/conforming-limits-2026.yml` with FHFA baseline + ceiling + per-county lookup, source URL, effective date
-- [ ] **REF-02**: `data/reference/fha-limits-2026.yml` with FHA floor/ceiling + per-county lookup
-- [ ] **REF-03**: `data/reference/fha-mip-rates.yml` with FHA UFMIP + annual MIP rates per term/LTV/loan-amount tier
+- [x] **REF-02**: `data/reference/fha-limits-2026.yml` with FHA floor/ceiling + per-county lookup
+- [x] **REF-03**: `data/reference/fha-mip-rates.yml` with FHA UFMIP + annual MIP rates per term/LTV/loan-amount tier
 - [ ] **REF-04**: `data/reference/va-funding-fees.yml` with first-use/subsequent-use/IRRRL/cash-out funding fee tables
 - [ ] **REF-05**: `data/reference/va-residual-income.yml` with geographic × family-size × loan-amount residual income table
 - [ ] **REF-06**: `data/reference/usda-income-limits.yml` with 115%-of-area-median income thresholds
@@ -37,7 +37,7 @@ User selected "all" scope; everything below is in v1.
 - [x] **RUL-01**: `lib/rules/loan_type.py` classifies conforming / high-balance / jumbo / FHA / FHA-HB / VA / VA-HB / USDA based on county data; fails loud when county missing (cfpb/jumbo-mortgage pattern)
 - [ ] **RUL-02**: `lib/rules/fannie_eligibility.py` implements LLPA matrix lookup (credit-score × LTV × loan-purpose tiers)
 - [ ] **RUL-03**: `lib/rules/freddie_eligibility.py` implements equivalent LPA-published eligibility checks
-- [ ] **RUL-04**: `lib/rules/fha_mip.py` implements MIP UFMIP + annual MIP per HUD ML 2023-05, with origination-date grandfathering
+- [x] **RUL-04**: `lib/rules/fha_mip.py` implements MIP UFMIP + annual MIP per HUD ML 2023-05, with origination-date grandfathering
 - [ ] **RUL-05**: `lib/rules/conventional_pmi.py` implements HPA auto-termination (78% LTV) and request-termination (80% LTV) rules
 - [ ] **RUL-06**: `lib/rules/va_funding_fee.py` calculates VA funding fee per Lender Handbook M26-7
 - [ ] **RUL-07**: `lib/rules/va_residual_income.py` evaluates residual income vs geographic × family-size × loan-amount table
@@ -222,8 +222,8 @@ Mapped 2026-04-26 by gsd-roadmapper. Every v1 requirement is assigned to exactly
 | FND-09 | Phase 1 | Pending |
 | FND-10 | Phase 1 | Pending |
 | REF-01 | Phase 2 | Done (02-01) |
-| REF-02 | Phase 2 | Pending |
-| REF-03 | Phase 2 | Pending |
+| REF-02 | Phase 2 | Done (02-02) |
+| REF-03 | Phase 2 | Done (02-02) |
 | REF-04 | Phase 2 | Pending |
 | REF-05 | Phase 2 | Pending |
 | REF-06 | Phase 2 | Pending |
@@ -233,7 +233,7 @@ Mapped 2026-04-26 by gsd-roadmapper. Every v1 requirement is assigned to exactly
 | RUL-01 | Phase 2 | Done (02-01) |
 | RUL-02 | Phase 2 | Pending |
 | RUL-03 | Phase 2 | Pending |
-| RUL-04 | Phase 2 | Pending |
+| RUL-04 | Phase 2 | Done (02-02) |
 | RUL-05 | Phase 2 | Pending |
 | RUL-06 | Phase 2 | Pending |
 | RUL-07 | Phase 2 | Pending |
