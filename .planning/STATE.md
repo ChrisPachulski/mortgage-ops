@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: Phase 2 plan 05 complete (Wave 3 plan 02-05 closed — RUL-05 Conventional PMI + RUL-02 Fannie LLPA + RUL-03 Freddie eligibility landed; statutory-constants-in-code idiom + twin-predicate-with-shared-bucket-structure pattern established)
-last_updated: "2026-04-27T04:09:04.000Z"
-last_activity: 2026-04-27 -- Phase 2 plan 05 complete (RUL-02, RUL-03, RUL-05 landed; Pitfall 6 boundary tests pinned; 21/22 phase-2 requirements done; 181/181 tests green)
+stopped_at: Phase 2 plan 06 complete (Wave 3 plan 02-06 closed — RUL-09 ATR/QM + RUL-10 Reg Z APR-tolerance landed; 22/22 phase-2 requirements done; only 02-07 audit gate remains)
+last_updated: "2026-04-27T04:24:13.000Z"
+last_activity: 2026-04-27 -- Phase 2 plan 06 complete (RUL-09 atr_qm + RUL-10 reg_z landed; CFPB Q4 2025 publication pinned with 2026-indexed loan-amount tiers; statutory-constants-in-code idiom reused for Reg-Z tolerances; 210/210 tests green)
 progress:
   total_phases: 12
   completed_phases: 1
   total_plans: 15
-  completed_plans: 11
-  percent: 73
+  completed_plans: 12
+  percent: 80
 ---
 
 # Project State
@@ -26,9 +26,9 @@ See: .planning/PROJECT.md (updated 2026-04-26)
 ## Current Position
 
 Phase: 2 of 12 in progress (Regulatory Reference Data + Rules Predicates)
-Plan: 5 of 7 in Phase 2 complete
-Status: Wave 3 plan 02-05 closed — RUL-05 Conventional PMI + RUL-02 Fannie LLPA + RUL-03 Freddie eligibility wired; ready for Wave 3 tail (02-06 ATR/QM + Reg Z, then 02-07 audit gate, sequential)
-Last activity: 2026-04-27 -- Phase 2 plan 05 complete (Conventional PMI + Fannie LLPA + Freddie eligibility; 181/181 tests pass)
+Plan: 6 of 7 in Phase 2 complete
+Status: Wave 3 plan 02-06 closed — RUL-09 ATR/QM + RUL-10 Reg Z APR-tolerance wired; all 22/22 phase-2 requirements landed; only 02-07 citation-coverage audit gate remains
+Last activity: 2026-04-27 -- Phase 2 plan 06 complete (atr_qm + reg_z; 210/210 tests pass)
 
 Progress: [█░░░░░░░░░] 8% (1/12 phases)
 
@@ -36,20 +36,21 @@ Progress: [█░░░░░░░░░] 8% (1/12 phases)
 
 **Velocity:**
 
-- Total plans completed: 11
+- Total plans completed: 12
 - Phase 1 wall time: ~1.5 hours (orchestrated, sequential)
 - Phase 2 plan 01 wall time: ~35 min (sequential, single executor)
 - Phase 2 plan 02 wall time: ~7 min (sequential, single executor — fastest plan to date thanks to 02-01 foundation pattern)
 - Phase 2 plan 03 wall time: ~12 min (sequential, single executor — VA scope had two predicates + cross-plan stub resolution + AFFD-07 contract; still well under 02-01)
 - Phase 2 plan 04 wall time: ~5 min (sequential, single executor — pattern fully internalized; no stub resolution; both new predicates pure new artifacts)
 - Phase 2 plan 05 wall time: ~10 min (sequential, single executor — largest plan in Phase 2 by file count: 3 predicates + 2 reference YAMLs + 12 fixtures + 3 test files = 20 new files; Pitfall 6 boundary tests + twin-predicate-with-shared-bucket-structure)
+- Phase 2 plan 06 wall time: ~5 min (sequential, single executor — atr_qm + reg_z; CFPB Q4 2025 publication pin + Reg-Z statutory constants reuse the 02-05 idiom; 19 new files: 2 predicates + 1 YAML + 2 test files + 15 fixtures + 2 deviations both Rule-3 ruff I001)
 
 **By Phase:**
 
 | Phase | Plans | Status |
 |-------|-------|--------|
 | 1     | 6/6   | Complete (PASS-WITH-CAVEATS) |
-| 2     | 5/7   | In progress — 02-01..02-05 green (FHA + VA + USDA + IRS Pub 936 + HPA + Fannie LLPA + Freddie eligibility wired); Wave 3 plan 02-05 closed |
+| 2     | 6/7   | In progress — 02-01..02-06 green (all 11 predicates shipped: FHA + VA + USDA + IRS Pub 936 + HPA + Fannie LLPA + Freddie eligibility + ATR/QM + Reg Z); only 02-07 citation-coverage audit gate remains |
 
 **Plan-level metrics:**
 
@@ -60,11 +61,12 @@ Progress: [█░░░░░░░░░] 8% (1/12 phases)
 | 02-03 | 12 min | 2 | 19 created + 2 modified | +25 net (+9 va_funding_fee + +7 va_residual_income + +4 new VA loan_type + +2 new schema params + +4 new citation-cov params, -1 stub-presence test removed) | green |
 | 02-04 | 5 min | 2 | 14 created + 0 modified | +24 net (+8 USDA + +10 IRS Pub 936 + +2 new schema params + +4 new citation-cov params; no test removal since no cross-plan stub resolution this plan) | green |
 | 02-05 | 10 min | 3 | 20 created + 0 modified | +42 net (+9 conventional_pmi + +18 fannie_eligibility + +7 freddie_eligibility + +2 new schema params + +6 new citation-cov params; no cross-plan stub resolution) | green |
+| 02-06 | 5 min | 2 | 19 created + 0 modified | +29 net (+14 atr_qm + +10 reg_z + +1 new schema param [atr-qm-thresholds] + +4 new citation-cov params [atr_qm × 2, reg_z × 2]; no cross-plan stub resolution) | green |
 
 **Recent Trend:**
 
-- Last 11 plans: 01-01..01-06 + 02-01..02-05 (all green; 181/181 tests pass)
-- Trend: clean — no node repairs, no rework cycles. 02-05 took 10 min (twice 02-04's 5 min) but shipped TWICE the surface area: 3 predicates + 2 YAMLs vs 02-04's 2 predicates + 2 YAMLs, plus the largest matrix payload of any Phase 2 plan (Fannie 8x8x3x3x4 cube + Freddie 8x8 eligibility table). Per-file/per-predicate velocity is ~3.3 min/predicate, the new floor. Pitfall 6 boundary tests proved easy to pin once the bucket convention was codified in YAML notes blocks. Six Rule-1/Rule-3 deviations were all auto-fixed without scope expansion.
+- Last 12 plans: 01-01..01-06 + 02-01..02-06 (all green; 210/210 tests pass)
+- Trend: clean — no node repairs, no rework cycles. 02-06 returned to the 5-min floor (matching 02-04 and the new per-predicate velocity baseline of ~2.5 min/predicate). All 11 RUL-* predicates now shipped — atr_qm closes out the price-based QM test (replacing the legacy 43% DTI cap; CFPB Q4 2025 publication pinned for 2026-indexed loan-amount tiers $110,260/$66,156); reg_z closes out the APR tolerance gate that Phase 7 will consume. Two Rule-3 deviations (ruff I001 import-block) auto-fixed without scope expansion. Phase 2 is one plan from done.
 
 *Updated after each plan completion*
 
@@ -114,6 +116,12 @@ Recent decisions affecting current work:
 - 02-05: LoanPurpose / Occupancy Literal aliases scoped to each predicate file (NOT promoted to types.py). Mirrors FilingStatus scoping in 02-04. Promotion deferred until a third consumer needs them.
 - 02-05: Plan-author-fixture-stem-must-match-predicate-stem (RUL-13 meta-test contract) — `tests/test_rules/test_citation_coverage.py` discovers fixtures via `FIX_DIR.glob(f'{path.stem}_*.json')`. Caused a Rule-1 deviation in this plan (renamed fannie fixtures from `fannie_llpa_*` to `fannie_eligibility_*`); future plan authors should follow predicate-stem-prefix convention.
 - 02-05: Plan acceptance grep `! grep -E 'NotImplementedError'` is literal — even descriptive phrases like "no NotImplementedError branches" in docstrings violate the literal grep. Reword as "no stub branches" or similar to satisfy the grep.
+- 02-06: Annual-indexed-values get a YAML; statutory-unchanged values are Final[Decimal] constants in code. Disambiguator for ANY future predicate is "do regulator-published values change annually?" RUL-09 atr_qm DOES use a YAML (CFPB indexes loan-amount tiers $110,260/$66,156 annually in Q4 publications); RUL-10 reg_z does NOT (Reg-Z tolerance text per 12 CFR §1026.22(a)(2)/(a)(3) unchanged for decades; statutory constants Decimal('0.00125')/Decimal('0.0025') with citation comments). Reuses 02-05's statutory-constants-in-code idiom for HPA. Phase 7 future APOR lookup, e.g., should consult this disambiguator.
+- 02-06: Q4 of year N CFPB publication carries year (N+1)-indexed tiers. The 2024-11 publication carried 2025-indexed tiers ($107,650/$64,590); the 2025-11 publication (effective 2025-11-01) carries 2026-indexed tiers ($110,260/$66,156). Pinning the wrong publication makes the YAML body's tiers inconsistent with their citation trail. Plan 02-07 audit gate should verify this lockstep across annual refreshes.
+- 02-06: Threshold-unit convention for human-readable YAML — store thresholds as percentage points (matches CFPB's published table 1:1) and divide by Decimal('100') at consumption. Trade-off: YAML readability against regulator's published table > raw fractional storage. Reusable for any future tiered-threshold predicate.
+- 02-06: Caller-classified booleans for regulatory grace periods / transaction-type classification — predicate does NOT classify; signature accepts caller-provided booleans (RUL-11 binding-contract flags from 02-04; RUL-10 is_irregular_transaction). Reusable for any future predicate with regulatory-classification ambiguity.
+- 02-06: `abs(disclosed - actual) <= tolerance` with Decimal-only operands as the canonical direction-agnostic-tolerance idiom — pinned by exactness assertion + symmetry-under-swap test + same-diff-different-branch test. Reusable for any future predicate comparing two Decimal values against a Decimal tolerance.
+- 02-06: LienPosition Literal alias scoped to atr_qm.py (NOT promoted to types.py) — RUL-10 reg_z is APR-tolerance-only and does NOT take a lien_position parameter (Reg-Z tolerance is lien-agnostic per §1026.22). No second consumer; promotion deferred. Mirrors FilingStatus + LoanPurpose/Occupancy scoping conventions.
 
 ### Pending Todos
 
@@ -139,6 +147,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-04-27T04:09:04.000Z
-Stopped at: Phase 2 plan 05 complete; Wave 3 plan 02-05 closed; ready for Wave 3 tail (02-06 ATR/QM + Reg Z, then 02-07 audit gate, sequential)
-Resume file: .planning/phases/02-regulatory-reference-data-rules-predicates/02-05-SUMMARY.md
+Last session: 2026-04-27T04:24:13.000Z
+Stopped at: Phase 2 plan 06 complete; Wave 3 plan 02-06 closed; only 02-07 citation-coverage audit gate remains in Phase 2
+Resume file: .planning/phases/02-regulatory-reference-data-rules-predicates/02-06-SUMMARY.md

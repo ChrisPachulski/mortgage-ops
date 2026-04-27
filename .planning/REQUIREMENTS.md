@@ -42,8 +42,8 @@ User selected "all" scope; everything below is in v1.
 - [x] **RUL-06**: `lib/rules/va_funding_fee.py` calculates VA funding fee per Lender Handbook M26-7
 - [x] **RUL-07**: `lib/rules/va_residual_income.py` evaluates residual income vs geographic × family-size × loan-amount table
 - [x] **RUL-08**: `lib/rules/usda.py` evaluates USDA income limits (115% area median) and guarantee fees
-- [ ] **RUL-09**: `lib/rules/atr_qm.py` implements General QM price-based test (Mar 2021 final rule, replaces 43% DTI cap)
-- [ ] **RUL-10**: `lib/rules/reg_z.py` implements Reg Z disclosures and tolerances (1/8 percentage point regular, 1/4 percentage point irregular)
+- [x] **RUL-09**: `lib/rules/atr_qm.py` implements General QM price-based test (Mar 2021 final rule, replaces 43% DTI cap)
+- [x] **RUL-10**: `lib/rules/reg_z.py` implements Reg Z disclosures and tolerances (1/8 percentage point regular, 1/4 percentage point irregular)
 - [x] **RUL-11**: `lib/rules/irs_pub936.py` implements qualified loan limit worksheet ($750k post-2017 cap)
 - [x] **RUL-12**: Every rules predicate has docstring with regulatory citation
 - [x] **RUL-13**: 1:1 test-to-citation mapping: every predicate has at least one test fixture per citation
@@ -238,8 +238,8 @@ Mapped 2026-04-26 by gsd-roadmapper. Every v1 requirement is assigned to exactly
 | RUL-06 | Phase 2 | Done (02-03) |
 | RUL-07 | Phase 2 | Done (02-03) |
 | RUL-08 | Phase 2 | Done (02-04) |
-| RUL-09 | Phase 2 | Pending |
-| RUL-10 | Phase 2 | Pending |
+| RUL-09 | Phase 2 | Done (02-06) |
+| RUL-10 | Phase 2 | Done (02-06) |
 | RUL-11 | Phase 2 | Done (02-04) |
 | RUL-12 | Phase 2 | Done (02-01) |
 | RUL-13 | Phase 2 | Done (02-01) |
