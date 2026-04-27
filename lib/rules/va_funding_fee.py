@@ -117,8 +117,16 @@ def _lookup_purchase_pct(
 ) -> Decimal:
     """Find the purchase row whose down-payment band brackets the input.
 
-    Bands are inclusive lower / EXCLUSIVE upper: 0..<5, 5..<10, >=10. The >=10 row
-    has down_payment_max=1.00 which we treat as inclusive (1.00 = 100% down).
+    Bands are inclusive lower / EXCLUSIVE upper for all rows EXCEPT the last
+    row in the table, whose upper bound is INCLUSIVE so 100%-down maps cleanly
+    (and so any future YAML edit that uses a non-1.00 top-row max — e.g. "1" or
+    "1.0001" — still works correctly).
+
+    WR-09 (02-REVIEW.md): pre-fix this last-row inclusivity was conditional on
+    a magic literal `dp_max == Decimal("1.00")`. While Decimal("1") == Decimal("1.00")
+    is True today, encoding the contract via row position is more robust than
+    via a sentinel value: the YAML schema's invariant is "the last row covers
+    the top of the range", not "the last row's max happens to equal 1.00".
 
     Cash-out refi does NOT use this table per M26-7 Ch 8 (see BL-02 fix in
     02-REVIEW.md / module docstring); it is flat-fee and routes through
@@ -126,14 +134,17 @@ def _lookup_purchase_pct(
 
     Raises LookupError if no row matches (indicates REF-04 schema regression).
     """
-    for row in table:
+    last_index = len(table) - 1
+    for index, row in enumerate(table):
         dp_min = Decimal(row["down_payment_min"])
         dp_max = Decimal(row["down_payment_max"])
-        # Lower bound inclusive; upper bound exclusive EXCEPT for the top band
-        # whose max is 1.00 (which we treat as inclusive so 100%-down still maps).
-        in_band = dp_min <= down_payment_pct < dp_max or (
-            dp_max == Decimal("1.00") and down_payment_pct == Decimal("1.00")
-        )
+        is_last_row = index == last_index
+        # Lower bound inclusive; upper bound exclusive on intermediate rows;
+        # upper bound INCLUSIVE on the last row (regardless of its literal max).
+        if is_last_row:
+            in_band = dp_min <= down_payment_pct <= dp_max
+        else:
+            in_band = dp_min <= down_payment_pct < dp_max
         if in_band:
             key = "first_use_pct" if is_first_use else "subsequent_use_pct"
             return Decimal(row[key])

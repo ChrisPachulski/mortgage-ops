@@ -195,3 +195,20 @@ def test_negative_down_payment_pct_raises() -> None:
             loan_purpose="purchase",
             is_exempt_from_funding_fee=False,
         )
+
+
+def test_purchase_first_use_100_pct_down_maps_to_top_band() -> None:
+    # Regression for WR-09 (02-REVIEW.md): pre-fix the top-band inclusivity
+    # was conditional on a magic literal `dp_max == Decimal("1.00")`. Post-fix,
+    # the top band is identified by row position so 100% down maps cleanly
+    # regardless of the YAML's literal max value.
+    # Hand: 100% down -> top-band purchase first-use rate = 0.0125.
+    # Fee = $400,000 * 0.0125 = $5,000.00.
+    fee = compute(
+        loan_amount=Decimal("400000.00"),
+        down_payment_pct=Decimal("1.00"),
+        is_first_use=True,
+        loan_purpose="purchase",
+        is_exempt_from_funding_fee=False,
+    )
+    assert fee == Decimal("5000.00")
