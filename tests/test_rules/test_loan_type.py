@@ -166,6 +166,22 @@ def test_fha_program_above_floor_missing_county_raises() -> None:
         classify(Decimal("700000.00"), county=None, program="fha")
 
 
+def test_fha_unlisted_county_above_floor_raises_missing_county_data() -> None:
+    # Regression for BL-01 (02-REVIEW.md): an unlisted high-cost county above the
+    # FHA floor must NOT silently fall back to floor (which would then trigger a
+    # NotImplementedError "exceeds FHA county ceiling" — implying the loan is
+    # structurally too large for FHA). Per fha-limits-2026.yml notes
+    # (D-PHASE2-Q2): unlisted high-cost counties → MissingCountyDataError.
+    # Hand: $700k > $541,287 floor; Autauga AL (01/001) is NOT in the shipped
+    # high-cost subset. Caller must be told to extend the table.
+    with pytest.raises(MissingCountyDataError, match="not in shipped high-cost subset"):
+        classify(
+            Decimal("700000.00"),
+            county=County(state_fips="01", county_fips="001", name="Autauga AL"),
+            program="fha",
+        )
+
+
 def test_va_program_classifies_below_baseline_as_va_standard() -> None:
     # Hand: $400,000 VA loan in Autauga AL (NOT in high_cost_counties; baseline
     # applies). $400k <= $832,750 → va_standard. (VA full-entitlement uses FHFA

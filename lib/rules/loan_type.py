@@ -31,6 +31,8 @@ Edge cases:
   - county=None + loan_amount > baseline → MissingCountyDataError (loud, never
     silent baseline fallback) — Pitfall 7 protection
   - program=fha + loan_amount > floor + county=None → MissingCountyDataError
+  - program=fha + loan_amount > floor + county not in high-cost subset →
+    MissingCountyDataError (mirrors conventional path; matches YAML notes)
   - program=fha + loan_amount > county ceiling → NotImplementedError (jumbo FHA
     not in v1)
   - program=va + loan_amount > baseline + county=None → MissingCountyDataError
@@ -178,9 +180,23 @@ def _county_limit(ref: dict[str, Any], county: County, unit_key: str, baseline: 
 def _county_limit_fha(
     ref: dict[str, Any], county: County, unit_key: str, floor: Decimal
 ) -> Decimal:
-    """Return county-specific FHA ceiling, falling back to floor for unlisted
-    counties (matches HUD's convention: low-cost areas use the floor)."""
+    """Return county-specific FHA ceiling for an above-floor loan.
+
+    Per data/reference/fha-limits-2026.yml notes (Phase 2 decision D-PHASE2-Q2):
+    we ship a SUBSET of high-cost counties; unlisted counties whose loan exceeds
+    the FHA floor must raise MissingCountyDataError so the caller can tell the
+    difference between "really exceeds the FHA ceiling" and "your county is not
+    in our shipped table." This mirrors `_county_limit` (conventional) which
+    fails loud rather than silently defaulting.
+
+    Note: callers MUST only invoke this helper when loan_amount > floor; loans
+    at or below floor are classified as fha_standard without any county lookup.
+    """
     for entry in ref["limits"]["high_cost_counties"]:
         if entry["state_fips"] == county.state_fips and entry["county_fips"] == county.county_fips:
             return Decimal(entry[unit_key])
-    return floor
+    raise MissingCountyDataError(
+        f"FHA county ({county.state_fips}/{county.county_fips} {county.name!r}) not "
+        f"in shipped high-cost subset; cannot determine ceiling. Add the county "
+        f"to data/reference/fha-limits-2026.yml or pass a smaller loan amount."
+    )
