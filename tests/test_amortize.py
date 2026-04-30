@@ -25,6 +25,9 @@ Money discipline (CLAUDE.md):
 
 from __future__ import annotations
 
+import json
+import subprocess
+import sys
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
@@ -45,6 +48,9 @@ FOUR_ORACLE_IDS = [
     "computed_200k_15yr",
 ]
 AMORTIZE_MODULE_PATH: Path = Path(__file__).resolve().parent.parent / "lib" / "amortize.py"
+SCRIPT_PATH: Path = Path(__file__).resolve().parent.parent / "scripts" / "amortize.py"
+"""Phase 3 CLI lives at project root scripts/. Phase 10 will relocate to
+.claude/skills/mortgage-ops/scripts/; only this constant updates."""
 
 
 def assert_schedule_invariants(schedule: Schedule, original_principal: Decimal) -> None:
@@ -522,3 +528,258 @@ def test_extra_principal_entry_rejects_zero_amount() -> None:
     # Hand: amount=0 is meaningless for extra-principal; surface as validation error.
     with pytest.raises(ValidationError):
         ExtraPrincipalEntry(period=1, amount=Decimal("0.00"), recurring=False)
+
+
+# ---------------------------------------------------------------------------
+# AMRT-06: scripts/amortize.py CLI subprocess + lazy-import + error surface
+# ---------------------------------------------------------------------------
+
+
+def test_cli_smoke_subprocess_round_trip(tmp_path: Path) -> None:
+    """AMRT-06: write input JSON, invoke script via subprocess, parse output JSON.
+
+    End-to-end: validates argparse + Pydantic boundary + engine + JSON output
+    in one round-trip.
+    """
+    input_path = tmp_path / "loan.json"
+    # Hand: Wikipedia oracle (200k/6.5/30) -> monthly_pi 1264.14, final balance 0.00.
+    input_path.write_text(
+        json.dumps(
+            {
+                "loan": {
+                    "principal": "200000.00",
+                    "annual_rate": "0.065000",
+                    "term_months": 360,
+                    "origination_date": "2026-05-01",
+                },
+            }
+        )
+    )
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), "--input", str(input_path)],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert result.returncode == 0
+    out = json.loads(result.stdout)
+    assert out["monthly_pi"] == "1264.14"
+    assert out["payments"][-1]["balance"] == "0.00"
+
+
+def test_cli_help_does_not_import_lib_amortize() -> None:
+    """D-18: --help must not trigger lib.amortize import (lazy-import contract).
+
+    Strategy (CANONICAL PROJECT PATTERN — mirrors tests/test_block_user_layer.py:24-32):
+
+    Spawn a fresh Python subprocess (so lib.amortize is NOT already imported from
+    this test module's own ``from lib.amortize import ...`` line) and run an
+    inline check that loads scripts/amortize.py via
+    ``importlib.util.spec_from_file_location`` with sys.argv patched to
+    ``--help``. The subprocess prints whether ``lib.amortize`` ended up in
+    sys.modules; this test asserts ``not_imported`` was reported.
+
+    We do NOT use ``import scripts.amortize`` because scripts/ has NO __init__.py
+    and is intentionally not a Python package (project convention; loading via
+    spec_from_file_location is how tests/test_block_user_layer.py loads
+    scripts/hooks/block-user-layer.py too).
+
+    A try/finally restores sys.argv inside the inline harness so the harness
+    itself stays isolated; argparse's --help raises SystemExit(0) after printing
+    usage, and the harness catches it and asserts exc.code == 0.
+
+    Per RESEARCH 10 Open Question 4: structural import-mock is more deterministic
+    than wall-clock timing-based assertions (which are flaky in CI under load).
+    """
+    # Hand: spawn a fresh Python that has NOT pre-imported lib.amortize
+    # (this test module's own top-level import would otherwise pollute sys.modules
+    # in the test process and force the assertion into a skip).
+    project_root = Path(__file__).resolve().parent.parent
+    inline = (
+        "import importlib.util, sys, json\n"
+        f"sys.path.insert(0, {str(project_root)!r})\n"
+        f"SCRIPT = {str(SCRIPT_PATH)!r}\n"
+        "spec = importlib.util.spec_from_file_location('scripts_amortize', SCRIPT)\n"
+        "assert spec is not None and spec.loader is not None\n"
+        "module = importlib.util.module_from_spec(spec)\n"
+        "spec.loader.exec_module(module)\n"
+        "saved_argv = sys.argv\n"
+        "sys.argv = [SCRIPT, '--help']\n"
+        "exit_code = None\n"
+        "try:\n"
+        "    try:\n"
+        "        module.main()\n"
+        "    except SystemExit as exc:\n"
+        "        exit_code = exc.code\n"
+        "finally:\n"
+        "    sys.argv = saved_argv\n"
+        "result = {\n"
+        "    'help_exit_code': exit_code,\n"
+        "    'lib_amortize_imported': 'lib.amortize' in sys.modules,\n"
+        "    'numpy_financial_imported': 'numpy_financial' in sys.modules,\n"
+        "}\n"
+        "print(json.dumps(result))\n"
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", inline],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    payload = json.loads(completed.stdout.strip().splitlines()[-1])
+    # Hand: argparse --help exits with code 0 after printing usage.
+    assert payload["help_exit_code"] == 0, (
+        f"--help should exit 0, got {payload['help_exit_code']!r}"
+    )
+    # Hand: D-18 contract: lib.amortize and numpy_financial MUST NOT have been
+    # loaded as a consequence of executing scripts/amortize.py's --help path.
+    assert payload["lib_amortize_imported"] is False, (
+        "D-18 violated: lib.amortize was imported during scripts/amortize.py --help "
+        "(must be lazy-imported INSIDE main() AFTER argparse parses --help)."
+    )
+    assert payload["numpy_financial_imported"] is False, (
+        "D-18 violated: numpy_financial was imported during --help "
+        "(heavy dep must stay behind the lazy-import gate)."
+    )
+
+
+def test_cli_no_input_returns_argparse_error() -> None:
+    """AMRT-06: missing --input flag exits 2 with argparse usage on stderr."""
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 2
+    assert "--input" in result.stderr
+
+
+def test_cli_file_not_found_returns_structured_error(tmp_path: Path) -> None:
+    """AMRT-06: nonexistent --input path exits 2 with structured JSON error."""
+    bogus = tmp_path / "does_not_exist.json"
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), "--input", str(bogus)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 2
+    err = json.loads(result.stderr)
+    assert "input file not found" in err.get("error", "")
+
+
+def test_cli_invalid_json_input(tmp_path: Path) -> None:
+    """AMRT-06: malformed JSON input exits 2 with Pydantic ValidationError JSON."""
+    bad = tmp_path / "bad.json"
+    bad.write_text('{"loan":')  # truncated
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), "--input", str(bad)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 2
+    # Pydantic emits a list of error dicts; should parse as JSON.
+    parsed = json.loads(result.stderr)
+    assert isinstance(parsed, list)
+    assert len(parsed) >= 1
+
+
+def test_cli_rejects_float_principal(tmp_path: Path) -> None:
+    """D-19: pre-validation gate rejects JSON-float in any Money field.
+
+    The JSON has ``principal: 400000.00`` as a NUMBER (not a string). Pydantic v2
+    model_validate_json permissively coerces JSON numbers into Decimal, so the
+    CLI runs a pre-validation walker (_find_json_float_loc) that emits a
+    Pydantic-shaped ``decimal_type`` error envelope before model_validate_json.
+    """
+    bad = tmp_path / "float.json"
+    # Hand: JSON number literal 400000.00 deserializes to a Python float;
+    # the pre-validation gate rejects it with a structured envelope.
+    bad.write_text(
+        '{"loan": {"principal": 400000.00, "annual_rate": "0.065000", "term_months": 360}}'
+    )
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), "--input", str(bad)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 2
+    errors = json.loads(result.stderr)
+    # At least one error should reference 'principal' in its loc OR mention
+    # 'decimal_type'/'Input should be'.
+    offending = [
+        e
+        for e in errors
+        if (isinstance(e.get("loc"), list) and "principal" in e["loc"])
+        or "decimal_type" in str(e.get("type", ""))
+        or "Input should be" in str(e.get("msg", ""))
+    ]
+    assert offending, f"No error referenced principal/decimal_type: {errors}"
+
+
+def test_cli_d02_violation_at_boundary(tmp_path: Path) -> None:
+    """D-02: AmortizeRequest validator rejects frequency=monthly + biweekly_mode='true'.
+
+    The validator runs at model_validate_json time, BEFORE build_schedule is
+    called. Surfaces as ValidationError JSON.
+    """
+    bad = tmp_path / "d02.json"
+    bad.write_text(
+        json.dumps(
+            {
+                "loan": {
+                    "principal": "400000.00",
+                    "annual_rate": "0.065000",
+                    "term_months": 360,
+                },
+                "frequency": "monthly",
+                "biweekly_mode": "true",
+            }
+        )
+    )
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), "--input", str(bad)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 2
+    # Stderr should be parseable Pydantic JSON; one of the errors should mention
+    # biweekly_mode.
+    errors = json.loads(result.stderr)
+    flat = json.dumps(errors)
+    assert "biweekly_mode" in flat
+
+
+def test_cli_biweekly_round_trip(tmp_path: Path) -> None:
+    """AMRT-03 + AMRT-06: end-to-end biweekly-true round-trip via CLI."""
+    input_path = tmp_path / "biweekly.json"
+    input_path.write_text(
+        json.dumps(
+            {
+                "loan": {
+                    "principal": "200000.00",
+                    "annual_rate": "0.065000",
+                    "term_months": 360,
+                    "origination_date": "2026-05-01",
+                },
+                "frequency": "biweekly",
+                "biweekly_mode": "true",
+            }
+        )
+    )
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), "--input", str(input_path)],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert result.returncode == 0
+    out = json.loads(result.stdout)
+    assert out["payments"][-1]["balance"] == "0.00"
+    # Hand: biweekly-true accelerates; expect substantially fewer than the
+    # 720 formulaic biweekly periods (per RESEARCH 3.1: ~628 for this loan).
+    assert 600 < len(out["payments"]) < 700
