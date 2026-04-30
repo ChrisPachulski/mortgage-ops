@@ -243,6 +243,190 @@ def test_amortize_request_rejects_biweekly_mode_when_monthly() -> None:
 
 
 # ---------------------------------------------------------------------------
+# CR-01 closure: AmortizeRequest rejects duplicate (period, recurring=True)
+# ---------------------------------------------------------------------------
+
+
+def test_amortize_request_rejects_duplicate_recurring_periods() -> None:
+    """CR-01 / D-05 uniqueness: two recurring entries at the same period are rejected.
+
+    The locked D-05 contract ("the LATEST entry with entry.period <= p AND
+    entry.recurring=True") is order-of-list-ambiguous when two recurring
+    entries tie on `period`. Per the UAT decision (option a), AmortizeRequest
+    rejects this input class via a model_validator that raises ValidationError
+    — surfaced through scripts/amortize.py's `e.json()` pass-through as a
+    structured error envelope.
+    """
+    loan = Loan(
+        principal=Decimal("200000.00"),
+        annual_rate=Decimal("0.065000"),
+        term_months=360,
+        origination_date=date(2026, 5, 1),
+    )
+    # Hand: CR-01 empirical reproducer per 03-REVIEW.md. With order [100, 200],
+    # the legacy _resolve_extra returned 100.00 (max-by-period last-wins).
+    with pytest.raises(ValidationError) as excinfo:
+        AmortizeRequest(
+            loan=loan,
+            extra_principal=[
+                ExtraPrincipalEntry(period=1, amount=Decimal("100.00"), recurring=True),
+                ExtraPrincipalEntry(period=1, amount=Decimal("200.00"), recurring=True),
+            ],
+        )
+    msg = str(excinfo.value)
+    assert "duplicate" in msg
+    assert "period" in msg
+    assert "recurring" in msg
+
+
+def test_amortize_request_rejects_duplicate_recurring_periods_reversed() -> None:
+    """CR-01 symmetric case: reversed order rejects identically (no order-dependence).
+
+    Pinning the symmetric case so a future refactor that re-introduces
+    order-of-list dependence (e.g. "only flag when later amount > earlier")
+    fails this test. Determinism contract: semantically equivalent inputs
+    produce semantically equivalent outputs (here, the same rejection).
+    """
+    loan = Loan(
+        principal=Decimal("200000.00"),
+        annual_rate=Decimal("0.065000"),
+        term_months=360,
+        origination_date=date(2026, 5, 1),
+    )
+    # Hand: with order [200, 100], the legacy _resolve_extra returned 200.00.
+    # Both orderings now reject identically.
+    with pytest.raises(ValidationError) as excinfo:
+        AmortizeRequest(
+            loan=loan,
+            extra_principal=[
+                ExtraPrincipalEntry(period=1, amount=Decimal("200.00"), recurring=True),
+                ExtraPrincipalEntry(period=1, amount=Decimal("100.00"), recurring=True),
+            ],
+        )
+    msg = str(excinfo.value)
+    assert "duplicate" in msg
+    assert "period" in msg
+    assert "recurring" in msg
+
+
+def test_amortize_request_rejects_three_way_duplicate_recurring() -> None:
+    """CR-01 generalized: validator catches >2-way collisions on the same period.
+
+    Pins that the validator iterates over all entries (not just adjacent
+    pairs). Three recurring entries at the same period would produce three
+    different schedules under three different list orderings — same
+    determinism violation, escalated.
+    """
+    loan = Loan(
+        principal=Decimal("200000.00"),
+        annual_rate=Decimal("0.065000"),
+        term_months=360,
+        origination_date=date(2026, 5, 1),
+    )
+    # Hand: 3 recurring entries at period=5 — all three orderings would
+    # diverge under legacy _resolve_extra. Validator must reject regardless
+    # of which two are adjacent.
+    with pytest.raises(ValidationError):
+        AmortizeRequest(
+            loan=loan,
+            extra_principal=[
+                ExtraPrincipalEntry(period=5, amount=Decimal("50.00"), recurring=True),
+                ExtraPrincipalEntry(period=5, amount=Decimal("75.00"), recurring=True),
+                ExtraPrincipalEntry(period=5, amount=Decimal("25.00"), recurring=True),
+            ],
+        )
+
+
+def test_amortize_request_accepts_d05_step_up_with_distinct_periods() -> None:
+    """D-05 positive sibling: legitimate step-up (distinct periods) still validates.
+
+    Guard against a future refactor that over-aggressively rejects "two
+    recurring entries" — D-05 explicitly supports later recurring entries
+    overriding earlier ones from their own period onward. Distinct periods
+    are NEVER ambiguous; only same-period collisions are.
+    """
+    loan = Loan(
+        principal=Decimal("200000.00"),
+        annual_rate=Decimal("0.065000"),
+        term_months=360,
+        origination_date=date(2026, 5, 1),
+    )
+    # Hand: canonical D-05 step-up — $200/period from period 1, replaced by
+    # $300/period from period 13. Pinned by tests/fixtures/amortize/extra_step_up_200_to_300.json
+    # and test_extra_step_up_200_to_300_at_period_13. Must remain legal.
+    request = AmortizeRequest(
+        loan=loan,
+        extra_principal=[
+            ExtraPrincipalEntry(period=1, amount=Decimal("200.00"), recurring=True),
+            ExtraPrincipalEntry(period=13, amount=Decimal("300.00"), recurring=True),
+        ],
+    )
+    assert len(request.extra_principal) == 2
+    assert request.extra_principal[0].period == 1
+    assert request.extra_principal[1].period == 13
+
+
+def test_amortize_request_accepts_duplicate_one_shots_at_same_period() -> None:
+    """D-05 positive sibling: duplicate one-shot entries at same period are LEGAL.
+
+    Per D-05, one-shots (recurring=False) "stack ADDITIVELY on top of the
+    recurring component". Addition is commutative — duplicate one-shots are
+    order-independent and produce a deterministic sum. The new uniqueness
+    validator is scoped to recurring=True ONLY; one-shot duplicates remain
+    legal (and exercised by the additive-stacking semantic in _resolve_extra).
+    """
+    loan = Loan(
+        principal=Decimal("200000.00"),
+        annual_rate=Decimal("0.065000"),
+        term_months=360,
+        origination_date=date(2026, 5, 1),
+    )
+    # Hand: two one-shots at period 60 ($1000 + $2000) sum to $3000 regardless
+    # of list order; not ambiguous; not rejected.
+    request = AmortizeRequest(
+        loan=loan,
+        extra_principal=[
+            ExtraPrincipalEntry(period=60, amount=Decimal("1000.00"), recurring=False),
+            ExtraPrincipalEntry(period=60, amount=Decimal("2000.00"), recurring=False),
+        ],
+    )
+    assert len(request.extra_principal) == 2
+    # Hand: each retains its own amount — additive stacking is the engine's
+    # responsibility (_resolve_extra), not a model-level merge.
+    assert request.extra_principal[0].amount == Decimal("1000.00")
+    assert request.extra_principal[1].amount == Decimal("2000.00")
+
+
+def test_amortize_request_accepts_recurring_plus_oneshot_at_same_period() -> None:
+    """D-05 positive sibling: recurring + one-shot at same period stack additively.
+
+    Per D-05, "One-shot entries (recurring=False) fire only when entry.period
+    == p and stack ADDITIVELY on top of the recurring component". This means
+    recurring + one-shot at the same period is the documented composition
+    case — not a duplicate. The new validator must not reject it.
+    """
+    loan = Loan(
+        principal=Decimal("200000.00"),
+        annual_rate=Decimal("0.065000"),
+        term_months=360,
+        origination_date=date(2026, 5, 1),
+    )
+    # Hand: $200/period recurring from period 60 PLUS one-shot $5000 at
+    # period 60 produces additive $5200 at period 60, then $200/period
+    # going forward. Not ambiguous; explicitly supported by D-05.
+    request = AmortizeRequest(
+        loan=loan,
+        extra_principal=[
+            ExtraPrincipalEntry(period=60, amount=Decimal("200.00"), recurring=True),
+            ExtraPrincipalEntry(period=60, amount=Decimal("5000.00"), recurring=False),
+        ],
+    )
+    assert len(request.extra_principal) == 2
+    recurring_entries = [e for e in request.extra_principal if e.recurring]
+    assert len(recurring_entries) == 1
+
+
+# ---------------------------------------------------------------------------
 # AMRT-04: extra principal entries (D-05 / D-07 / D-08)
 # ---------------------------------------------------------------------------
 
