@@ -69,11 +69,13 @@ User selected **fine** (8-12 phases). This roadmap is **12 phases** — each cal
   3. Biweekly schedule (`frequency: biweekly`) produces 26 payments per year via `relativedelta(weeks=2)` with sum of all principal payments exactly equal to original principal
   4. Extra-principal scenario (single, recurring, and per-period inputs) shortens the schedule and final row still balances to `Decimal("0.00")`
   5. `scripts/amortize.py --help` prints usage without importing heavy deps; running with no input prints a clear schema-error message (Pydantic validation surfaces at the script boundary)
-**Plans:** 4 plans
+**Plans:** 6 plans (4 original + 2 gap-closure)
 - [x] 03-01-PLAN.md — Extend lib/models.py (Payment cumulative totals + Schedule final_payment_adjusted + D-15 validator) — AMRT-01 [completed 2026-04-30, commits 9821d77 + 81beaca; 5 new + 1 updated tests; 19 in test_models.py; 259/259 full suite green]
 - [x] 03-02-PLAN.md — Build lib/amortize.py engine (numpy-financial wrapper + fixed-rate + biweekly true/half-monthly + extra-principal + D-09 cleanup) — AMRT-01..05 [completed 2026-04-30, commits 1abdffa + 7d9c931 + 071f6dc; lib/amortize.py 460 lines; all 4 oracles parity-match exactly; biweekly-true accelerates to 628 periods; 259/259 full suite green]
 - [x] 03-03-PLAN.md — Build scripts/amortize.py CLI (argparse + lazy-import + AmortizeRequest boundary) — AMRT-06 [completed 2026-04-30, commit 539aebf; scripts/amortize.py 187 lines; D-18 structural lazy-import check exits 0 with "D-18 OK"; all 5 smoke acceptance commands produce expected outputs (happy path / no-input / nonexistent / float-in-money / D-02 violation); 259/259 full suite green]
 - [x] 03-04-PLAN.md — Build tests/test_amortize.py + 7 fixtures + conftest extension (AMRT-07/08 invariants + structural + biweekly + extra + CLI + D-12/D-13) — AMRT-01..08 [completed 2026-04-30, commits b4eaa2d + cd7ae9f + 5ea3d67; tests/test_amortize.py 25 functions / 35 parametrized cases; 7 JSON fixtures + amortize_fixture loader; 294/294 full suite green; AMRT-07 + AMRT-08 closed]
+- [ ] 03-05-PLAN.md — gap-closure (CR-01): AmortizeRequest validator rejects duplicate (period, recurring=True) entries; pinned by 6 new tests in tests/test_amortize.py — AMRT-04 [gap_closure: true; wave 1; depends_on: []]
+- [ ] 03-06-PLAN.md — gap-closure (WR-02): unify scripts/amortize.py float-gate envelope to 6-key Pydantic shape (type/loc/msg/input/url/ctx); pinned by tightened test_cli_rejects_float_principal + new test_cli_error_envelope_uniformity — AMRT-06 [gap_closure: true; wave 2; depends_on: [03-05]]
 
 ### Phase 4: Affordability
 **Goal**: Compose Phase 1 models + Phase 2 rules into household-aware DTI/LTV/CLTV/PITI calculations and reverse-affordability ("what loan amount can I qualify for?")
