@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 03 plan 01 complete — Payment + Schedule extended for D-10/D-14/D-15; 5 new tests + 1 updated; 259/259 full suite green; ready for plan 03-02 (lib/amortize.py engine)
-last_updated: "2026-04-30T05:14:00.000Z"
-last_activity: 2026-04-30 -- 03-01 complete (commits 9821d77 + 81beaca)
+stopped_at: Phase 03 plan 02 complete — lib/amortize.py engine shipped (numpy-financial wrapper, fixed + biweekly true/half-monthly + extra-principal); 4 golden oracles parity-match exactly; biweekly-true accelerates to 628 periods on 200k/6.5/30; 259/259 full suite green; ready for 03-03 CLI
+last_updated: "2026-04-30T05:30:00.000Z"
+last_activity: 2026-04-30 -- 03-02 complete (commits 1abdffa + 7d9c931 + 071f6dc)
 progress:
   total_phases: 12
   completed_phases: 2
   total_plans: 17
-  completed_plans: 14
-  percent: 82
+  completed_plans: 15
+  percent: 88
 ---
 
 # Project State
@@ -26,20 +26,20 @@ See: .planning/PROJECT.md (updated 2026-04-26)
 ## Current Position
 
 Phase: 03 (core-amortization) — EXECUTING
-Plan: 2 of 4 (03-01 complete; 03-02 next)
+Plan: 3 of 4 (03-01 + 03-02 complete; 03-03 next)
 Status: Executing Phase 03
-Last activity: 2026-04-30 -- 03-01 complete (D-10/D-14/D-15 model contracts shipped)
+Last activity: 2026-04-30 -- 03-02 complete (lib/amortize.py engine shipped; AMRT-01..05 closed)
 
-Progress: [██░░░░░░░░] 17% (2/12 phases complete; Phase 3 at 1/4 plans)
+Progress: [██░░░░░░░░] 17% (2/12 phases complete; Phase 3 at 2/4 plans)
 
 ### Resume instructions
 
-Plan 03-02 (lib/amortize.py engine) is next. Recommended path:
+Plan 03-03 (scripts/amortize.py CLI) is next. Recommended path:
 
 1. `/clear`
-2. `/gsd-execute-plan 3 2` — implement the numpy-financial wrapper engine atop the new model contract
+2. `/gsd-execute-plan 3 3` — wrap the engine in the JSON-in/JSON-out CLI surface (argparse + lazy-import + AmortizeRequest boundary)
 
-Resume file: `.planning/phases/03-core-amortization/03-02-PLAN.md`
+Resume file: `.planning/phases/03-core-amortization/03-03-PLAN.md`
 
 ## Performance Metrics
 
@@ -55,6 +55,7 @@ Resume file: `.planning/phases/03-core-amortization/03-02-PLAN.md`
 - Phase 2 plan 06 wall time: ~5 min (sequential, single executor — atr_qm + reg_z; CFPB Q4 2025 publication pin + Reg-Z statutory constants reuse the 02-05 idiom; 19 new files: 2 predicates + 1 YAML + 2 test files + 15 fixtures + 2 deviations both Rule-3 ruff I001)
 - Phase 2 plan 07 wall time: ~4 min (sequential, single executor — audit-only gate; 3 new test files [mutation harness + YAML count audit + cross-predicate smoke] + 0 production code changes; 14 new tests; 1 Rule-1 deviation [removed inapplicable ruff RUF100 noqa: BLE001 from plan spec])
 - Phase 3 plan 01 wall time: ~4 min (sequential, single executor — model-only data-shape lock; 0 created + 2 modified; +5 new tests + 1 updated; 3 Rule-3 ruff-format/UP037 deviations [all formatting, no semantic changes]; new project velocity floor tied with 02-07)
+- Phase 3 plan 02 wall time: ~9 min (sequential, single executor — engine plan with high logical complexity but zero new test files; 1 new file (lib/amortize.py 460 lines); 0 modified; 1 Rule-1 deviation [extra-principal-induced negative-balance bug found via Task 3 smokes — formulaic-overshoot detection added BEFORE principal computation]; 4 Rule-3 deviations [npf.irr literal in docstring conflicting with negative grep gate; ruff F401/RUF100 on initial date import; ruff RUF100 on # noqa: S101; ruff format auto-wrap on each commit]; all 4 golden oracles parity-match exactly; biweekly-true accelerates to 628 periods exactly per RESEARCH §3.1 prediction)
 
 **By Phase:**
 
@@ -62,7 +63,7 @@ Resume file: `.planning/phases/03-core-amortization/03-02-PLAN.md`
 |-------|-------|--------|
 | 1     | 6/6   | Complete (PASS-WITH-CAVEATS) |
 | 2     | 7/7   | Complete — 02-01..02-07 green; 11 predicates + 10 reference YAMLs + citation-coverage + schema meta-tests + mutation-harness audit ratification; 224/224 tests pass; ready for Phase 4 affordability consumers |
-| 3     | 1/4   | Executing — 03-01 green (D-10/D-14/D-15 model contracts; 5 new + 1 updated tests in test_models.py; 259/259 full suite); 03-02 (lib/amortize.py engine) is next |
+| 3     | 2/4   | Executing — 03-01 + 03-02 green (model contract + lib/amortize.py engine; numpy-financial wrapper with three frequency paths; 4 golden oracles parity-match exactly; biweekly-true 628 periods; 259/259 full suite); 03-03 (scripts/amortize.py CLI) is next |
 
 **Plan-level metrics:**
 
@@ -76,11 +77,12 @@ Resume file: `.planning/phases/03-core-amortization/03-02-PLAN.md`
 | 02-06 | 5 min | 2 | 19 created + 0 modified | +29 net (+14 atr_qm + +10 reg_z + +1 new schema param [atr-qm-thresholds] + +4 new citation-cov params [atr_qm × 2, reg_z × 2]; no cross-plan stub resolution) | green |
 | 02-07 | 4 min | 4 + 1 checkpoint (auto-approved) | 3 created + 0 modified | +14 net (7 mutation harness + 2 YAML count audit + 5 cross-predicate smoke; zero production code touched; audit-only gate) | green |
 | 03-01 | 4 min | 2 | 0 created + 2 modified | +5 new (D-14 cumulative-totals positive + default; D-15 mismatch raises + empty-payments skip; D-10 default) + 1 updated (test_schedule_aggregates_loan_and_payments now satisfies D-15); 19 in test_models.py (was 14); 259/259 full suite | green |
+| 03-02 | 9 min | 3 | 1 created (lib/amortize.py 460 lines) + 0 modified | 0 new tests this plan (Plan 03-04 brings test surface); 259/259 full suite (no regression) | green |
 
 **Recent Trend:**
 
-- Last 14 plans: 01-01..01-06 + 02-01..02-07 + 03-01 (all green; 259/259 tests pass)
-- Trend: clean — no node repairs, no rework cycles. 03-01 ties 02-07 at the 4-min velocity floor (model-only data-shape lock; 0 new files; 2 modified; pre-commit hooks fired three formatting auto-fixes that were absorbed as Rule-3 deviations without semantic impact). Phase 3 engine plan (03-02) is unblocked; the data shape Plan 03-02 will produce is now pinned by the @model_validator. AMRT-01 requirement remains unchecked — Plan 03-01 only locked the contract, not the wrapper itself; AMRT-01 closes on 03-02.
+- Last 15 plans: 01-01..01-06 + 02-01..02-07 + 03-01 + 03-02 (all green; 259/259 tests pass)
+- Trend: clean — no node repairs, no rework cycles. 03-02 took 9 minutes (above the 4-min floor due to engine complexity: ~125-line locked-decisions docstring + three private build helpers + Rule-1 bug discovered via smoke testing the formulaic-overshoot edge case). Plan 03-04 will pin every behavior exhaustively. AMRT-01 requirement now satisfied (lib/amortize.py wraps numpy-financial PMT/IPMT/PPMT and all four golden oracles parity-match exactly); AMRT-02..05 also satisfied (fixed-rate, biweekly true/half-monthly, extra-principal, final-payment cleanup); AMRT-06..08 still pending — 03-03 closes AMRT-06 (CLI), 03-04 closes AMRT-07 (invariant) + AMRT-08 (golden oracle parity in test surface).
 
 *Updated after each plan completion*
 
@@ -146,6 +148,12 @@ Recent decisions affecting current work:
 - 03-01: When `from __future__ import annotations` is enabled (project-wide), validator return-type annotations like `def validator(self) -> "Schedule":` get flagged by ruff UP037 (redundant string literal). Use unquoted forward references: `def validator(self) -> Schedule:`. Both forms are equivalent under PEP 563; UP037 enforces the unquoted form. Apply globally to any future @model_validator that returns its own class.
 - 03-01: Pre-commit ruff format will auto-wrap an assignment with a long inline comment into a parenthesized expression (e.g. `final_payment_adjusted: bool = (False  # comment)`) when the line exceeds the 100-char ruff line-length. This BREAKS grep gates that anchor on the original `field: type = value` shape. Mitigation: when the plan's grep gate anchors on a specific line shape AND the inline comment pushes line length past 100, hoist the comment to the line ABOVE the assignment, not after it. Applies to any future plan with grep-gated additions accompanied by long explanatory comments.
 - 03-01: Requirements-to-plan attribution can be 1-to-many. PLAN.md frontmatter `requirements: [AMRT-01]` was a planner shorthand for "this plan supports AMRT-01" but completing 03-01 alone does NOT close AMRT-01 ("`lib/amortize.py` wraps numpy-financial PMT/IPMT/PPMT"); the engine wrapper in 03-02 closes it. REQUIREMENTS.md AMRT-01 stays unchecked until 03-02 ships `lib/amortize.py`. Mark requirements complete only when ALL plans listing the requirement in frontmatter have shipped. Future plan executors should not auto-mark requirement complete on the first plan that lists it.
+- 03-02: Path A scalar per-period iteration over a single `npf.pmt` level-payment call is the canonical numpy-financial wrap shape for this project. Reasoning: (1) survives extra-principal mid-stream (vectorized npf.ipmt/ppmt assume the original principal-amortizing schedule, which extra-principal invalidates after each event); (2) survives biweekly-true acceleration (the schedule terminates ~5-7 yrs early; vectorized would over-allocate); (3) one code path for fixed + biweekly + extras (maintainability); (4) performance non-issue (~628 iterations of trivial Decimal arithmetic per schedule). Phase 5 ARM and Phase 8 stress should reuse this idiom; vectorization should only be considered if profiling Phase 8 stress sweeps shows scalar paths slow enough to matter.
+- 03-02: Formulaic-overshoot detection BEFORE principal computation is the canonical D-09 cleanup pattern. `formulaic_overshoot = (balance + interest <= level_pmt)` fires the same code path as `is_last_term_period` — both branches set `principal_paid = balance` and zero the balance. This unifies four termination cases (end-of-term cents-drift, extra-principal-induced early payoff, biweekly-true acceleration's last rung, cap-fired silent termination) under one rule. Discovered via Rule-1 bug: without overshoot detection, mid-stream extra-principal would produce negative balances that Pydantic Money(ge=0) rejects. Phase 5 ARM re-amortization paths and Phase 6 refi NPV synthetic schedules MUST follow this pattern.
+- 03-02: For both biweekly modes (and ALL three frequencies), `Schedule.monthly_pi` is the IMPLIED monthly P&I computed at `rate/12`, NEVER the biweekly cashflow. `_build_biweekly_true` computes biweekly_payment = quantize_cents(monthly_pi/2) for the per-period cashflow but reports monthly_pi (not biweekly_payment) on Schedule. Phase 10 SKILL.md narration must reflect this — biweekly callers see "per-biweekly-debit" amounts on `Payment.payment` rows but `Schedule.monthly_pi` stays in monthly units. Half-monthly mode delegates to fixed-rate-monthly because per RESEARCH §3.2 Option A and CONTEXT.md D-04 'interest still booked monthly', the math is identical and the biweekly billing is a Phase-10-narration concern.
+- 03-02: Module-docstring locked-decision blocks (D-01..D-15) on `lib/amortize.py` mirror the `lib/rules/atr_qm.py` template (Phase 2 idiom): "LOCKED DECISION - D-XX (one-line summary; per CONTEXT.md):" followed by 2-5 lines of body. ~125 lines of docstring carrying the entire phase 3 decision contract is a load-bearing artifact; future refactors must preserve every D-XX block. Code-side `# D-XX:` inline citations are minimum 1 per decision, anchored on the line that implements the rule.
+- 03-02: When plan acceptance criteria includes BOTH a positive grep gate (e.g. `issues/131` cited in docstring) AND a negative grep gate referencing the same library function (e.g. `! grep -E 'npf\.irr'`), the planner-author may have written conflicting requirements. Resolution: rewrite the citation to use the project name + descriptive function name (e.g. "numpy-financial's irr function") instead of the literal `npf.irr`, satisfying both the positive citation gate and the negative call-detection gate. Future plan-authors should grep their own acceptance criteria for negative gates that reject literal strings appearing elsewhere in the plan.
+- 03-02: Pre-commit ruff format auto-wrap is a recurring source of grep-gate breakage. Long inline `Decimal("0.00")` expressions inside `any(...)` generators and long inline comments after `field: type = value` assignments both get reformatted across multiple lines, which can break single-line grep gates. Mitigations available: (a) write target expressions short enough to fit on one line at 100-char limit; (b) hoist long comments to the line above; (c) when neither is feasible, document as a Rule-3 deviation in the plan SUMMARY (the substance is preserved; only the line shape changes). 03-02 had four such instances absorbed without semantic impact.
 
 ### Pending Todos
 
@@ -171,6 +179,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-04-30T05:14:00.000Z
-Stopped at: Phase 03 plan 01 complete — Payment + Schedule extended for D-10/D-14/D-15; 5 new tests + 1 updated; 259/259 full suite green; ready for plan 03-02 (lib/amortize.py engine)
-Resume file: .planning/phases/03-core-amortization/03-02-PLAN.md
+Last session: 2026-04-30T05:30:00.000Z
+Stopped at: Phase 03 plan 02 complete — lib/amortize.py engine shipped (numpy-financial wrapper, fixed + biweekly true/half-monthly + extra-principal); 4 golden oracles parity-match exactly; biweekly-true accelerates to 628 periods on 200k/6.5/30; 259/259 full suite green; ready for plan 03-03 (scripts/amortize.py CLI)
+Resume file: .planning/phases/03-core-amortization/03-03-PLAN.md
