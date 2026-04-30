@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 03 complete — plan 03-04 ships test surface (tests/test_amortize.py 25 functions / 35 parametrized cases + 7 JSON fixtures + amortize_fixture loader); AMRT-07 + AMRT-08 closed; all 8 phase requirements have direct test evidence; 294/294 full suite green; mypy --strict + ruff clean across 50 source files; ready for /gsd-verify-work + /gsd-transition to Phase 4
-last_updated: "2026-04-30T06:05:00.000Z"
-last_activity: 2026-04-30 -- 03-04 complete (commits b4eaa2d + cd7ae9f + 5ea3d67)
+stopped_at: Phase 03 plan 03-05 complete (CR-01 gap closure) — AmortizeRequest._no_duplicate_recurring_periods @model_validator rejects duplicate (period, recurring=True) entries via pydantic.ValidationError; D-05 LOCKED DECISION docstring extended with "Uniqueness rider (CR-01 closure)" paragraph; 6 new tests (3 negative + 3 positive sibling) pinning the determinism contract; 300/300 full suite green; mypy --strict + ruff clean across 50 source files; CR-01 reproducer end-to-end verified at both AmortizeRequest boundary AND scripts/amortize.py D-19 path (structured Pydantic envelope on stderr); ready for plan 03-06 (WR-02 envelope-shape unification, wave 2, depends_on: [03-05])
+last_updated: "2026-04-30T06:55:00.000Z"
+last_activity: 2026-04-30 -- 03-05 complete (commits 973456c + f8c1ddb)
 progress:
   total_phases: 12
   completed_phases: 3
-  total_plans: 17
-  completed_plans: 17
-  percent: 100
+  total_plans: 19
+  completed_plans: 18
+  percent: 95
 ---
 
 # Project State
@@ -25,29 +25,30 @@ See: .planning/PROJECT.md (updated 2026-04-26)
 
 ## Current Position
 
-Phase: 03 (core-amortization) — COMPLETE
-Plan: 4 of 4 (03-01 + 03-02 + 03-03 + 03-04 all green)
-Status: Phase 03 complete; ready for /gsd-verify-work + /gsd-transition to Phase 4
-Last activity: 2026-04-30 -- 03-04 complete (test surface shipped; AMRT-07 + AMRT-08 closed)
+Phase: 03 (core-amortization) — Plan 5 of 6 complete
+Plan: 5 of 6 (03-01 + 03-02 + 03-03 + 03-04 + 03-05 all green; 03-06 pending)
+Status: 03-05 ships CR-01 closure (AmortizeRequest validator + 6 pinned tests); ready for 03-06 (WR-02 envelope-shape unification; wave 2; depends_on: [03-05])
+Last activity: 2026-04-30 -- 03-05 complete (CR-01 gap-closure: AmortizeRequest._no_duplicate_recurring_periods validator + D-05 docstring rider + 6 tests; 300/300 full suite green)
 
-Progress: [███░░░░░░░] 25% (3/12 phases complete; Phase 3 at 4/4 plans)
+Progress: [███░░░░░░░] 25% (3/12 phases complete; Phase 3 at 5/6 plans)
 
 ### Resume instructions
 
-Phase 3 is complete. Recommended path:
+Phase 3 plan 03-05 is complete; one plan remaining (03-06 WR-02). Recommended path:
 
-1. `/gsd-verify-work` — verifier sweep across Phase-3 deliverables
-2. `/gsd-transition` to Phase 4 (Affordability) once verifier passes
-3. `/gsd-discuss-phase 4` — gather Phase-4 context before planning
-4. `/gsd-plan-phase 4` — plan Phase 4 deliverables
+1. `/gsd-execute-phase 3` (or single-plan equivalent) — execute 03-06-PLAN.md (WR-02: unify scripts/amortize.py float-gate envelope to 6-key Pydantic shape; depends_on satisfied by 03-05 landing)
+2. After 03-06 lands: `/gsd-verify-work` — verifier sweep over both gap-closure plans + Phase-3 totality
+3. `/gsd-transition` to Phase 4 (Affordability) once verifier passes
+4. `/gsd-discuss-phase 4` — gather Phase-4 context before planning
+5. `/gsd-plan-phase 4` — plan Phase 4 deliverables
 
-Resume file (next): `.planning/phases/04-affordability/` (will be created by /gsd-discuss-phase 4)
+Resume file (next): `.planning/phases/03-core-amortization/03-06-PLAN.md` (gap-closure plan; already authored)
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 16
+- Total plans completed: 18
 - Phase 1 wall time: ~1.5 hours (orchestrated, sequential)
 - Phase 2 plan 01 wall time: ~35 min (sequential, single executor)
 - Phase 2 plan 02 wall time: ~7 min (sequential, single executor — fastest plan to date thanks to 02-01 foundation pattern)
@@ -59,7 +60,8 @@ Resume file (next): `.planning/phases/04-affordability/` (will be created by /gs
 - Phase 3 plan 01 wall time: ~4 min (sequential, single executor — model-only data-shape lock; 0 created + 2 modified; +5 new tests + 1 updated; 3 Rule-3 ruff-format/UP037 deviations [all formatting, no semantic changes]; new project velocity floor tied with 02-07)
 - Phase 3 plan 02 wall time: ~9 min (sequential, single executor — engine plan with high logical complexity but zero new test files; 1 new file (lib/amortize.py 460 lines); 0 modified; 1 Rule-1 deviation [extra-principal-induced negative-balance bug found via Task 3 smokes — formulaic-overshoot detection added BEFORE principal computation]; 4 Rule-3 deviations [npf.irr literal in docstring conflicting with negative grep gate; ruff F401/RUF100 on initial date import; ruff RUF100 on # noqa: S101; ruff format auto-wrap on each commit]; all 4 golden oracles parity-match exactly; biweekly-true accelerates to 628 periods exactly per RESEARCH §3.1 prediction)
 - Phase 3 plan 03 wall time: ~6 min (sequential, single executor — single-task plan: scripts/amortize.py CLI; 1 new file (scripts/amortize.py 187 lines); 0 modified; 3 deviations [Rule-3: ruff I001 reordered the lazy-imports automatically; Rule-1: script invocation `python scripts/amortize.py` failed with ModuleNotFoundError because Python adds `scripts/` not cwd to sys.path — fixed by injecting project root onto sys.path inside main() AFTER argparse.parse_args(); Rule-2: Pydantic v2 model_validate_json permissively coerces JSON floats into Decimal — added pre-validation `_find_json_float_loc` walker that emits Pydantic-shaped `decimal_type` error envelope to enforce the FND-01/D-19 money-string contract that the plan author assumed Pydantic would handle natively]; D-18 structural lazy-import check exits 0 with `D-18 OK`; all 5 smoke acceptance commands produce expected outputs; AMRT-06 closed)
-- Phase 3 plan 04 wall time: ~25 min (sequential, single executor — full Phase-3 test surface: tests/conftest.py extended (+15 lines: amortize_fixture filename-stem loader); 7 JSON fixtures with engine-emitted values pasted verbatim; tests/test_amortize.py 25 functions / 35 parametrized cases (17 engine pinning + 8 CLI subprocess); 5 deviations [Rule-1: D-18 lazy-import test had to move into a fresh-Python subprocess because this test module's own top-level `from lib.amortize import ...` always pollutes sys.modules and forces the in-process variant into a permanent skip — relevant deviation pattern for any future "verify import not loaded" test; Rule-3 four times: top-level `import importlib.util` removed after Rule-1 fix (string still appears inside subprocess harness so plan grep gate satisfied); plan-author-speculative noqa directives `PLC0415` and `ARG003` removed after ruff RUF100 fired (mirrors 02-07 pattern); docstring text "assertAlmostEqual"/"freezegun" reworded to "fuzzy comparators"/"time-mocking dep" because the plan's negative grep gates are LITERAL greps that fire on docstring mentions (mirrors 02-05 reword pattern); ruff I001 auto-sorted the import block alphabetically]; full suite 294/294 (was 259 baseline + 35 new); AMRT-07 + AMRT-08 closed; Phase 3 complete)
+- Phase 3 plan 04 wall time: ~25 min (sequential, single executor — full Phase-3 test surface: tests/conftest.py extended (+15 lines: amortize_fixture filename-stem loader); 7 JSON fixtures with engine-emitted values pasted verbatim; tests/test_amortize.py 25 functions / 35 parametrized cases (17 engine pinning + 8 CLI subprocess); 5 deviations [Rule-1: D-18 lazy-import test had to move into a fresh-Python subprocess because this test module's own top-level `from lib.amortize import ...` always pollutes sys.modules and forces the in-process variant into a permanent skip — relevant deviation pattern for any future "verify import not loaded" test; Rule-3 four times: top-level `import importlib.util` removed after Rule-1 fix (string still appears inside subprocess harness so plan grep gate satisfied); plan-author-speculative noqa directives `PLC0415` and `ARG003` removed after ruff RUF100 fired (mirrors 02-07 pattern); docstring text "assertAlmostEqual"/"freezegun" reworded to "fuzzy comparators"/"time-mocking dep" because the plan's negative grep gates are LITERAL greps that fire on docstring mentions (mirrors 02-05 reword pattern); ruff I001 auto-sorted the import block alphabetically]; full suite 294/294 (was 259 baseline + 35 new); AMRT-07 + AMRT-08 closed; Phase 3 4/4 original plans complete)
+- Phase 3 plan 05 wall time: ~3 min (sequential, single executor — gap-closure for CR-01: 1 new @model_validator on AmortizeRequest + D-05 LOCKED DECISION docstring extension + 6 new tests (3 negative pinning order-symmetric + 3-way duplicate; 3 positive sibling pinning legal D-05 step-up / duplicate one-shots / recurring+one-shot); 0 deviations — RED state had the precise expected `DID NOT RAISE ValidationError` shape on first run, GREEN state turned all 3 negatives into PASS without breaking any prior test; CR-01 reproducer end-to-end verified at AmortizeRequest boundary AND scripts/amortize.py D-19 path (structured Pydantic envelope on stderr); 300/300 full suite green; new project velocity floor; restores AMRT-04 determinism contract for the duplicate-(period, recurring=True) input class)
 
 **By Phase:**
 
@@ -67,7 +69,7 @@ Resume file (next): `.planning/phases/04-affordability/` (will be created by /gs
 |-------|-------|--------|
 | 1     | 6/6   | Complete (PASS-WITH-CAVEATS) |
 | 2     | 7/7   | Complete — 02-01..02-07 green; 11 predicates + 10 reference YAMLs + citation-coverage + schema meta-tests + mutation-harness audit ratification; 224/224 tests pass; ready for Phase 4 affordability consumers |
-| 3     | 4/4   | Complete — 03-01..03-04 green (model contract + lib/amortize.py engine + scripts/amortize.py CLI + tests/test_amortize.py 25 functions / 35 parametrized cases + 7 JSON fixtures + amortize_fixture loader); AMRT-01..08 all closed via direct test evidence; 294/294 tests pass; mypy --strict + ruff clean across 50 source files; ready for /gsd-verify-work and /gsd-transition to Phase 4 |
+| 3     | 5/6   | In progress — 03-01..03-05 green (model contract + lib/amortize.py engine + scripts/amortize.py CLI + tests/test_amortize.py 41 functions + 7 JSON fixtures + amortize_fixture loader + AmortizeRequest._no_duplicate_recurring_periods CR-01 closure with 6 pinned tests); AMRT-01..08 all closed; 03-06 (WR-02 envelope-shape unification) pending; 300/300 tests pass; mypy --strict + ruff clean across 50 source files |
 
 **Plan-level metrics:**
 
@@ -84,11 +86,12 @@ Resume file (next): `.planning/phases/04-affordability/` (will be created by /gs
 | 03-02 | 9 min | 3 | 1 created (lib/amortize.py 460 lines) + 0 modified | 0 new tests this plan (Plan 03-04 brings test surface); 259/259 full suite (no regression) | green |
 | 03-03 | 6 min | 1 | 1 created (scripts/amortize.py 187 lines) + 0 modified | 0 new tests this plan (Plan 03-04 brings the CLI subprocess tests); 259/259 full suite (no regression) | green |
 | 03-04 | 25 min | 3 | 8 created (tests/test_amortize.py + 7 JSON fixtures) + 1 modified (tests/conftest.py) | 35 net (17 engine pinning + 8 CLI subprocess; 25 functions / 35 parametrized cases); 294/294 full suite | green |
+| 03-05 | 3 min | 2 | 0 created + 2 modified (lib/amortize.py + tests/test_amortize.py) | 6 net (3 negative CR-01 reproducer + symmetric reverse + 3-way duplicate; 3 positive sibling D-05 step-up / duplicate one-shots / recurring+one-shot); 300/300 full suite; 0 deviations | green |
 
 **Recent Trend:**
 
-- Last 17 plans: 01-01..01-06 + 02-01..02-07 + 03-01..03-04 (all green; 294/294 tests pass)
-- Trend: clean — no node repairs, no rework cycles. 03-04 took 25 minutes (3-task plan with 5 deviations absorbed inline: Rule-1 D-18 lazy-import test had to move into a fresh-Python subprocess because the test module's own `from lib.amortize import ...` always pollutes sys.modules; Rule-3 four times — top-level `import importlib.util` removed after Rule-1 fix, plan-author-speculative `# noqa: PLC0415` and `# noqa: ARG003` removed after ruff RUF100 fired, docstring "assertAlmostEqual"/"freezegun" reworded to "fuzzy comparators"/"time-mocking dep" because the plan's negative grep gates are LITERAL, ruff I001 auto-sorted import block). The D-18-test-skips-in-process bug was a real Rule-1 — the in-process design as written is unsatisfiable and the subprocess harness is the canonical fix; this is a pattern future "assert X not in sys.modules" tests across the project should follow. AMRT-07 + AMRT-08 closed; Phase 3 complete; ready for /gsd-verify-work + /gsd-transition to Phase 4.
+- Last 18 plans: 01-01..01-06 + 02-01..02-07 + 03-01..03-05 (all green; 300/300 tests pass)
+- Trend: clean — no node repairs, no rework cycles. 03-05 took 3 minutes with ZERO deviations: a tight TDD plan (RED commit + GREEN commit) that materialized exactly as the planner predicted — 3 expected RED-shape failures, 3 sibling positives passing on first run, then a one-validator-method GREEN turn that resolved all 3 negatives into PASS without disturbing any of the 35 prior Phase 3 tests. New project velocity floor (was 4 min for 02-07/03-01). The plan's substring assertions on `"duplicate"/"period"/"recurring"` and the explicit recommendation to raise `ValueError` (Pydantic-wrapped) instead of `ValidationError` directly were both load-bearing — the validator pattern matches `_biweekly_mode_consistency` exactly, which is why both validators compose cleanly under Pydantic's declaration-order execution. CR-01 gap closed; AMRT-04 determinism contract restored at boundary; ready for plan 03-06 (WR-02 wave 2; depends_on: [03-05] satisfied).
 
 *Updated after each plan completion*
 
@@ -168,6 +171,10 @@ Recent decisions affecting current work:
 - 03-04: Plan-author noqa speculation (`# noqa: PLC0415`, `# noqa: ARG003`, `# noqa: BLE001`) recurs every plan that involves new test files; ruff RUF100 reliably catches them when those rules aren't enabled in `pyproject.toml [tool.ruff.lint]`. Mitigation: plan-authors should grep `pyproject.toml` for the rule code BEFORE writing pre-emptive noqa directives. Mirrors 02-07 + this plan's 03-04 deviation. Project-wide convention: do not write noqa directives speculatively — let ruff fire, then add the noqa only if the rule actually blocks.
 - 03-04: Negative grep gates that anchor on common docstring vocabulary (`assertAlmostEqual`, `pytest.approx`, `freezegun`) will fire on docstring mentions just as readily as on real anti-pattern uses. Mitigation: when a docstring text needs to communicate "do not use X", reword as "no X-style fuzzy comparators" or "no time-mocking dep" instead of inlining the literal banned token. Mirrors 02-05 reword pattern. Plan-authors who write negative grep gates should ALSO check whether their docstring template would trip the gate; this is a gate-design hygiene check.
 - 03-04: Engine-as-source-of-truth for fixture authoring. When pinning Decimal-equality contracts, run the engine first, capture its emitted strings, and paste verbatim into the fixture — never hand-compute or guess. This guarantees the fixture round-trips with `Decimal(expected) == schedule.actual`. Reusable for Phase 5 (ARM re-amortization fixtures), Phase 6 (refi NPV synthetic schedule fixtures), Phase 7 (APR Newton-Raphson convergence fixtures), Phase 8 (stress-sweep fixtures).
+- 03-05: Reject-at-boundary over silently-pick-tiebreaker for order-of-list-ambiguous input classes. When a locked decision's selector wording (D-05's "the LATEST entry with entry.period <= p AND entry.recurring=True") is ambiguous on caller-supplied list ordering, the determinism contract is restored by REJECTING the ambiguous input class at the request boundary — NOT by silently picking a tiebreaker. UAT decision option (a) was canonical here; option (b) ("document a tie-breaker and pin a fixture") would have left the math-correctness narrative weaker. Reusable for any future Phase that has a "select-one-from-multiple" rule whose collision behavior the spec doesn't cover (e.g., Phase 5 ARM rate-cap selection if multiple caps fire same period; Phase 8 stress-sweep deduplication).
+- 03-05: Composable @model_validator(mode="after") chain pattern. Pydantic v2 runs all `@model_validator(mode="after")` methods on a model in declaration order. New validators added AFTER existing ones inherit a defined precedence — a request that violates BOTH validator contracts gets the FIRST validator's error. This matters for test stability: existing D-02 tests (`test_amortize_request_rejects_biweekly_mode_when_monthly`) construct `AmortizeRequest(loan, frequency="monthly", biweekly_mode="true")` with NO `extra_principal` field, so the new D-05 rider would never fire on that input — but if it had, the order would matter. Future plan-authors adding additional model_validators to AmortizeRequest should append them AFTER the D-05 rider unless their contract should fire first.
+- 03-05: Validator MUST raise `ValueError` (NOT `pydantic.ValidationError` directly) inside `@model_validator(mode="after")`. Pydantic v2 wraps `ValueError` raised inside a model_validator into a `ValidationError` automatically — this is the canonical pattern. Raising `ValidationError` directly (rather than `ValueError`) bypasses the wrapper and produces a less-readable error. Verified end-to-end: the new validator raises `ValueError`; both direct construction and CLI subprocess see a proper `pydantic_core._pydantic_core.ValidationError` envelope with `type=value_error` per error dict. Reusable for any future Pydantic v2 model_validator that needs to enforce cross-field invariants.
+- 03-05: TDD with zero deviations is achievable when the plan author front-loads the substring-assertion contract. The 03-05 PLAN's 3 negative test substring-assertions (`"duplicate" in msg`, `"period" in msg`, `"recurring" in msg`) and the 3 positive sibling test cases were each thought through to land exactly. The validator's error message string (`f"duplicate recurring extra_principal at period {entry.period}; ..."`) was authored to satisfy all three substrings simultaneously. This is the cleanest TDD execution in the project to date: 0 Rule-1/Rule-2/Rule-3 deviations across both tasks. Pattern: when authoring TDD plans, the planner's negative test substring assertions and the implementation's error-message string MUST be specified together; the planner's contract drives the implementer's wording.
 
 ### Pending Todos
 
@@ -193,6 +200,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-04-30T06:05:00.000Z
-Stopped at: Phase 03 complete — plan 03-04 ships test surface (tests/test_amortize.py 25 functions / 35 parametrized cases + 7 JSON fixtures + amortize_fixture loader); AMRT-07 + AMRT-08 closed (5 deviations absorbed inline: Rule-1 D-18-test-must-spawn-subprocess; Rule-3 importlib.util-removed-from-top-level / plan-author-speculative-noqa-removed (PLC0415, ARG003) / docstring-reworded-to-pass-negative-grep-gates / ruff-I001-auto-sort); 294/294 full suite green; mypy --strict + ruff clean across 50 source files; ready for /gsd-verify-work and /gsd-transition to Phase 4 (Affordability)
-Resume file: .planning/phases/04-affordability/ (will be created by /gsd-discuss-phase 4)
+Last session: 2026-04-30T06:55:00.000Z
+Stopped at: Phase 03 plan 03-05 complete (CR-01 gap closure) — AmortizeRequest._no_duplicate_recurring_periods @model_validator added; D-05 LOCKED DECISION docstring extended with "Uniqueness rider (CR-01 closure)" paragraph; 6 new tests (3 negative pinning order-symmetric + 3-way duplicate; 3 positive sibling pinning legal D-05 step-up / duplicate one-shots / recurring+one-shot); 0 deviations (cleanest TDD plan to date); 300/300 full suite green; CR-01 reproducer end-to-end verified at AmortizeRequest boundary AND scripts/amortize.py D-19 path (structured Pydantic envelope on stderr); ready for plan 03-06 (WR-02 envelope-shape unification, wave 2, depends_on: [03-05] now satisfied)
+Resume file: .planning/phases/03-core-amortization/03-06-PLAN.md (gap-closure WR-02; already authored)
