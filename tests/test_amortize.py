@@ -871,16 +871,30 @@ def test_cli_invalid_json_input(tmp_path: Path) -> None:
 
 
 def test_cli_rejects_float_principal(tmp_path: Path) -> None:
-    """D-19: pre-validation gate rejects JSON-float in any Money field.
+    """D-19 + WR-02: pre-validation gate emits the full 6-key Pydantic-shaped envelope.
 
-    The JSON has ``principal: 400000.00`` as a NUMBER (not a string). Pydantic v2
-    model_validate_json permissively coerces JSON numbers into Decimal, so the
-    CLI runs a pre-validation walker (_find_json_float_loc) that emits a
-    Pydantic-shaped ``decimal_type`` error envelope before model_validate_json.
+    WR-02 closure: the float-gate envelope MUST match Pydantic v2's e.json()
+    shape exactly (type, loc, msg, input, url, ctx) so Phase 9 Node orchestration
+    and Phase 10 SKILL.md narration parse stderr as a single uniform contract
+    regardless of which boundary gate fired.
+
+    Pinned values:
+      - type:  decimal_type (Pydantic's canonical decimal-rejection error type)
+      - loc:   ['loan', 'principal'] (JSON-pointer path to the offending field)
+      - msg:   non-empty string containing 'Input should be' (Pydantic's canonical
+               prefix; substring-checked to survive future Pydantic message tweaks)
+      - input: '400000.00' -- str() of the rejected Decimal so it round-trips
+               through JSON without losing identity
+      - url:   starts with https://errors.pydantic.dev/ and ends with /v/decimal_type
+               (the version segment in the middle floats with the runtime Pydantic
+               version; checking prefix+suffix means a Pydantic 2.13 to 2.14 upgrade
+               does not break this test)
+      - ctx:   dict containing class:'Decimal' (Pydantic's decimal_type ctx convention)
     """
     bad = tmp_path / "float.json"
-    # Hand: JSON number literal 400000.00 deserializes to a Python float;
-    # the pre-validation gate rejects it with a structured envelope.
+    # Hand: JSON number literal 400000.00 deserializes to a Python float (or
+    # Decimal under parse_float=Decimal); the pre-validation gate rejects it
+    # with the unified Pydantic-shaped envelope.
     bad.write_text(
         '{"loan": {"principal": 400000.00, "annual_rate": "0.065000", "term_months": 360}}'
     )
@@ -892,16 +906,26 @@ def test_cli_rejects_float_principal(tmp_path: Path) -> None:
     )
     assert result.returncode == 2
     errors = json.loads(result.stderr)
-    # At least one error should reference 'principal' in its loc OR mention
-    # 'decimal_type'/'Input should be'.
-    offending = [
-        e
-        for e in errors
-        if (isinstance(e.get("loc"), list) and "principal" in e["loc"])
-        or "decimal_type" in str(e.get("type", ""))
-        or "Input should be" in str(e.get("msg", ""))
-    ]
-    assert offending, f"No error referenced principal/decimal_type: {errors}"
+    assert isinstance(errors, list)
+    assert len(errors) >= 1
+    err = errors[0]
+
+    # 6-key uniform shape (WR-02 closure)
+    assert set(err.keys()) == {"type", "loc", "msg", "input", "url", "ctx"}, (
+        f"Float-gate envelope must have exactly 6 Pydantic-shape keys; got {sorted(err.keys())}"
+    )
+
+    # Per-key value contracts
+    assert err["type"] == "decimal_type"
+    assert err["loc"] == ["loan", "principal"]
+    assert isinstance(err["msg"], str)
+    assert "Input should be" in err["msg"]
+    assert err["input"] == "400000.00"
+    assert isinstance(err["url"], str)
+    assert err["url"].startswith("https://errors.pydantic.dev/")
+    assert err["url"].endswith("/v/decimal_type")
+    assert isinstance(err["ctx"], dict)
+    assert err["ctx"].get("class") == "Decimal"
 
 
 def test_cli_d02_violation_at_boundary(tmp_path: Path) -> None:
@@ -967,3 +991,77 @@ def test_cli_biweekly_round_trip(tmp_path: Path) -> None:
     # Hand: biweekly-true accelerates; expect substantially fewer than the
     # 720 formulaic biweekly periods (per RESEARCH 3.1: ~628 for this loan).
     assert 600 < len(out["payments"]) < 700
+
+
+def test_cli_error_envelope_uniformity(tmp_path: Path) -> None:
+    """WR-02 closure: all CLI ValidationError-class surfaces share one 6-key shape.
+
+    Cross-shape contract: the pre-validation float-gate envelope and the
+    native Pydantic ValidationError envelope (D-02 path) MUST have identical
+    keysets at the first-error level so Phase 9 Node orchestration and
+    Phase 10 SKILL.md narration parse stderr without conditional shape
+    detection. This test fails the moment any key drifts on either side.
+
+    NOT covered by this test (intentionally): file-not-found and invalid-JSON
+    envelopes use a {error: <message>} shape (not Pydantic ValidationError
+    surfaces) and predate this gap. Keeping them as-is preserves backward
+    compatibility for the existing test_cli_file_not_found_returns_structured_error
+    and test_cli_invalid_json_input contracts.
+    """
+    # Path 1: float-gate
+    float_path = tmp_path / "float.json"
+    float_path.write_text(
+        '{"loan": {"principal": 400000.00, "annual_rate": "0.065000", "term_months": 360}}'
+    )
+    float_result = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), "--input", str(float_path)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert float_result.returncode == 2
+    float_errors = json.loads(float_result.stderr)
+    assert isinstance(float_errors, list)
+    assert len(float_errors) >= 1
+    float_keys = set(float_errors[0].keys())
+
+    # Path 2: D-02 violation (frequency=monthly + biweekly_mode='true' surfaces
+    # via Pydantic ValidationError.json() -- known-good 6-key shape)
+    d02_path = tmp_path / "d02.json"
+    d02_path.write_text(
+        json.dumps(
+            {
+                "loan": {
+                    "principal": "400000.00",
+                    "annual_rate": "0.065000",
+                    "term_months": 360,
+                },
+                "frequency": "monthly",
+                "biweekly_mode": "true",
+            }
+        )
+    )
+    d02_result = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), "--input", str(d02_path)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert d02_result.returncode == 2
+    d02_errors = json.loads(d02_result.stderr)
+    assert isinstance(d02_errors, list)
+    assert len(d02_errors) >= 1
+    d02_keys = set(d02_errors[0].keys())
+
+    # Cross-shape contract: identical keysets
+    expected_keys = {"type", "loc", "msg", "input", "url", "ctx"}
+    assert float_keys == expected_keys, (
+        f"Float-gate envelope keys drifted: expected {expected_keys}, got {float_keys}"
+    )
+    assert d02_keys == expected_keys, (
+        f"Pydantic envelope keys drifted: expected {expected_keys}, got {d02_keys}"
+    )
+    assert float_keys == d02_keys, (
+        "WR-02 invariant violated: float-gate envelope and Pydantic ValidationError "
+        f"envelope have different keysets (float={float_keys}, d02={d02_keys})"
+    )
