@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Plan 04-04 complete (Wave 4 _evaluate_blockers D-11 precedence + public evaluate dispatcher; ROADMAP SC-3 closed at math layer)
-last_updated: "2026-04-30T20:19:29.401Z"
+stopped_at: Completed 04-05-cli-and-config-PLAN.md
+last_updated: "2026-04-30T20:34:45.816Z"
 last_activity: 2026-04-30
 progress:
   total_phases: 12
   completed_phases: 3
   total_plans: 26
-  completed_plans: 24
-  percent: 92
+  completed_plans: 25
+  percent: 96
 ---
 
 # Project State
@@ -26,11 +26,11 @@ See: .planning/PROJECT.md (updated 2026-04-26)
 ## Current Position
 
 Phase: 4 (affordability) — EXECUTING
-Plan: 6 of 7
+Plan: 7 of 7
 Status: Ready to execute
 Last activity: 2026-04-30
 
-Progress: [█████████░] 92%
+Progress: [██████████] 96%
 
 ### Resume instructions
 
@@ -104,6 +104,7 @@ Resume file (next): `.planning/phases/04-affordability/04-05-cli-and-config-PLAN
 - Trend: clean — no node repairs, no rework cycles. 04-03 took 8 minutes with 5 deviations (4 Rule-1 + 1 Rule-3); the 4 Rule-1 deviations are all genuine correctness fixes (NOT speculative bug-finding). Key insights from 04-03: (a) Sign-convention spec drift: when a plan author derives a grep gate from documentation describing the THEORETICAL convention (e.g., npf.pv "returns negative under cash-flow convention" per the docs) but the actual library implements that convention internally and returns positive directly (numpy_financial 1.0.0 verified empirically 2026-04-30: pmt=-1500 returns +225461.35; pmt=+1500 returns -225461.35), the executed code must follow the empirical behavior while the grep gate substring can live in a docstring/comment block. The fix pattern: ship correct code with a multi-line comment block whose text contains the prescribed grep-gate substring (twice in this case: docstring pipeline description + inline sign-convention rationale). The round-trip closure assertion D-09 acts as the empirical pin (forward.loan_amount == reverse.max_loan_amount exact Decimal equality cannot tolerate sign drift). Reusable for any future plan where authored grep gates were derived from documentation that diverges from on-disk library behavior. (b) Pre-existing-bug-exposed-by-round-trip pattern: Plan 04-02's evaluate_forward returned raw Decimal divisions for ltv/cltv/dti without quantization. The Plan 04-02 conforming oracle ($400k/$500k → 0.80 exactly) hid the issue because clean fractions quantize to themselves. Plan 04-03's round-trip flow exposed it: a max_loan_amount divided by an approximated property_value can produce 28-digit Decimals that fail Pydantic Rate's max_digits=7 constraint. Mitigation: introduce a sibling `_quantize_rate(rate)` helper at 6 decimal places (mirrors lib.money.quantize_cents at 2 decimal places) and call at the response boundary in evaluate_forward. The patch is purely additive (no Plan 04-02 oracle test breaks). Reusable pattern: when a round-trip-style integration test exposes a quantization gap in an upstream calc, fix the upstream calc with a sibling-quantize-helper at the appropriate Pydantic constraint precision; the round-trip integration is the safety net for "things that look done but aren't" per CLAUDE.md PITFALLS. (c) Cross-plan stub-presence test handoff is now a canonical pattern (third occurrence: Phase 2 02-02 + Plan 04-02 + Plan 04-03). When a cross-plan stub's body ships in a later plan, the prior plan's stub-presence test (asserting NotImplementedError) MUST be replaced with a positive behavior test in the same commit. The replacement test should exercise an oracle-equivalent happy-path. (d) Zero-MI seed pre-pass for FHA chicken-and-egg in reverse mode: when MI estimation requires a candidate financed_loan_amount (FHA's chicken-and-egg between MI rate and loan size) AND a candidate property_value, a zero-MI seed npf.pv call yields the candidate amount → derive candidate property_value → MI estimate → final npf.pv solve. ONE refinement pass (D-08 one-shot premise; iteration deferred per CONTEXT.md). Same sign convention applied to both seed and final solves (consistency). Reusable for any future reverse-solve composition where the predicate function depends on its own output. (e) Plans 04-04 (blocker precedence) + 04-05 (CLI) + 04-06 (tests + fixtures) all unblocked. evaluate_forward + evaluate_reverse have stable contracts; Plan 04-04 will wrap BOTH with `_evaluate_blockers(...)`; Plan 04-05's CLI dispatches on `request.mode`; Plan 04-06 ships fixture-based tests + flips the 9 AFFD-XX xfail stubs RED→GREEN. The numpy_financial import is now actively used (no longer noqa'd). AFFD-05 is closed at the math layer (round-trip assertion ships at Plan 04-06).
 
 *Updated after each plan completion*
+| Phase 04-affordability P05-cli-and-config | 4min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -213,6 +214,9 @@ Recent decisions affecting current work:
 - [Phase 4]: 04-03: Cross-plan stub-presence test handoff is now a canonical pattern (third occurrence: Phase 2 02-02 → Plan 04-02 → Plan 04-03). Codified rule: when a cross-plan stub's body ships in a later plan, the prior plan's stub-presence test (asserting NotImplementedError) MUST be replaced with a positive behavior test in the same commit. The replacement test should exercise an oracle-equivalent happy-path. Forbidden alternative: leaving the stub-presence test in place after the body ships — it WILL fail (the new body raises AttributeError, not NotImplementedError) and break suite-stays-green. Documented Rule-1 deviation pattern; future plan executors should NOT request user permission to perform this rename — it's auto-fixed. Established as project convention.
 - [Phase 4]: 04-03: Zero-MI seed pre-pass for FHA chicken-and-egg in reverse mode. FHA's `_compute_monthly_mi` requires a candidate financed_loan_amount AND property_value, but reverse mode doesn't know either until npf.pv solves — and npf.pv needs max_PI which needs MI. Resolution: ZERO-MI seed npf.pv call (using max_pi_plus_mi as the pmt) yields zero_mi_loan_amount → zero_mi_property_value (= zero_mi_loan_amount / target_ltv_pct); `_compute_monthly_mi` runs at that candidate; the resulting assumed_monthly_mi feeds the FINAL npf.pv solve. ONE refinement pass (D-08 one-shot premise per CONTEXT.md; iteration deferred per CONTEXT.md Deferred Items "Iterative PMI-LTV reverse solver bisection: out of scope"). Same sign convention applied to both seed and final solves to keep them consistent. Reusable for any future reverse-solve composition where the predicate function depends on its own output.
 - [Phase 4]: 04-03: 12-step evaluate_reverse composition pipeline as the canonical Phase 4 reverse-mode contract. (1) joint income sum + monthly debts; (2) max_PITI = max_dti * income - debts; (3) max_PI_plus_MI = max_PITI - escrow; (4) monthly_rate = annual / 12; (5) zero-MI seed npf.pv solve; (6) MI estimate at candidate financed_loan_amount; (7) max_PI = max_PI_plus_MI - assumed_monthly_mi; (8) final npf.pv solve; (9) quantize_cents(raw_pv); (10) derived_property_value = max_loan_amount / target_ltv_pct (NOT surfaced on response — reverse mode commits to LTV, not property); (11) loan-type classify with derived_property_value; (12) build response with mode='reverse' + max_loan_amount + implied_pi + assumed_ltv_pct + assumed_monthly_mi. The contract is locked at the AffordabilityResponse output. Phase 5 ARM may consume for reverse-affordability-at-each-reset analysis; Phase 8 stress may sweep target_ltv_pct + max_dti grids.
+- [Phase ?]: Plan 04-05: TypeAdapter(AffordabilityRequest) over .model_validate_json — AffordabilityRequest is an Annotated discriminated-union TypeAlias from Plan 04-01, not a BaseModel subclass; TypeAdapter is the v2 idiom for validating non-class types
+- [Phase ?]: Plan 04-05: MissingCountyDataError catch as separate try/except (not folded into ValidationError) — preserves WR-02 closure 6-key envelope shape uniformly across both Pydantic and non-Pydantic surfaces; structurally distinct catches keep ctx['class'] discriminating (Decimal vs MissingCountyDataError)
+- [Phase ?]: Plan 04-05: VA citation format referenced by source location (lib/rules/va_residual_income.py L115) in YAML va block docstring instead of inlining the format-string — preserves the Plan 04-04 negative-grep discipline at the documentation layer
 
 ### Pending Todos
 
@@ -238,6 +242,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-04-30T20:12:45Z
-Stopped at: Plan 04-04 complete (Wave 4 _evaluate_blockers D-11 precedence + public evaluate dispatcher; ROADMAP SC-3 closed at math layer)
-Resume file: .planning/phases/04-affordability/04-05-cli-and-config-PLAN.md
+Last session: 2026-04-30T20:34:39.926Z
+Stopped at: Completed 04-05-cli-and-config-PLAN.md
+Resume file: None

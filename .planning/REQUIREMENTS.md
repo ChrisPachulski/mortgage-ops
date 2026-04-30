@@ -68,8 +68,8 @@ User selected "all" scope; everything below is in v1.
 - [ ] **AFFD-05**: Reverse direction: "what loan amount can I qualify for given income X?" via `npf.pv` from max-affordable PMT
 - [ ] **AFFD-06**: Household-aware: joint income, joint applicants, dual-credit-score handling
 - [x] **AFFD-07**: Affordability output cites the binding rule when blocking (e.g., "blocked by VA-RESIDUAL-WEST-FAMILY-4")
-- [ ] **AFFD-08**: `scripts/affordability.py` provides JSON-in / JSON-out CLI
-- [ ] **AFFD-09**: `config/household.example.yml` documents schema (joint income, applicants, monthly debts, location)
+- [x] **AFFD-08**: `scripts/affordability.py` provides JSON-in / JSON-out CLI
+- [x] **AFFD-09**: `config/household.example.yml` documents schema (joint income, applicants, monthly debts, location)
 
 ### ARM Modeling
 
@@ -258,8 +258,8 @@ Mapped 2026-04-26 by gsd-roadmapper. Every v1 requirement is assigned to exactly
 | AFFD-05 | Phase 4 | Pending |
 | AFFD-06 | Phase 4 | Pending |
 | AFFD-07 | Phase 4 | Complete |
-| AFFD-08 | Phase 4 | Pending |
-| AFFD-09 | Phase 4 | Pending |
+| AFFD-08 | Phase 4 | Complete |
+| AFFD-09 | Phase 4 | Complete |
 | ARM-01 | Phase 5 | Pending |
 | ARM-02 | Phase 5 | Pending |
 | ARM-03 | Phase 5 | Pending |
