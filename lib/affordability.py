@@ -173,6 +173,7 @@ Stale-warning expected behavior (RESEARCH §"_loader.py and StaleReferenceWarnin
 
 from __future__ import annotations
 
+import warnings
 from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING, Annotated, Any, Final, Literal
@@ -180,13 +181,10 @@ from typing import TYPE_CHECKING, Annotated, Any, Final, Literal
 import numpy_financial as npf  # noqa: F401  # used by Plan 04-03 reverse; preloaded here
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-# Suppression rationale (one-line per code):
-#   F401 — Loan is re-exported for Plans 04-02..04-04 (cross-plan import surface).
-#   TC001 — Money + Rate are Annotated[Decimal, Field(...)] aliases used as Pydantic
-#           field types; Pydantic resolves annotations at runtime so these MUST be
-#           runtime imports (mirrors lib/models.py L16 datetime.date convention).
+from lib.amortize import build_schedule
 from lib.models import Loan, Money, Rate
 from lib.money import quantize_cents
+from lib.rules._loader import StaleReferenceWarning
 
 # Phase 2 predicate full-path imports per Phase 2 D-08 (one predicate per citation).
 # Wave 2 (Plan 04-02) promotes these to runtime imports because evaluate_forward
@@ -695,23 +693,169 @@ def _compute_monthly_mi(
 
 
 def evaluate_forward(request: ForwardModeRequest) -> AffordabilityResponse:
-    """Forward-mode affordability: known loan + property_value → DTI/LTV/CLTV/PITI.
+    """Forward-mode affordability composition (AFFD-01..04, AFFD-06).
 
-    Body shipped in Plan 04-02 (cross-plan stub idiom; Phase 2 02-01 precedent).
-    Wave 1 / Plan 04-02 will:
-      1. classify target_loan_type via lib.rules.loan_type.classify (using
-         TARGET_LOAN_TYPE_TO_PROGRAM cross-walk + LocationFIPS-derived County)
-      2. compute monthly_pi via lib.amortize.build_schedule(loan).monthly_pi
-      3. compute monthly_mi (FHA from fha_mip.compute; conventional from request.
-         monthly_pmi; VA / USDA / conventional <= 80 LTV → 0)
-      4. compute PITI via _compute_piti = quantize_cents(P&I + tax + ins + HOA + MI)
-      5. compute DTI front/back, LTV, CLTV
-      6. evaluate blockers via _evaluate_blockers (D-11 precedence) — uses
-         TARGET_LOAN_TYPE_CROSSWALK to detect FHFA-LIMIT-* / HUD-LIMIT-* blockers
-         when the predicate's returned LoanType is outside the requested target
-      7. capture StaleReferenceWarning into response.warnings
+    Pipeline:
+      1. Sum joint income; compute total monthly debts.
+      2. Build County from household.location FIPS.
+      3. Classify loan_type via Phase 2 RUL-01 with corrected signature
+         (RESEARCH §A.1) — uses TARGET_LOAN_TYPE_CROSSWALK to detect
+         FHFA-LIMIT-* / HUD-LIMIT-* blockers when the predicate's returned
+         LoanType is outside the requested target.
+         (MissingCountyDataError propagates as Python exception; D-11 step 1
+         hard error, NOT blocked_by — script boundary surfaces 6-key envelope.)
+      4. Capture StaleReferenceWarning across predicate calls (D-11 propagation).
+      5. For FHA target with D-03 auto-finance: financed_loan_amount =
+         loan_amount + ufmip. For other targets: financed_loan_amount = loan_amount.
+      6. Call build_schedule on the financed Loan to get monthly_pi.
+      7. Compute monthly_mi via _compute_monthly_mi (handles all 5 target loan types).
+      8. PITI = quantize_cents(monthly_pi + tax + ins + hoa + monthly_mi). ONE quantize.
+      9. LTV = financed_loan_amount / property_value (ratio).
+     10. CLTV = (financed_loan_amount + sum(junior_liens)) / property_value.
+     11. DTI front = piti / income; DTI back = (piti + non_housing_debts) / income.
+     12. Surface the loan-type-classify blocker (if any) into blocked_by so Plan
+         04-04's _evaluate_blockers precedence pipeline can find it; the rest of
+         D-11 precedence (LTV/CLTV ceiling -> DTI cap -> ATR/QM -> VA-residual)
+         is wired in Plan 04-04.
+
+    Note on warnings capture: every predicate call site is wrapped in a single
+    warnings.catch_warnings(record=True) block; the captured StaleReferenceWarning
+    instances are stringified via str(w.message) and appended to response.warnings.
     """
-    raise NotImplementedError("forward evaluation shipped in Plan 04-02")
+    # 1. Joint applicant aggregation (D-06 + D-05 + D-07)
+    applicants = request.household.applicants
+    total_gross_monthly_income = sum(
+        (a.gross_monthly_income for a in applicants),
+        start=Decimal("0"),
+    )
+    debts = request.household.monthly_debts
+    sum_monthly_debts = debts.auto + debts.student_loans + debts.credit_cards + debts.other
+    # min_credit_score is the documented selector for Fannie LLPA + Freddie
+    # eligibility lookups in Plan 04-04 — not consumed in evaluate_forward math
+    # itself, but bound here per D-05 so the documented selector is visible at
+    # the call site (underscore-prefixed name signals "intentionally unused
+    # within this function" to ruff; Plan 04-04 wraps and consumes via the
+    # blocker pipeline).
+    _min_credit_score = min(a.credit_score for a in applicants)
+
+    # 2. County construction
+    county = _build_county(request.household.location)
+
+    # Endorsement date (RESEARCH Open Q#6: default to today; allow override)
+    endorsement_date = request.endorsement_date_override or date.today()
+
+    # 3-12: capture staleness warnings across the pipeline (D-11)
+    captured_warnings: list[str] = []
+    with warnings.catch_warnings(record=True) as captured:
+        warnings.simplefilter("always", StaleReferenceWarning)
+
+        # 3. Loan-type classification (corrected signature per RESEARCH §A.1)
+        classified_loan_type, classify_blocker = _classify_target_loan_type(
+            loan_amount=request.loan_amount,
+            county=county,
+            target_loan_type=request.target_loan_type,
+        )
+
+        # 5. UFMIP financing (D-03 auto-finance per RESEARCH recommendation)
+        #    Compute MI and UFMIP together; financed_loan_amount derives from UFMIP.
+        #    Note: _compute_monthly_mi takes financed_loan_amount; for FHA we need
+        #    a two-step compute (UFMIP first -> financed_amount -> monthly MIP from
+        #    financed_amount). Inline the FHA branch here for clarity.
+        ufmip_to_finance = Decimal("0.00")
+        if request.target_loan_type == "fha":
+            # First MIP call to get UFMIP
+            pre_finance_loan = _build_loan_for_amortization(
+                principal=request.loan_amount,
+                annual_rate=request.annual_rate,
+                term_months=request.term_months,
+                origination_date=endorsement_date,
+            )
+            pre_mip = fha_mip_compute(
+                loan=pre_finance_loan,
+                original_property_value=request.property_value,
+                endorsement_date=endorsement_date,
+            )
+            ufmip_to_finance = pre_mip.ufmip
+
+        financed_loan_amount = quantize_cents(request.loan_amount + ufmip_to_finance)
+
+        # 6. Compute monthly P&I via Phase 3 build_schedule on the financed loan
+        financed_loan = _build_loan_for_amortization(
+            principal=financed_loan_amount,
+            annual_rate=request.annual_rate,
+            term_months=request.term_months,
+            origination_date=endorsement_date,
+        )
+        schedule = build_schedule(financed_loan)
+        monthly_pi = schedule.monthly_pi
+
+        # 7. Compute monthly_mi (predicate-derived for FHA; caller-supplied for
+        #    conventional > 80%; predicate-derived for USDA; 0 for VA / jumbo /
+        #    conventional <= 80%)
+        monthly_mi, _ = _compute_monthly_mi(
+            target_loan_type=request.target_loan_type,
+            financed_loan_amount=financed_loan_amount,
+            property_value=request.property_value,
+            annual_rate=request.annual_rate,
+            term_months=request.term_months,
+            monthly_pmi=request.monthly_pmi,
+            endorsement_date=endorsement_date,
+        )
+
+        # Collect StaleReferenceWarning strings (D-11 propagation)
+        for w in captured:
+            if issubclass(w.category, StaleReferenceWarning):
+                captured_warnings.append(str(w.message))
+
+    # 8. PITI — quantize ONCE at end (Phase 3 D-04 PITFALLS pattern; D-01)
+    escrow = request.household.escrow
+    piti_pre_quantize = (
+        monthly_pi
+        + escrow.property_tax_monthly
+        + escrow.insurance_monthly
+        + escrow.hoa_monthly
+        + monthly_mi
+    )
+    piti = quantize_cents(piti_pre_quantize)
+
+    # 9-10. LTV + CLTV (use financed_loan_amount for FHA UFMIP semantics)
+    ltv = _compute_ltv(financed_loan_amount, request.property_value)
+    cltv = _compute_cltv(
+        financed_loan_amount,
+        request.junior_liens,
+        request.property_value,
+    )
+
+    # 11. DTI front + back
+    dti_front, dti_back = _compute_dti(
+        piti=piti,
+        sum_monthly_debts=sum_monthly_debts,
+        total_gross_monthly_income=total_gross_monthly_income,
+    )
+
+    # 12. Build response — blocked / blocked_by reflect ONLY the loan-type-classify
+    # blocker (D-11 step 1). Plan 04-04 wraps evaluate_forward with the rest of the
+    # precedence pipeline (LTV/CLTV ceiling -> DTI cap -> ATR/QM -> VA-residual) and
+    # mutates a NEW response (frozen models — model_copy(update={...})).
+    return AffordabilityResponse(
+        mode="forward",
+        loan_type=classified_loan_type,
+        blocked=(classify_blocker is not None),
+        blocked_by=classify_blocker,
+        warnings=captured_warnings,
+        total_gross_monthly_income=quantize_cents(total_gross_monthly_income),
+        total_monthly_debts=quantize_cents(sum_monthly_debts),
+        loan_amount=request.loan_amount,
+        property_value=request.property_value,
+        financed_loan_amount=financed_loan_amount,
+        dti_front=dti_front,
+        dti_back=dti_back,
+        ltv=ltv,
+        cltv=cltv,
+        piti=piti,
+        monthly_pi=monthly_pi,
+        monthly_mi=quantize_cents(monthly_mi),
+    )
 
 
 def evaluate_reverse(request: ReverseModeRequest) -> AffordabilityResponse:

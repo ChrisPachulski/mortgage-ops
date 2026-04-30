@@ -296,13 +296,62 @@ def test_target_loan_type_to_program_table() -> None:
     assert TARGET_LOAN_TYPE_TO_PROGRAM["usda"] == "usda"
 
 
-def test_evaluate_forward_is_cross_plan_stub() -> None:
-    """Test 13: evaluate_forward raises NotImplementedError citing Plan 04-02."""
-    from lib.affordability import evaluate_forward
+def test_evaluate_forward_returns_response_for_valid_request() -> None:
+    """Test 13: evaluate_forward composes Phase 1/2/3 into AffordabilityResponse.
 
-    with pytest.raises(NotImplementedError) as exc:
-        evaluate_forward(None)  # type: ignore[arg-type]
-    assert "Plan 04-02" in str(exc.value)
+    Plan 04-02 replaced the cross-plan stub body; this test now exercises the
+    happy path against the $400k @ 6.5%/30yr conforming oracle ($2528.27 monthly P&I).
+    Mirrors Phase 2 02-02's pattern of REPLACING `test_*_raises_not_implemented_until_*`
+    stub-presence tests with positive behavior tests when the stub body lands.
+    """
+    from lib.affordability import (
+        AffordabilityResponse,
+        Applicant,
+        EscrowInputs,
+        ForwardModeRequest,
+        Household,
+        LocationFIPS,
+        MonthlyDebts,
+        evaluate_forward,
+    )
+
+    req = ForwardModeRequest(
+        mode="forward",
+        household=Household(
+            location=LocationFIPS(
+                state="WA",
+                state_fips="53",
+                county_fips="033",
+                county_name="King",
+                zip="98101",
+            ),
+            applicants=[
+                Applicant(
+                    name="A",
+                    gross_monthly_income=Decimal("10000.00"),
+                    credit_score=720,
+                ),
+            ],
+            size=1,
+            monthly_debts=MonthlyDebts(),
+            escrow=EscrowInputs(
+                property_tax_monthly=Decimal("0.00"),
+                insurance_monthly=Decimal("0.00"),
+            ),
+        ),
+        max_dti=Decimal("0.430000"),
+        target_loan_type="conventional",
+        term_months=360,
+        annual_rate=Decimal("0.065000"),
+        loan_amount=Decimal("400000.00"),
+        property_value=Decimal("500000.00"),
+    )
+    response = evaluate_forward(req)
+    assert isinstance(response, AffordabilityResponse)
+    assert response.mode == "forward"
+    assert response.monthly_pi == Decimal("2528.27")  # Phase 1/3 oracle
+    assert response.ltv == Decimal("0.80")
+    assert response.loan_type == "conforming"
 
 
 def test_evaluate_reverse_is_cross_plan_stub() -> None:
