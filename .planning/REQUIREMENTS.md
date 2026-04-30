@@ -61,12 +61,12 @@ User selected "all" scope; everything below is in v1.
 
 ### Affordability
 
-- [ ] **AFFD-01**: `lib/affordability.py` calculates DTI (front-end and back-end) given household income + monthly debts
-- [ ] **AFFD-02**: LTV calculation given loan amount + property value
-- [ ] **AFFD-03**: CLTV calculation given loan amount + junior liens + property value
-- [ ] **AFFD-04**: PITI calculation (P&I + property tax + insurance + HOA + PMI/MIP)
-- [ ] **AFFD-05**: Reverse direction: "what loan amount can I qualify for given income X?" via `npf.pv` from max-affordable PMT
-- [ ] **AFFD-06**: Household-aware: joint income, joint applicants, dual-credit-score handling
+- [x] **AFFD-01**: `lib/affordability.py` calculates DTI (front-end and back-end) given household income + monthly debts
+- [x] **AFFD-02**: LTV calculation given loan amount + property value
+- [x] **AFFD-03**: CLTV calculation given loan amount + junior liens + property value
+- [x] **AFFD-04**: PITI calculation (P&I + property tax + insurance + HOA + PMI/MIP)
+- [x] **AFFD-05**: Reverse direction: "what loan amount can I qualify for given income X?" via `npf.pv` from max-affordable PMT
+- [x] **AFFD-06**: Household-aware: joint income, joint applicants, dual-credit-score handling
 - [x] **AFFD-07**: Affordability output cites the binding rule when blocking (e.g., "blocked by VA-RESIDUAL-WEST-FAMILY-4")
 - [x] **AFFD-08**: `scripts/affordability.py` provides JSON-in / JSON-out CLI
 - [x] **AFFD-09**: `config/household.example.yml` documents schema (joint income, applicants, monthly debts, location)
@@ -251,12 +251,12 @@ Mapped 2026-04-26 by gsd-roadmapper. Every v1 requirement is assigned to exactly
 | AMRT-06 | Phase 3 | Done (03-03) |
 | AMRT-07 | Phase 3 | Done (03-04) |
 | AMRT-08 | Phase 3 | Done (03-04) |
-| AFFD-01 | Phase 4 | Pending |
-| AFFD-02 | Phase 4 | Pending |
-| AFFD-03 | Phase 4 | Pending |
-| AFFD-04 | Phase 4 | Pending |
-| AFFD-05 | Phase 4 | Pending |
-| AFFD-06 | Phase 4 | Pending |
+| AFFD-01 | Phase 4 | Done (04-06) |
+| AFFD-02 | Phase 4 | Done (04-06) |
+| AFFD-03 | Phase 4 | Done (04-06) |
+| AFFD-04 | Phase 4 | Done (04-06) |
+| AFFD-05 | Phase 4 | Done (04-06) |
+| AFFD-06 | Phase 4 | Done (04-06) |
 | AFFD-07 | Phase 4 | Complete |
 | AFFD-08 | Phase 4 | Complete |
 | AFFD-09 | Phase 4 | Complete |
