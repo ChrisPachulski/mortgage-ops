@@ -1,218 +1,216 @@
 ---
 phase: 03-core-amortization
-reviewed: 2026-04-29T23:30:00Z
+reviewed: 2026-04-29T00:00:00Z
 depth: standard
-files_reviewed: 13
+diff_base: 599fb0f
+files_reviewed: 3
 files_reviewed_list:
-  - lib/models.py
   - lib/amortize.py
   - scripts/amortize.py
-  - tests/test_models.py
   - tests/test_amortize.py
-  - tests/conftest.py
-  - tests/fixtures/amortize/biweekly_half_monthly_200k_6_5.json
-  - tests/fixtures/amortize/biweekly_true_200k_6_5.json
-  - tests/fixtures/amortize/extra_caps_at_balance.json
-  - tests/fixtures/amortize/extra_oneshot_5k_period_60.json
-  - tests/fixtures/amortize/extra_recurring_200_30yr.json
-  - tests/fixtures/amortize/extra_step_up_200_to_300.json
-  - tests/fixtures/amortize/month_end_jan_31.json
 findings:
-  critical: 1
-  warning: 8
-  info: 4
-  total: 13
+  blocker: 0
+  warning: 4
+  total: 4
 status: issues_found
 ---
 
-# Phase 3: Code Review Report
+# Phase 3: Code Review Report (Gap-Closure Delta)
 
-**Reviewed:** 2026-04-29T23:30:00Z
+**Reviewed:** 2026-04-29
 **Depth:** standard
-**Files Reviewed:** 13
+**Diff base:** `599fb0f` (pre-CR-01/WR-02 baseline)
+**Files Reviewed:** 3
 **Status:** issues_found
 
 ## Summary
 
-Phase 3 ships a deterministic Decimal-only amortization engine with three frequency paths (monthly, biweekly-true, biweekly-half-monthly), file-based JSON CLI, and 35 parametrized test cases. The core math primitives are sound: no float literals appear anywhere in `lib/amortize.py`, `lib/models.py`, or `scripts/amortize.py` (verified via AST scan); `numpy_financial.pmt` returns `Decimal` when fed `Decimal` (verified empirically); `quantize_cents` is correctly applied at end-of-period only; the `parse_float=Decimal` pre-validation gate effectively blocks JSON-float inputs to money fields; and the four golden oracles (Wikipedia, CFPB LE, computed $400k, computed $200k/15yr) all match `monthly_pi` exactly.
+Adversarial review of the 4-commit gap-closure delta covering CR-01 (`AmortizeRequest._no_duplicate_recurring_periods` validator) and WR-02 (uniform 6-key Pydantic-shaped error envelope in `scripts/amortize.py`).
 
-That said, adversarial review surfaced one BLOCKER (order-dependent behavior when two recurring `ExtraPrincipalEntry` rows share a `period`) and several WARNINGs covering coverage gaps (no biweekly+extras test, no one-shot+recurring stacking test, no rate=0 / term=1 edge-case tests), an inconsistent error-shape between two CLI failure gates, a `Schedule` validator that silently accepts absurd `total_interest` values when `payments=[]`, and a few maintainability concerns (load-bearing `assert` for type narrowing, redundant cross-cutting validation in two places, biweekly-half-monthly outputs that are byte-identical to monthly outputs without any frequency hint on `Schedule`).
+**Math correctness (CR-01) — clean.** The new `_no_duplicate_recurring_periods` validator correctly closes the D-05 order-of-list ambiguity at the request boundary: it raises `ValueError` (Pydantic-wraps to `ValidationError`), is scoped to `recurring=True` only, runs in O(n) over the entries list, leaves the engine's `_resolve_extra` math path untouched, and is exercised by 6 well-shaped tests (3 negative orderings + 3 positive sibling cases). The Decimal-only money discipline is preserved — the validator does no arithmetic.
 
-## Critical Issues
+**Envelope contract (WR-02) — substantively clean, with documented contract drift.** The 6-key envelope (`type, loc, msg, input, url, ctx`) is unified across the float-gate path and the native Pydantic `e.json()` path. `_find_json_float_loc` was correctly refactored to return `tuple[list[str | int], str] | None` so the envelope can populate `input` without re-walking. `pydantic.VERSION` is lazy-imported INSIDE `main()` after `argparse.parse_args()`, preserving D-18.
 
-### CR-01: `_resolve_extra` is order-dependent when two recurring entries share the same `period`
+**Concerns surfaced below:**
+1. The float-gate misses JSON **integer** money values — the docstring claims money/rate fields "must be JSON strings" but the gate only catches JSON floats. A user submitting `"principal": 400000` (no decimal point) bypasses the gate and is silently coerced by Pydantic.
+2. `_find_json_float_loc` reports only the FIRST JSON float; a multi-float input surfaces one error at a time, contradicting the unified-envelope claim that downstream consumers see "the rejection" in one pass.
+3. The 6-key envelope uniformity test only inspects `errors[0]`; if Pydantic emits multiple errors, the contract is unverified for `errors[1:]`.
+4. The CR-01 validator's `ValueError` message is interpolated into `loc=[]` by Pydantic's wrapper (since `mode="after"` model validators have no field anchor); downstream Phase 9/10 narration cannot rely on `loc` to distinguish CR-01 from D-02 — only `msg` substring matching works.
 
-**File:** `lib/amortize.py:203-207`
-**Issue:** `_resolve_extra` selects the active recurring entry with `max(... key=lambda e: e.period, default=None)`. When two `ExtraPrincipalEntry` rows have the same `period` and both are `recurring=True`, Python's `max` returns whichever appears LAST in the input sequence (no tie-breaker on `amount`). The contract in CONTEXT.md D-05 says "the LATEST entry with `entry.period <= p` AND `entry.recurring=True`" — that wording is order-of-list-ambiguous when periods tie. Empirically verified:
-
-```
-[ExtraPrincipalEntry(period=1, amount=100, recurring=True),
- ExtraPrincipalEntry(period=1, amount=200, recurring=True)]
-  -> _resolve_extra(period=5, ...) returns 100.00
-
-[ExtraPrincipalEntry(period=1, amount=200, recurring=True),
- ExtraPrincipalEntry(period=1, amount=100, recurring=True)]
-  -> _resolve_extra(period=5, ...) returns 200.00
-```
-
-Two semantically equivalent inputs (sets of entries) produce different schedules — and therefore different `total_interest`, different `num_payments`, different `final_payment_adjusted`. This is a determinism violation in a calc engine whose stated value is "Math correctness first. Every dollar figure that exits this system must be traceable to a tested, deterministic Python function."
-
-**Fix:** Either (a) add a `model_validator` on `AmortizeRequest` rejecting duplicate `(period, recurring)` pairs, or (b) define an explicit tie-breaker (e.g., later in list overrides) AND add a fixture/test pinning the documented behavior. Preferred (a):
-
-```python
-@model_validator(mode="after")
-def _no_duplicate_recurring_periods(self) -> AmortizeRequest:
-    seen: set[int] = set()
-    for e in self.extra_principal:
-        if e.recurring:
-            if e.period in seen:
-                raise ValueError(
-                    f"duplicate recurring extra_principal at period {e.period}; "
-                    "use one entry per period (D-05)"
-                )
-            seen.add(e.period)
-    return self
-```
-
-## Warnings
-
-### WR-01: `Schedule` D-15 validator silently accepts absurd `total_interest` when `payments=[]`
-
-**File:** `lib/models.py:76-91`, exercised by `tests/test_models.py:233-248`
-**Issue:** The empty-payments branch returns early without validating `total_interest`. Tests/library callers can construct `Schedule(payments=[], total_interest=Decimal("999.99"))` and the model accepts it. The engine never produces empty payments today, but the model is the contract — Phase 5 ARM, Phase 8 stress, and any downstream consumer can construct stub `Schedule`s with internally-inconsistent values. The "constructor convenience for in-progress scaffolds" justification is for Phase 1 — by Phase 3, no engine produces an empty schedule.
-**Fix:** When `payments` is empty, require `total_interest == Decimal("0.00")`:
-
-```python
-if not self.payments:
-    if self.total_interest != Decimal("0.00"):
-        raise ValueError(
-            f"D-15 invariant: empty schedule must have total_interest=0.00, "
-            f"got {self.total_interest}"
-        )
-    return self
-```
-
-### WR-02: CLI emits two different error envelope shapes for two adjacent failure modes
-
-**File:** `scripts/amortize.py:151-163` vs `scripts/amortize.py:169-174`
-**Issue:** When the float pre-validation gate fires, the CLI emits a hand-built envelope with keys `{"type", "loc", "msg"}`. When Pydantic's `model_validate_json` fires, the CLI passes through `e.json()` which emits keys `{"type", "loc", "msg", "input", "url"}` (and sometimes `"ctx"`). Two failure paths for closely related errors produce two different shapes on stderr. Phase 9 Node consumer parsing both will need conditional logic; STACK.md says the calc engine returns "JSON; Claude narrates" — heterogeneous shapes break that contract.
-**Fix:** Build the float-gate envelope to match Pydantic's full shape (include `"input": null, "url": null`), or alternatively raise a Pydantic `PydanticCustomError` so the same `e.json()` path emits both. The first option is simpler:
-
-```python
-envelope = [
-    {
-        "type": "decimal_type",
-        "loc": float_loc,
-        "msg": "Input should be a JSON string for money/rate fields ...",
-        "input": None,
-        "url": "https://docs.pydantic.dev/2.13/concepts/json/",
-    }
-]
-```
-
-### WR-03: Float pre-validation gate fires before `extra="forbid"`, giving misleading errors for unrelated typos
-
-**File:** `scripts/amortize.py:151-164`
-**Issue:** `_find_json_float_loc` walks the entire parsed JSON tree and reports the FIRST JSON-float-with-decimal-point or scientific notation it finds. If a user submits `{"loan": {...}, "metadata": {"version": 1.5}}` (an unrecognized top-level key with a float value), the pre-validation gate fires on `metadata.version` and emits `decimal_type` pointing to a field that is not in the schema at all. The actual problem is `extra="forbid"` (the field shouldn't exist), but the user sees a misleading "money field needs a string" error. Future schema additions that introduce any float-accepting field anywhere break this gate's "blanket reject" assumption (documented at line 64-65 as fragile).
-**Fix:** Limit the walker to known money/rate JSON paths (`loan.principal`, `loan.annual_rate`, `extra_principal[*].amount`) instead of "anything that smells like a JSON number with a decimal point." This eliminates both the misleading-error case and the future-fragility note in the docstring.
-
-### WR-04: No test exercises one-shot + recurring stacking on the same period (D-05 contract)
-
-**File:** `tests/test_amortize.py` (entire AMRT-04 section)
-**Issue:** `_resolve_extra` line 211-212 stacks recurring + one-shot ADDITIVELY when both target the same period. CONTEXT.md D-05 explicitly specifies this: "One-shot entries (recurring=False) fire only when entry.period == p and stack ADDITIVELY on top of the recurring component." The four AMRT-04 fixtures cover:
-- one-shot only (`extra_oneshot_5k_period_60.json`)
-- recurring only (`extra_recurring_200_30yr.json`)
-- two recurring (step-up, `extra_step_up_200_to_300.json`)
-- recurring with cap (`extra_caps_at_balance.json`)
-
-None cover one-shot + recurring on the same period. A regression that broke the additive `raw = raw + e.amount` line into `raw = e.amount` would silently pass the entire test suite.
-**Fix:** Add a fixture `extra_oneshot_plus_recurring_period_60.json` pinning a recurring `$200` from `period=1` plus a one-shot `$5000` at `period=60`, with the expected row at `period=60` having `extra_principal == "5200.00"`.
-
-### WR-05: No test exercises biweekly + extra_principal (D-06 contract)
-
-**File:** `tests/test_amortize.py` (AMRT-04 section)
-**Issue:** All four extras fixtures use `frequency="monthly"`. CONTEXT.md D-06 explicitly defines biweekly extras semantics ("the CALLER divides by 2 — the engine does NOT internally convert"), but no test pins the engine's biweekly extras path. `_build_biweekly_true` line 400 calls `_resolve_extra(period, extra_principal, ...)`. A bug that confused biweekly periods with monthly periods (e.g., always dividing by 2 inside the engine instead of expecting caller-side conversion) would not be caught.
-**Fix:** Add a fixture `extra_recurring_biweekly_100.json`: 200k/6.5/30 biweekly-true with `[ExtraPrincipalEntry(period=1, amount=Decimal("100"), recurring=True)]` (the biweekly equivalent of the monthly $200 fixture), and pin engine output verbatim.
-
-### WR-06: No test for rate=0 or term_months=1 / 2 edge cases
-
-**File:** `tests/test_amortize.py`
-**Issue:** `Loan` allows `annual_rate=Decimal("0")` (interest-free, non-amortizing) and `term_months=1`. The engine handles these in principle (numpy-financial's `pmt(0, 1, P)` returns `-P`), but neither is exercised. A `term_months=1` schedule has exactly one row and exposes the final-period drift cleanup with no preceding rows to absorb compounding error. A `rate=0` biweekly-true schedule could come close to the `max_periods = term_months*2 + 10` safety bound (line 380).
-**Fix:** Add two parametrized cases:
-
-```python
-@pytest.mark.parametrize("term_months", [1, 2])
-def test_short_term_loan_terminates_correctly(term_months: int) -> None: ...
-
-def test_zero_rate_loan_amortizes_linearly() -> None: ...
-```
-
-### WR-07: Load-bearing `assert` for mypy narrowing on `biweekly_mode` strips under `python -O`
-
-**File:** `lib/amortize.py:254`
-**Issue:** `assert biweekly_mode == "half-monthly"  # mypy narrowing` runs in dev/test but is COMPLETELY ELIDED when Python is invoked with `-O`. Today the post-assert call to `_build_biweekly_half_monthly` ignores `biweekly_mode` so the missing assertion has no functional impact — but a future refactor that makes `_build_biweekly_half_monthly` consult `biweekly_mode` would crash silently in `-O` mode. Project STACK.md mandates `mypy --strict`; an explicit `if/elif/else` is both narrowing-safe and runtime-safe.
-**Fix:**
-
-```python
-if biweekly_mode == "half-monthly":
-    return _build_biweekly_half_monthly(loan, origination, extra_principal)
-raise AssertionError(f"unreachable biweekly_mode: {biweekly_mode!r}")
-```
-
-### WR-08: Two failure modes for the same logical D-02 violation (lib vs CLI)
-
-**File:** `lib/amortize.py:246-247` vs `lib/amortize.py:184-186`
-**Issue:** `AmortizeRequest._biweekly_mode_consistency` raises a Pydantic `ValidationError`; `build_schedule` raises a plain Python `ValueError` for the same condition. Library callers calling `build_schedule(loan, frequency="monthly", biweekly_mode="true")` directly (Phase 5 ARM, Phase 8 stress will do this) get a `ValueError`; CLI callers get a Pydantic `ValidationError`. Two different exception types for one logical contract violation surfaces as inconsistent error handling at every call site.
-**Fix:** Pick one. Recommended: have `build_schedule` re-raise the engine-side check as a `ValidationError` by routing through `AmortizeRequest.model_validate` internally, OR document explicitly that `build_schedule` may raise `ValueError` and update callers' contract. The simpler change is to align both:
-
-```python
-# Replace the ValueError on line 247 with:
-from pydantic import TypeAdapter
-TypeAdapter(AmortizeRequest).validate_python({
-    "loan": loan,
-    "frequency": frequency,
-    "biweekly_mode": biweekly_mode,
-})  # raises ValidationError
-```
-
-## Info
-
-### IN-01: Schedule output is byte-identical for monthly and biweekly+half-monthly
-
-**File:** `lib/amortize.py:443-460`, fixtures `month_end_jan_31.json` vs `biweekly_half_monthly_200k_6_5.json`
-**Issue:** `_build_biweekly_half_monthly` delegates directly to `_build_fixed_monthly`. The resulting `Schedule` has no `frequency` or `biweekly_mode` field — `Schedule.loan` carries only `loan_type`, not `frequency`. CLI consumers JSON-dumping a half-monthly schedule see exactly the same shape as a monthly schedule (and indeed the half-monthly fixture's `expected_schedule_summary` is byte-identical to the corresponding monthly schedule, modulo `final_payment_adjusted=true` which is the same in both for 200k/6.5/30). Phase 10 SKILL.md narration relies on the docstring claim "biweekly cashflow is a billing decoration consumers handle outside the engine," but Phase 10 has no in-band signal on `Schedule` to know which mode produced the rows.
-**Fix:** Add an optional `frequency: Literal["monthly", "biweekly"] = "monthly"` and `biweekly_mode: Literal["true", "half-monthly"] | None = None` to `Schedule` so the JSON output preserves what the caller requested. (Defer to Phase 10 if narration doesn't actually need it; raise to WARNING if it does.)
-
-### IN-02: `parse_float=Decimal` also catches scientific-notation integers (e.g., `5e2`)
-
-**File:** `scripts/amortize.py:67-90`
-**Issue:** The walker docstring at lines 56-58 says it flags "JSON-numbers-with-decimal-points" but `json.loads(parse_float=Decimal)` also routes scientific-notation literals (`1e2`, `5E+3`) through the float parser, so they too become `Decimal` instances and trigger the gate. Behaviorally OK (such literals violate money discipline equally), but the docstring is slightly wrong.
-**Fix:** Update the docstring on lines 56-58 to read: "JSON numbers that are not pure integer literals (i.e., contain a decimal point OR scientific-notation 'e'/'E')."
-
-### IN-03: `ExtraPrincipalEntry.amount` re-declares Money-shaped constraints rather than reusing `Money`
-
-**File:** `lib/amortize.py:163`
-**Issue:** `amount: Decimal = Field(strict=True, gt=Decimal("0"), max_digits=14, decimal_places=2)`. This is `Money` minus `ge=0` plus `gt=0`. If `Money`'s shape evolves (e.g., adds rounding context, adds a future serializer config), `amount` won't follow. Project conventions in CLAUDE.md treat `condecimal(max_digits=14, decimal_places=2)` as a single contract; multiple declarations dilute that.
-**Fix:** Either define a `PositiveMoney` alias in `lib/models.py` and reuse it here, or add a comment documenting why this isn't `Money` (gt vs ge):
-
-```python
-# In lib/models.py:
-PositiveMoney = Annotated[
-    Decimal,
-    Field(strict=True, max_digits=14, decimal_places=2, gt=Decimal("0")),
-]
-# In lib/amortize.py:
-amount: PositiveMoney
-```
-
-### IN-04: `ExtraPrincipalEntry.period` has `ge=1` but no upper bound
-
-**File:** `lib/amortize.py:162`
-**Issue:** A user can submit `ExtraPrincipalEntry(period=99999, amount=Decimal("100"))` and it validates. The engine never reaches that period for any reasonable schedule; the entry is silently a no-op. No diagnostic. Mortgage UX best-practice is to surface "your entry was ignored because the schedule terminated at period N." This is a Phase 10 narration concern more than a Phase 3 engine concern, but worth pinning.
-**Fix:** Either accept silent no-op (current) and document it explicitly in the docstring, or add a cross-field validator on `AmortizeRequest` warning when `entry.period > loan.term_months * 2` (rough biweekly upper bound). Defer to Phase 10 if narration handles it.
+None of these rise to BLOCKER. The math correctness contract holds; the D-19 envelope contract holds for the cases tested.
 
 ---
 
-_Reviewed: 2026-04-29T23:30:00Z_
+## Warnings
+
+### WR-01: Float-gate accepts JSON integer money values, contradicting documented "JSON strings only" contract
+
+**File:** `scripts/amortize.py:89-95` (gate docstring), `scripts/amortize.py:100` (parser invocation)
+
+**Issue:**
+The docstring claims:
+> The schema has zero fields that legitimately accept JSON floats:
+>   - principal / annual_rate / amount: must be JSON strings (Money/Rate)
+>   ...
+> A blanket "reject any JSON float" check is therefore correct.
+
+The "therefore" inference is incomplete. `parse_float=Decimal` only intercepts JSON numbers that contain `.` or `e` (the Python `json` module's definition of "float"). A JSON **integer** literal — e.g. `"principal": 400000` — is parsed as a Python `int`, NOT a `Decimal`. The walker only checks `isinstance(node, _Decimal)`, so int-shaped money values pass straight through to Pydantic, which (per Pydantic v2 JSON-mode strict semantics) coerces JSON ints to `Decimal`. The user's input never gets to "must be JSON string" enforcement.
+
+Math correctness is NOT compromised — `Decimal("400000")` is exact. But the documented D-19 contract ("JSON strings required for money/rate fields") is violated silently. Phase 9/10 consumers expecting the float-gate to be the single chokepoint for "non-string money" will be surprised by integer-shaped submissions reaching the engine.
+
+Concrete reproducer (would NOT exit 2 via the float-gate path):
+```json
+{"loan": {"principal": 400000, "annual_rate": "0.065000", "term_months": 360}}
+```
+
+**Fix (preferred — tighten the gate):** Walk for JSON ints in money/rate fields too, OR drop the "must be JSON strings" claim from the docstring and accept that the gate's contract is narrower than D-19.
+
+```python
+# In _find_json_float_loc, also intercept ints in known money/rate fields.
+MONEY_FIELDS = {"principal", "annual_rate", "amount"}
+
+def _walk(node, path):
+    if isinstance(node, _Decimal):
+        return (path, str(node))
+    if (isinstance(node, int) and not isinstance(node, bool)
+            and path and path[-1] in MONEY_FIELDS):
+        return (path, str(node))
+    ...
+```
+
+**Fix (alternative — accept narrower scope):** Update the docstring at `scripts/amortize.py:89-95` to acknowledge that the gate catches floats only; integers in money fields are accepted by Pydantic's JSON-mode coercion. Remove the "therefore correct" claim.
+
+---
+
+### WR-02: Envelope reports only the first JSON float; multi-float inputs surface errors one-at-a-time, contradicting "unified envelope" framing
+
+**File:** `scripts/amortize.py:105-120` (`_walk` early-return on first hit)
+
+**Issue:**
+The envelope-shape contract paragraph (`scripts/amortize.py:36-60`) and the WR-02 closure narrative (03-06-SUMMARY.md) frame the 6-key envelope as the canonical format Phase 9/10 consumers parse. But native Pydantic `ValidationError.json()` returns a **list** of all violations (one entry per violating field). The float-gate path returns a **list of length 1** because `_walk` returns the first Decimal it encounters and the caller emits a single envelope.
+
+A user submitting two JSON floats:
+```json
+{"loan": {"principal": 400000.00, "annual_rate": 0.065}}
+```
+gets ONE error envelope (for `principal`), fixes it to a string, re-runs, and gets a SECOND error (for `annual_rate`). The "uniform shape" claim still holds (both are 6-key dicts in a list), but the implied "single end-to-end pass" UX consumers expect from Pydantic-style ValidationError surfaces is broken: the float-gate path is iterative-discovery, the Pydantic path is exhaustive.
+
+Phase 9 db-write.mjs and Phase 10 SKILL.md narration that aggregate "all the things wrong with this input" will under-report on float-gate rejections.
+
+**Fix:** Make `_walk` collect ALL hits, not just the first:
+
+```python
+def _find_json_float_locs(raw: str) -> list[tuple[list[str | int], str]]:
+    ...
+    hits: list[tuple[list[str | int], str]] = []
+    def _walk(node, path):
+        if isinstance(node, _Decimal):
+            hits.append((path, str(node)))
+            return  # Decimal is a leaf
+        if isinstance(node, dict):
+            for k, v in node.items():
+                _walk(v, [*path, k])
+        elif isinstance(node, list):
+            for i, v in enumerate(node):
+                _walk(v, [*path, i])
+    _walk(parsed, [])
+    return hits
+
+# Caller emits one envelope per hit:
+hits = _find_json_float_locs(raw)
+if hits:
+    envelope = [_build_envelope(loc, val, _pydantic_version) for loc, val in hits]
+    print(json.dumps(envelope), file=sys.stderr)
+    return 2
+```
+
+The current single-hit behavior is not a math correctness issue; it's a UX/contract drift relative to Pydantic's exhaustive-error semantics that the WR-02 documentation invokes.
+
+---
+
+### WR-03: Uniformity contract test only verifies errors[0]; downstream consumers reading errors[1:] could see drift uncaught by the suite
+
+**File:** `tests/test_amortize.py:996-1067` (`test_cli_error_envelope_uniformity`)
+
+**Issue:**
+The test extracts `float_errors[0]` and `d02_errors[0]` and asserts identical 6-key keysets. If Pydantic ever emits >1 error for the D-02 path (e.g. a future Pydantic version splits the cross-field validation into a primary + ancillary error), `errors[1:]` could carry a different keyset (legacy 3-key, missing `ctx`, etc.) and this test would NOT catch it. The test docstring acknowledges the scope ("first-error level") but Phase 9 db-write.mjs ingests the full list, so downstream regression would slip past the suite.
+
+Risk is low for the specific D-02 reproducer used (current Pydantic 2.13 emits exactly one error for that input class), but the contract being asserted is "uniform shape across ALL ValidationError-class boundary failures" and the test only proves it for `errors[0]`.
+
+**Fix:** Iterate all errors in both lists:
+
+```python
+expected_keys = {"type", "loc", "msg", "input", "url", "ctx"}
+for i, err in enumerate(float_errors):
+    assert set(err.keys()) == expected_keys, (
+        f"float_errors[{i}] keys drifted: got {sorted(err.keys())}"
+    )
+for i, err in enumerate(d02_errors):
+    assert set(err.keys()) == expected_keys, (
+        f"d02_errors[{i}] keys drifted: got {sorted(err.keys())}"
+    )
+```
+
+This costs nothing and pins the contract on the WHOLE list, which is what the documentation claims.
+
+---
+
+### WR-04: CR-01 ValidationError emits `loc=[]`; downstream narration cannot distinguish CR-01 from D-02 via `loc`, only via `msg` substring matching
+
+**File:** `lib/amortize.py:196-223` (`_no_duplicate_recurring_periods` validator)
+
+**Issue:**
+Pydantic v2 model-level `@model_validator(mode="after")` validators that raise `ValueError` produce a `ValidationError` whose `loc` is `[]` (empty tuple in Pydantic ErrorDetails) — there's no field anchor because the validator inspected the whole model. Consequence: the structured envelope for CR-01 looks like:
+
+```json
+[{"type": "value_error", "loc": [], "msg": "duplicate recurring extra_principal at period 1; ...",
+  "input": {<entire request dict>}, "url": "...", "ctx": {...}}]
+```
+
+The 03-05-SUMMARY claims "CLI run on CR-01 reproducer JSON exits 2 with parseable JSON list whose first error contains `duplicate recurring`" — true, but the empty `loc` means Phase 9/10 narration MUST string-match on `msg` to identify the violation type. Compare with Pydantic's per-field validators (e.g. `ExtraPrincipalEntry.amount`'s `gt=0`) where `loc=["extra_principal", 0, "amount"]` provides structured field-routing.
+
+This isn't a bug in the validator — it's the canonical Pydantic v2 idiom. But the WR-02 docstring (`scripts/amortize.py:36-60`) says Phase 10 SKILL.md narration "narrates the rejection by reading `loc` (which field) + `msg` (why) + `input` (the rejected value)". For CR-01 (and D-02) the `loc` carries no field information; the narration falls back to `msg` parsing exclusively. The 6-key shape is uniform but the SEMANTIC content of `loc` varies by surface.
+
+**Fix (preferred):** Construct the CR-01 envelope manually like the float-gate does, with an explicit `loc` like `["extra_principal", i, "period"]` so downstream consumers can field-route:
+
+```python
+# In scripts/amortize.py, before model_validate_json — pre-scan extra_principal
+# for duplicate recurring periods and emit an envelope with loc populated.
+# Or: convert the model_validator into a per-list-item validator using
+# Pydantic's AfterValidator on extra_principal, which gives Pydantic enough
+# context to populate loc=['extra_principal', i].
+```
+
+**Fix (alternative — document the limitation):** Update `scripts/amortize.py:36-60` to acknowledge that model-level validators (CR-01, D-02) emit empty `loc` and that downstream narration falls back to `msg` substring matching for those cases. Currently the docstring implies all 6 keys carry semantic information uniformly.
+
+This is contract-shape drift, not math drift. The CR-01 closure WORKS — duplicate inputs are rejected deterministically. But the unified-envelope claim is weaker than the docstring implies.
+
+---
+
+## Defect Hunts That Came Back Clean
+
+The following adversarial probes were performed and found NO defect; recording them so the next reviewer doesn't re-run them:
+
+- **CR-01 validator scoping:** Confirmed the `if not entry.recurring: continue` early-out correctly excludes one-shot entries from the dedup set. Three-way recurring duplicates (test pinned). Recurring + one-shot at same period (test pinned). One-shot + one-shot at same period (test pinned).
+- **CR-01 validator iteration:** `set[int]` lookup is O(1); full pass is O(n). No quadratic surface introduced.
+- **CR-01 validator order vs D-02:** Pydantic v2 `mode="after"` runs validators in declaration order. D-02 fires first; if input violates both, D-02 wins. 03-05-SUMMARY documents this as intentional. No test crosses both, but the ordering is stable.
+- **`_resolve_extra` engine math:** Untouched in this delta. With the validator gating the input class, the `max(...)` selector in `_resolve_extra` is now well-defined (no recurring ties on `entry.period`). Math correctness contract preserved.
+- **Decimal-only money discipline:** Both `_no_duplicate_recurring_periods` and the float-gate envelope construction are float-free. No Decimal/float mixing introduced. `quantize_cents` not invoked in either change (correctly — no money arithmetic to round).
+- **Lazy-import D-18 preservation:** `from pydantic import VERSION` is INSIDE `main()`, INSIDE the `if float_hit is not None:` block, AFTER `args = parser.parse_args()`. The `--help` fast path is byte-identical to pre-WR-02. Pinned by `test_cli_help_does_not_import_lib_amortize`.
+- **`pydantic.VERSION` shape:** Pinned project version is `pydantic>=2.13.3` (`pyproject.toml:7`). `"2.13.3".split(".")[:2]` -> `["2", "13"]` -> `"2.13"`. URL emits `https://errors.pydantic.dev/2.13/v/decimal_type`, matches Pydantic's docs URL convention. No IndexError surface for any well-formed semver.
+- **`_find_json_float_loc` walker safety:** Recursive descent through dict/list; terminates at first Decimal. No infinite recursion (JSON is a tree). No mutation of input. List/dict path-building uses `[*path, k]` (new list per recursive call); no aliasing.
+- **Walker handles JSON null/bool/string/int correctly:** `isinstance` checks for Decimal/dict/list only; everything else falls through to `return None`. Non-Decimal numerics (ints) silently skipped (related to WR-01 above).
+- **`str(Decimal)` round-trip preservation:** `Decimal("400000.00")` -> `"400000.00"` (preserves trailing zeros via Decimal's lexical form). Pinned by `test_cli_rejects_float_principal` line 923 (`err["input"] == "400000.00"`).
+- **6-key envelope JSON-serializability:** All 6 values are JSON-serializable (str/list/str/str/str/dict). `loc` mixes str+int for nested array paths; ints serialize as JSON numbers (matches Pydantic's native `loc` shape). No serialization risk.
+- **Test substring assertions for CR-01 message:** `"duplicate"`, `"period"`, `"recurring"` are all in the pinned message; future message tweaks must preserve all three substrings. Symmetric tests for `[100,200]` and `[200,100]` orderings pin order-independence.
+- **AMRT-07 invariant (sum of principal+extra == original):** Engine path untouched in this delta; `assert_schedule_invariants` continues to pin via Decimal exact-equality across all 4 oracles + biweekly modes + extra-principal scenarios.
+- **D-15 invariant (`Schedule.total_interest == payments[-1].cumulative_interest`):** Engine path untouched; `assert_schedule_invariants` continues to pin.
+- **No new external surfaces / network calls / file writes:** Validator + envelope construction are pure functions over already-loaded inputs. No new I/O attack surface.
+- **`extra="forbid"` on `AmortizeRequest`:** Unknown keys at request top-level are rejected by Pydantic. The float-gate runs BEFORE Pydantic, so unknown-key + JSON-float in unknown-key would emit a float-gate envelope with `field_path = "<unknown_key>"`. User-controlled JSON keys flow into `ctx.field_path` as opaque text — no injection risk (no shell/SQL/HTML interpolation downstream); 03-06-SUMMARY documents this under T-03-06-04/T-03-06-08.
+
+---
+
+_Reviewed: 2026-04-29_
 _Reviewer: Claude (gsd-code-reviewer)_
 _Depth: standard_
+_Diff range: 599fb0f..HEAD (4 source-modifying commits: 973456c, f8c1ddb, 450d8d9, 1bb2cc6; plus 4bdd5eb, 359f7a7 docs)_
