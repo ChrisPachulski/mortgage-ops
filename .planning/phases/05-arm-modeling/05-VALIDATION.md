@@ -1,0 +1,148 @@
+---
+phase: 5
+slug: arm-modeling
+status: draft
+nyquist_compliant: false
+wave_0_complete: false
+created: 2026-04-30
+---
+
+# Phase 5 — Validation Strategy
+
+> Per-phase validation contract for feedback sampling during execution.
+> Derived from `05-RESEARCH.md` §"Validation Architecture".
+
+---
+
+## Test Infrastructure
+
+| Property | Value |
+|----------|-------|
+| **Framework** | pytest (project standard, configured in `pyproject.toml` since Phase 1) |
+| **Config file** | `pyproject.toml` `[tool.pytest.ini_options]` |
+| **Quick run command** | `pytest tests/test_arm.py -x` |
+| **Full suite command** | `pytest -x` |
+| **Estimated runtime** | ~5–10s for `tests/test_arm.py`; ~30s for full suite (Phase 4 baseline 379 passed + 4 skipped, Phase 5 adds ~30–40 tests) |
+
+**Phase gate:** Full suite green + `mypy --strict` clean + `ruff` clean across `lib/arm.py`, `scripts/arm_simulate.py`, `tests/test_arm.py`, `scripts/_cli_helpers.py` (if factored) before `/gsd-verify-work`.
+
+---
+
+## Sampling Rate
+
+- **After every task commit:** Run `pytest tests/test_arm.py -x` (quick — ~5–10s)
+- **After every plan wave:** Run `pytest -x` (full suite — ~30s)
+- **Before `/gsd-verify-work`:** Full suite green + mypy --strict + ruff clean
+- **Max feedback latency:** 30 seconds (full suite)
+
+---
+
+## Per-Task Verification Map
+
+> Filled in by planner during plan creation (Wave 0 first; subsequent waves flip xfail decorators as engine slices land). Each task in each PLAN.md MUST cite the test name + fixture path that verifies its acceptance criteria.
+
+| Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
+|---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
+| TBD     | TBD  | 0    | (Wave 0 — stubs) | — | N/A (math layer) | unit | `pytest tests/test_arm.py -x` | ❌ W0 | ⬜ pending |
+
+*Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+*Planner fills this table per plan; gsd-plan-checker enforces every task has a row.*
+
+---
+
+## Phase Requirements → Test Map (locked from research)
+
+| Req ID | Behavior | Test | File Exists |
+|--------|----------|------|---|
+| ARM-01 | ARMTerms has 8 explicit fields + REQUIRED floor_rate + optional note_rate | `test_arm_terms_field_set` | ❌ W0 |
+| ARM-01 | ARMTerms rejects missing floor_rate at construction | `test_arm_terms_missing_floor_rate_raises` | ❌ W0 |
+| ARM-01 | ARMTerms.note_rate defaults to None; engine substitutes loan.annual_rate | `test_note_rate_defaults_to_loan_annual_rate` | ❌ W0 |
+| ARM-02 | 5/1 (initial=60, reset=12) builds correctly | `test_arm_5_1_payment_jump_at_61` | ❌ W0 |
+| ARM-02 | 7/1 (initial=84, reset=12) builds correctly | `test_arm_7_1_payment_jump_at_85` | ❌ W0 |
+| ARM-02 | 10/1 (initial=120, reset=12) builds correctly | `test_arm_10_1_payment_jump_at_121` | ❌ W0 |
+| ARM-02 | 5/6 (initial=60, reset=6) — first reset 61, second 67 | `test_arm_5_6_payment_jump_at_61_and_67` | ❌ W0 |
+| ARM-03 | Reset formula clamp(quantize(index+margin), low=floor, high=min(periodic_ceil, lifetime_ceil)) | `test_reset_formula_locked` | ❌ W0 |
+| ARM-03 | First-reset uses initial_cap; subsequent uses periodic_cap | `test_arm_initial_cap_at_first_reset` | ❌ W0 |
+| ARM-03 | Lifetime cap binds when fully-indexed > note_rate + lifetime_cap | `test_arm_lifetime_cap_binds` | ❌ W0 |
+| ARM-04 | Floor enforcement: new_rate >= max(margin, floor_rate) | `test_arm_floor_below_margin_blocked` | ❌ W0 |
+| ARM-05 | Re-amortization over FULL remaining term | `test_full_remaining_term_re_amortization` | ❌ W0 |
+| ARM-05 | Continuous period numbering 1..N; final balance == 0.00 | `test_arm_continuous_period_numbering` | ❌ W0 |
+| ARM-05 | Cumulative totals continuous across epoch boundaries | `test_cumulative_totals_continuous_across_resets` | ❌ W0 |
+| ARM-05 | Non-final epoch's last sliced row has balance > 0.00 | `test_non_final_epoch_does_not_zero_balance` | ❌ W0 |
+| ARM-05 | First epoch matches Phase 1 oracle ($400k @ 6.5%/30yr → $2528.27) | `test_initial_fixed_period_matches_phase1_oracle` | ❌ W0 |
+| ARM-06 | Hand-calc + Bankrate/Vertex42 capture AGREE EXACTLY (5/1) | `test_oracle_cross_validation_5_1` | ❌ W0 |
+| ARM-06 | 5/6 ARM oracle: AmericU disclosure cross-validation | `test_oracle_cross_validation_5_6` | ❌ W0 |
+| ARM-07 | Off-by-one negative: month 59 still old; month 61 already new | `test_arm_5_1_off_by_one_negative` | ❌ W0 |
+| ARM-07 | Reset boundary: payments[59].rate == initial; payments[60].rate == new | (covered by `test_arm_5_1_payment_jump_at_61`) | ❌ W0 |
+| ARM-08 | CLI subprocess round-trip: write JSON → invoke → parse stdout | `test_cli_smoke_subprocess_round_trip` | ❌ W0 |
+| ARM-08 | CLI --help fast (lazy-import; no lib.arm before argparse) | `test_cli_help_does_not_import_lib_arm` | ❌ W0 |
+| ARM-08 | CLI rejects JSON-float in loan.principal with 6-key envelope | `test_cli_rejects_float_principal` | ❌ W0 |
+| ARM-08 | CLI rejects JSON-float in assumed_index_rate | `test_cli_rejects_float_assumed_index_rate` | ❌ W0 |
+| ARM-08 | CLI rejects JSON-float in index_path[].value (deep loc) | `test_cli_rejects_float_index_path_value` | ❌ W0 |
+| ARM-08 | CLI rejects JSON-float in floor_rate | `test_cli_rejects_float_floor_rate` | ❌ W0 |
+| ARM-08 | CLI envelope-uniformity: float-gate + Pydantic emit identical 6-key shape | `test_cli_error_envelope_uniformity` | ❌ W0 |
+| ARM-08 | CLI surfaces misaligned index_path period as 6-key envelope | `test_cli_misaligned_index_path_period_rejected` | ❌ W0 |
+| ARM-09 | references/arm-mechanics.md exists with all D-08 sections | `test_arm_mechanics_doc_sections_present` | ❌ W0 |
+| ARM-09 | ARMTerms docstring cites references/arm-mechanics.md | `test_arm_terms_docstring_cites_arm_mechanics` | ❌ W0 |
+| ARM-09 | references/arm-mechanics.md cites B2-1.4-02 + Freddie 6302.7(b) + CFPB §1951 + AmericU 5/6 | `test_arm_mechanics_citations` | ❌ W0 |
+| Cross  | applied_cap citation-coverage: every Literal value exercised by ≥1 fixture (D-10) | `test_applied_cap_citation_coverage` | ❌ W0 |
+| Cross  | Phase 3 + Phase 4 suites still pass after quantize_rate promotion (no regression) | `pytest tests/test_amortize.py tests/test_affordability.py -x` | ✓ existing |
+
+---
+
+## ROADMAP Success Criteria → Test Map
+
+| SC | Description | Pinned Test |
+|----|-------------|-------------|
+| SC-1 | ARMTerms has 8 explicit fields | `test_arm_terms_field_set` |
+| SC-2 | 5/1 ARM payment-jump at month 61 (not 60, not 62) | `test_arm_5_1_payment_jump_at_61` |
+| SC-3 | Both reset-month conventions (60 and 61) covered as separate fixtures | `test_arm_5_1_payment_jump_at_61` (positive) + `test_arm_5_1_off_by_one_negative` (negative) |
+| SC-4 | Floor enforced: never below max(margin, configured_floor) | `test_arm_floor_below_margin_blocked` |
+| SC-5 | references/arm-mechanics.md cites Selling Guides; cited from ARMTerms docstring | `test_arm_mechanics_doc_sections_present` + `test_arm_terms_docstring_cites_arm_mechanics` + `test_arm_mechanics_citations` |
+
+---
+
+## applied_cap Literal Coverage (D-10 citation-coverage meta-test)
+
+Every value of `Literal["initial", "periodic", "lifetime", "floor", "none"]` MUST appear in `expected.reset_events[*].applied_cap` of at least one fixture. Meta-test asserts coverage by walking all `tests/fixtures/arm/*.json` and verifying every Literal value is present.
+
+| applied_cap | Fixture pinning the value |
+|---|---|
+| `"initial"` | `arm_initial_cap_at_first_reset.json` (first reset binds at initial_cap) |
+| `"periodic"` | `arm_initial_cap_at_first_reset.json` (second reset binds at periodic_cap) |
+| `"lifetime"` | `arm_lifetime_cap_binds.json` |
+| `"floor"` | `arm_floor_below_margin_blocked.json` |
+| `"none"` | `arm_5_1_payment_jump_at_61.json` (modest reset within all caps) |
+
+---
+
+## Wave 0 Requirements
+
+- [ ] `tests/test_arm.py` — full file with ~30 xfail stubs covering ARM-01..09 + cross-cutting + applied_cap citation coverage + 6-key envelope contract
+- [ ] `tests/conftest.py` extension — add `arm_fixture` loader (Phase 4 D-17 pattern; ~12 lines)
+- [ ] `tests/fixtures/arm/.gitkeep` — directory created
+- [ ] `tests/fixtures/arm/oracle/.gitkeep` — oracle directory created
+- [ ] No framework install needed (pytest + mypy + ruff already configured Phase 1)
+
+---
+
+## Manual-Only Verifications
+
+| Behavior | Requirement | Why Manual | Test Instructions |
+|----------|-------------|------------|-------------------|
+| Bankrate ARM calculator capture (PDF) | ARM-06 oracle | Browser-print of third-party tool; output not deterministically scrapeable | Open https://www.bankrate.com/mortgages/adjustable-rate-mortgage-calculator/, populate the canonical 5/1 scenario from `arm_5_1_payment_jump_at_61.json`, browser-print to `tests/fixtures/arm/oracle/bankrate_5_1_capture_2026.pdf`, transcribe per-period rate/payment table to `bankrate_5_1_capture_2026.json`. Repeat for 7/1, 10/1. |
+| Vertex42 Excel capture (PDF) | ARM-06 oracle | Excel template; manual cell entry | Download https://www.vertex42.com/ExcelTemplates/arm-calculator.html, populate same canonical 5/1 scenario, print-to-PDF to `vertex42_5_1_capture_2026.pdf`, transcribe to `.json`. |
+| AmericU 5/6 SOFR disclosure | ARM-06 oracle (5/6) | Static lender PDF (already published) | `curl -o tests/fixtures/arm/oracle/americu_5_6_disclosure_2022.pdf https://www.americu.com/wp-content/uploads/2022/06/5_6-SOFR-ARM-Program-Disclosure-2_1_5-CAPS.pdf`; transcribe disclosed worked example to `americu_5_6_disclosure.json`. |
+
+---
+
+## Validation Sign-Off
+
+- [ ] All tasks have `<automated>` verify or Wave 0 dependencies (filled in per-plan)
+- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
+- [ ] Wave 0 covers all MISSING references (per-task map populated)
+- [ ] No watch-mode flags
+- [ ] Feedback latency < 30s
+- [ ] `nyquist_compliant: true` set in frontmatter (after planner finalizes per-task map)
+
+**Approval:** pending
