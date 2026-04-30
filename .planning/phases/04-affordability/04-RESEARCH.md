@@ -780,19 +780,23 @@ Every `blocked_by` citation string format Phase 4 emits in production code MUST 
 | A6 | Phase 4's request shape requires explicit `(state_fips, county_fips)` codes in `household.location`, not just county name | Phase 2 Predicate Signature Audit (types) | Without explicit FIPS, can't construct `County(state_fips=..., county_fips=...)` for `loan_type.classify`. CONTEXT.md is silent; planner must extend D-15 schema. |
 | A7 | ATR/QM `apr`-only or `apor`-only (one supplied, other null) is rejected at request boundary | ATR/QM Gating Subtleties | Slightly stricter than CONTEXT.md D-11 ("if both apr+apor missing, advisory not blocker"). Defensible but optional. |
 
-## Open Questions for Planner
+## Open Questions for Planner (RESOLVED)
 
-1. **PMI rate sourcing for conventional > 80% LTV**
+> All seven open questions were resolved during PLAN authoring (2026-04-30). Resolution
+> appears as a one-line `(RESOLVED: ...)` marker after each question's recommendation.
+> Implementation lives in PLAN 04-01..04-06 per the cited Plan/decision IDs.
+
+1. **PMI rate sourcing for conventional > 80% LTV** *(RESOLVED: Plan 04-01 ships caller-supplied `monthly_pmi: Money | None` field on `_CommonRequestFields`; Plan 04-01 `_validate_common` raises ValueError when target_loan_type=='conventional' AND LTV > 0.80 AND monthly_pmi is None. W3 fix.)*
    - What we know: `lib/rules/conventional_pmi.py` returns termination status only, not a rate. There is no `pmi-rates.yml` reference YAML.
    - What's unclear: does Phase 4 ship a hardcoded default PMI rate (e.g., 75 bps annualized) for the affordability surface, OR does the caller supply `monthly_pmi` directly when conventional + LTV > 80%?
    - Recommendation: caller-supplied `monthly_pmi: Decimal | None` request field; required when `target_loan_type == "conventional"` AND `target_ltv_pct > 0.80`; document in `--help` and module docstring. Add to D-01 / D-02 amendments at PLAN time.
 
-2. **`Household.location` schema must include FIPS codes**
+2. **`Household.location` schema must include FIPS codes** *(RESOLVED: Plan 04-01 ships `LocationFIPS` Pydantic model with required `state_fips`, `county_fips`, `county_name` fields; Plan 04-05 `config/household.example.yml` adds King WA defaults state_fips=53/county_fips=033. W3 fix.)*
    - What we know: `lib/rules/types.py:42-44` requires `County(state_fips: str, county_fips: str, name: str)`. CONTEXT.md `household.example.yml` shows only `county: "King"` (name).
    - What's unclear: should D-15 schema add `state_fips` and `county_fips` keys?
    - Recommendation: yes; matches "fail loud, no inference". Update `household.example.yml` with explicit FIPS codes. Document the mapping (e.g., King WA → state_fips=53, county_fips=033) in YAML comments.
 
-3. **Loan-type-vs-target-loan-type cross-walk**
+3. **Loan-type-vs-target-loan-type cross-walk** *(RESOLVED: Plan 04-01 ships `TARGET_LOAN_TYPE_CROSSWALK` (target → frozenset(LoanType)) and `TARGET_LOAN_TYPE_TO_PROGRAM` (target → program kwarg) module-level constants. W3 fix.)*
    - What we know: Phase 2's `loan_type.classify(...)` returns one of 8 LoanType values; CONTEXT.md D-10 has 5 `target_loan_type` values.
    - What's unclear: which classified values count as "matching" each requested `target_loan_type`? E.g., does `target_loan_type=="conventional"` accept both `"conforming"` and `"high_balance"` (yes, recommended) but block `"jumbo"`?
    - Recommendation: planner pins the cross-walk in `lib/affordability.py` module docstring as a literal table. Suggested cross-walk:
@@ -802,22 +806,22 @@ Every `blocked_by` citation string format Phase 4 emits in production code MUST 
      - `va` → accepts `{"va_standard", "va_high_balance"}`
      - `usda` → accepts `{"usda"}`
 
-4. **USDA income-eligibility blocker placement in D-11 precedence**
+4. **USDA income-eligibility blocker placement in D-11 precedence** *(RESOLVED: Plan 04-04 places USDA income-eligibility as step 2 of `_evaluate_blockers` (after classify, before LTV/CLTV); citation `BLOCKED_BY_USDA_INCOME_TEMPLATE = 'USDA-INCOME-LIMIT-{state_fips}-{county_fips}'`. BLOCKER 2 fix uses `request.household.size` directly. W3 fix.)*
    - What we know: `usda.evaluate(...)` returns `income_eligible: bool`; CONTEXT.md D-11 doesn't include USDA in the blocker list.
    - What's unclear: should USDA income-ineligible be a hard blocker, and where in the precedence?
    - Recommendation: hard blocker, as a sub-step of "loan-type classification" (step 1) — only fires when `target_loan_type == "usda"`. Citation: `"USDA-INCOME-LIMIT-{COUNTY_FIPS}"` (planner finalizes format).
 
-5. **VA funding fee financing convention (parallel to D-03)**
+5. **VA funding fee financing convention (parallel to D-03)** *(RESOLVED: Plan 04-02 auto-finances VA funding fee in `lib.affordability` (mirrors D-03 UFMIP convention); response.financed_loan_amount surfaces; documented in CLI --help. W3 fix.)*
    - What we know: `va_funding_fee.compute(...)` returns the fee dollar amount; CONTEXT.md `<canonical_refs>` says "financed into principal at script boundary".
    - What's unclear: who finances? `lib/affordability.py` (auto-financing) or the caller?
    - Recommendation: mirror the D-03 recommendation (auto-finance in `lib/affordability.py`); document in `--help`.
 
-6. **Endorsement-date input for `fha_mip.compute(...)`**
+6. **Endorsement-date input for `fha_mip.compute(...)`** *(RESOLVED: Plan 04-01 ships optional `endorsement_date_override: date | None` field on `_CommonRequestFields`; Plan 04-02 defaults to `date.today()` when None; pre-2023-03-20 dates raise NotImplementedError documented in module docstring per HUD ML 2023-05. W3 fix.)*
    - What we know: predicate requires `endorsement_date: date`; raises `NotImplementedError` for dates before 2023-03-20.
    - What's unclear: where does Phase 4 source this? Caller-supplied? Defaults to `date.today()`?
    - Recommendation: default to `date.today()`; allow override via optional request field `fha_endorsement_date: date | None`. Document in module docstring that pre-2023-03-20 dates raise NotImplementedError per HUD ML 2023-05 grandfathering.
 
-7. **VA region / family_size / actual_residual_income — required vs optional**
+7. **VA region / family_size / actual_residual_income — required vs optional** *(RESOLVED: Plan 04-01 `_validate_common` raises ValueError when target_loan_type=='va' AND household.va is None; fail-fast at request validation boundary; Plan 04-05 `config/household.example.yml` ships optional va: block with field docstrings. W3 fix.)*
    - What we know: D-15 says "Optional `va:` block for VA loans"; predicate requires all three.
    - What's unclear: when `target_loan_type == "va"` AND `va:` block missing, do we fail-fast (Pydantic validation) or treat as advisory?
    - Recommendation: fail-fast — Pydantic `model_validator(mode="after")` on `AffordabilityRequest` enforces "if `target_loan_type == 'va'` then `va` block required". Matches "fail loud, no inference".

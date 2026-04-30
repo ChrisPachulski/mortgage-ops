@@ -40,7 +40,12 @@ created: 2026-04-30
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | TBD | ⬜ pending |
+| TBD | 04-00..04-05 | 0..5 | AFFD-01..09 | T-04-XX-XX | Per-plan threat models | unit + integration + subprocess | `pytest tests/test_affordability.py -x --tb=short` | tests/test_affordability.py | ⬜ pending |
+| 04-06 Task 2 Test 19 | 04-06 | 6 | AFFD-08 | T-04-02-03 | scripts/affordability.py catches MissingCountyDataError → 6-key envelope (BLOCKER 1) | subprocess | `pytest tests/test_affordability.py::test_cli_missing_county_data_emits_six_key_envelope -x` | tests/test_affordability.py + tests/fixtures/affordability/forward_missing_county_data.json | ⬜ pending |
+| 04-06 Task 2 Test 20 | 04-06 | 6 | AFFD-07 | T-04-04-01 | VA-residual citation VERBATIM across all 4 regions × {1,4,5} family sizes (BLOCKER 4 + VALIDATION §1) | parametrized unit | `pytest tests/test_affordability.py::test_va_residual_citation_format -x` | tests/test_affordability.py + data/reference/va-residual-income.yml | ⬜ pending |
+| 04-06 Task 2 Test 21 | 04-06 | 6 | AFFD-04 | T-04-02-XX | FHA MIP table cells (4 cells per HUD ML 2023-05) all produce non-None monthly_mi (BLOCKER 4 + VALIDATION §1) | parametrized unit | `pytest tests/test_affordability.py::test_fha_mip_compute_per_table_row -x` | tests/test_affordability.py + data/reference/fha-mip-rates.yml | ⬜ pending |
+| 04-06 Task 2 Test 22 | 04-06 | 6 | AFFD-07 | T-04-04-XX | LTV ceiling boundary per loan_type (6 loan_types × 2 boundary cases; jumbo over-ceiling skipped) (BLOCKER 4 + VALIDATION §1) | parametrized unit | `pytest tests/test_affordability.py::test_ltv_ceiling_boundary -x` | tests/test_affordability.py + lib/affordability.py LTV_CEILING_BY_TARGET | ⬜ pending |
+| 04-06 Task 2 W5 | 04-06 | 6 | AFFD-08 | T-04-01-02 | LTV>0.80 + monthly_pmi=null raises ValidationError (W5 companion to Test 14) | subprocess | `pytest tests/test_affordability.py::test_cli_rejects_missing_monthly_pmi_when_required -x` | tests/test_affordability.py | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
 
