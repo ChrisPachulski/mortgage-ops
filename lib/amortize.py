@@ -142,6 +142,7 @@ from lib.money import quantize_cents
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+    from datetime import date
 
 
 class ExtraPrincipalEntry(BaseModel):
@@ -223,14 +224,16 @@ def build_schedule(
 ) -> Schedule:
     """Generate an amortization schedule (AMRT-02..05).
 
-    Fixed-rate monthly path: scalar per-period iteration. npf.pmt is called
-    ONCE for the level payment; per-period interest = period_rate * prior_balance,
-    regular principal = pmt - interest, extra principal applied AFTER (D-07),
-    and balance updates with quantize_cents end-of-period (FND-01).
+    Dispatch entrypoint. After D-12 origination synthesis and D-02 defaulting,
+    routes to one of three private helpers based on frequency + biweekly_mode:
+      - monthly                                -> _build_fixed_monthly
+      - biweekly + biweekly_mode='true'        -> _build_biweekly_true
+      - biweekly + biweekly_mode='half-monthly' -> _build_biweekly_half_monthly
 
-    Final period: principal = prior_balance (D-09), balance = Decimal("0.00"),
-    final_payment_adjusted = True when principal differed from formulaic value
-    OR any extra-principal fired (D-10).
+    All three helpers share the same shape: scalar per-period iteration with
+    end-of-period quantize_cents discipline, D-07/D-08 extra-principal composition,
+    D-09 final-period cleanup, D-10 final_payment_adjusted detection, D-14
+    cumulative-totals tracking, D-15 total_interest set by construction.
 
     D-12: when loan.origination_date is None, synthesize from datetime.now(UTC).
     """
@@ -243,10 +246,27 @@ def build_schedule(
     if frequency == "monthly" and biweekly_mode is not None:
         raise ValueError("biweekly_mode must be None when frequency='monthly' (D-02)")
 
-    if frequency == "biweekly":
-        raise NotImplementedError("biweekly path shipped in Task 2 of plan 03-02")
+    if frequency == "monthly":
+        return _build_fixed_monthly(loan, origination, extra_principal)
+    if biweekly_mode == "true":
+        return _build_biweekly_true(loan, origination, extra_principal)
+    # biweekly_mode == "half-monthly"
+    assert biweekly_mode == "half-monthly"  # mypy narrowing
+    return _build_biweekly_half_monthly(loan, origination, extra_principal)
 
-    # Fixed-rate monthly path
+
+def _build_fixed_monthly(
+    loan: Loan,
+    origination: date,
+    extra_principal: Sequence[ExtraPrincipalEntry],
+) -> Schedule:
+    """Fixed-rate monthly path (AMRT-02).
+
+    npf.pmt called ONCE for the level payment at rate/12 (D-04). Per-period
+    interest = period_rate * prior_balance, regular principal = pmt - interest,
+    extra-principal applied AFTER (D-07) and capped at remaining balance (D-08).
+    Final period: principal = prior_balance (D-09); balance = Decimal("0.00").
+    """
     period_rate = loan.annual_rate / Decimal("12")  # D-04
     level_pmt = quantize_cents(-npf.pmt(period_rate, loan.term_months, loan.principal))
 
@@ -258,7 +278,8 @@ def build_schedule(
     for period in range(1, loan.term_months + 1):
         interest = quantize_cents(period_rate * balance)
 
-        if period == loan.term_months:
+        is_last_term_period = period == loan.term_months
+        if is_last_term_period:
             # D-09 final-period cleanup: principal = remaining balance
             principal_paid = balance
             payment_amount = quantize_cents(principal_paid + interest)
@@ -266,18 +287,21 @@ def build_schedule(
             principal_paid = quantize_cents(level_pmt - interest)
             payment_amount = level_pmt
 
-        balance_after_regular = balance - principal_paid
-
         # D-07 + D-08: extra-principal AFTER regular principal, capped at remaining balance
-        extra = _resolve_extra(period, extra_principal, cap=balance_after_regular)
-        balance_after = balance_after_regular - extra
+        remaining_after_regular = balance - principal_paid
+        extra = _resolve_extra(period, extra_principal, cap=remaining_after_regular)
+        balance_after = remaining_after_regular - extra
 
-        # Defensive: if extra-principal would have overpaid (cap fired), the schedule
-        # ends here. Future tasks extend this path; for fixed-rate-monthly with no
-        # extras the cap branch never fires.
-        final_period = (period == loan.term_months) or (
-            balance_after == Decimal("0.00") and extra > Decimal("0.00")
-        )
+        # D-09 cents-drift cleanup on the formulaic last period: if residual remains,
+        # absorb into final principal so balance lands at exactly Decimal("0.00").
+        if is_last_term_period and balance_after != Decimal("0.00"):
+            principal_paid = principal_paid + balance_after
+            payment_amount = quantize_cents(principal_paid + interest + extra)
+            balance_after = Decimal("0.00")
+
+        # Final-period detection: term reached OR extra-principal zeroed the balance
+        extra_zeroed_balance = balance_after == Decimal("0.00") and extra > Decimal("0.00")
+        final_period = is_last_term_period or extra_zeroed_balance
 
         cum_int = quantize_cents(cum_int + interest)
         cum_prin = quantize_cents(cum_prin + principal_paid)
@@ -300,8 +324,7 @@ def build_schedule(
         if final_period:
             break
 
-    # D-10: final_payment_adjusted = True iff last principal != formulaic value
-    # OR extra-principal triggered early payoff
+    # D-10 detection rule: drift cleanup OR any extra-principal fired
     last = payments[-1]
     formulaic_last_principal = quantize_cents(level_pmt - last.interest)
     final_payment_adjusted = (last.principal != formulaic_last_principal) or any(
@@ -315,3 +338,117 @@ def build_schedule(
         final_payment_adjusted=final_payment_adjusted,
         payments=payments,
     )
+
+
+def _build_biweekly_true(
+    loan: Loan,
+    origination: date,
+    extra_principal: Sequence[ExtraPrincipalEntry],
+) -> Schedule:
+    """True biweekly path (AMRT-03 D-01 D-04).
+
+    period_rate = annual_rate / Decimal("26") for interest accrual. Biweekly
+    cashflow = quantize_cents(monthly_pi / Decimal("2")) where monthly_pi is the
+    IMPLIED monthly P&I computed at rate/12 (per RESEARCH §3.1; this is what
+    Schedule.monthly_pi reports — NOT the biweekly cashflow).
+
+    The schedule terminates ~5-7 years early (acceleration). For 30yr at 6.5%
+    on $200k, ~628 biweekly periods (vs the formulaic 720). Final-period
+    detection: when `balance + interest <= biweekly_payment`, this is the last
+    period — D-09 cleanup sets principal = balance.
+
+    Schedule.monthly_pi is the implied monthly P&I, not the biweekly cashflow.
+    """
+    period_rate = loan.annual_rate / Decimal("26")  # D-04
+    monthly_pi = quantize_cents(
+        -npf.pmt(loan.annual_rate / Decimal("12"), loan.term_months, loan.principal)
+    )
+    biweekly_payment = quantize_cents(monthly_pi / Decimal("2"))
+
+    balance = loan.principal
+    cum_int = Decimal("0.00")
+    cum_prin = Decimal("0.00")
+    payments: list[Payment] = []
+
+    # Safety bound: biweekly accelerates payoff but never beyond ~term_months*2 periods.
+    max_periods = loan.term_months * 2 + 10
+    period = 0
+    while balance > Decimal("0.00"):
+        period += 1
+        if period > max_periods:
+            raise ValueError(f"biweekly schedule did not terminate in expected periods: {period}")
+
+        interest = quantize_cents(period_rate * balance)
+
+        # D-09 final-period detection: formulaic biweekly payment would zero/overshoot balance
+        formulaic_termination = balance + interest <= biweekly_payment
+        if formulaic_termination:
+            principal_paid = balance
+            payment_amount = quantize_cents(principal_paid + interest)
+        else:
+            principal_paid = quantize_cents(biweekly_payment - interest)
+            payment_amount = biweekly_payment
+
+        # D-07 + D-08: extra-principal AFTER regular principal, capped at remaining balance
+        remaining_after_regular = balance - principal_paid
+        extra = _resolve_extra(period, extra_principal, cap=remaining_after_regular)
+        balance_after = remaining_after_regular - extra
+
+        # Final-period detection: formulaic termination OR extra-principal zeroed balance
+        final_period = formulaic_termination or balance_after == Decimal("0.00")
+
+        cum_int = quantize_cents(cum_int + interest)
+        cum_prin = quantize_cents(cum_prin + principal_paid)
+
+        payments.append(
+            Payment(
+                period=period,
+                payment_date=origination + relativedelta(weeks=2 * period),  # D-03
+                payment=payment_amount,
+                principal=principal_paid,
+                interest=interest,
+                extra_principal=extra,
+                balance=balance_after,
+                cumulative_interest=cum_int,  # D-14
+                cumulative_principal=cum_prin,  # D-14
+            )
+        )
+
+        balance = balance_after
+        if final_period:
+            break
+
+    # D-10 detection rule: principal != formulaic biweekly principal OR any extra fired
+    last = payments[-1]
+    formulaic_last_principal = quantize_cents(biweekly_payment - last.interest)
+    final_payment_adjusted = (last.principal != formulaic_last_principal) or any(
+        p.extra_principal > Decimal("0.00") for p in payments
+    )
+
+    return Schedule(
+        loan=loan,
+        monthly_pi=monthly_pi,  # IMPLIED monthly P&I (rate/12), per RESEARCH §3.1
+        total_interest=last.cumulative_interest,  # D-15: matches by construction
+        final_payment_adjusted=final_payment_adjusted,
+        payments=payments,
+    )
+
+
+def _build_biweekly_half_monthly(
+    loan: Loan,
+    origination: date,
+    extra_principal: Sequence[ExtraPrincipalEntry],
+) -> Schedule:
+    """Half-monthly biweekly path (AMRT-03 D-04).
+
+    Per RESEARCH §3.2 Option A and CONTEXT.md D-04 'interest still booked monthly':
+    half-monthly biweekly is monthly amortization with biweekly billing. The
+    schedule rows match a pure-monthly schedule (term_months rows for term_months
+    months). The biweekly cashflow cadence is a billing-frequency decoration that
+    consumers (Phase 10 SKILL.md narration) handle outside the engine.
+
+    Math is identical to fixed-rate monthly — period_rate = rate/12 (D-04),
+    schedule has term_months rows, payment_date advances by relativedelta(months=1).
+    Implementation delegates to _build_fixed_monthly.
+    """
+    return _build_fixed_monthly(loan, origination, extra_principal)
