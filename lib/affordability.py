@@ -251,6 +251,77 @@ _LOAN_TYPE_BLOCKER_PREFIX: dict[str, str] = {
 }
 
 
+# =============================================================================
+# D-11 Blocker Precedence — Citation Constants + Ceiling Tables (Plan 04-04)
+# =============================================================================
+# Citation strings emitted by _evaluate_blockers (Plan 04-04). Plan 04-06 ships
+# the citation-coverage meta-test that introspects these via grep on the
+# `BLOCKED_BY_` / `WARNING_` prefixes and asserts each appears in at least one
+# fixture (RUL-12/13 inheritance per RESEARCH §"Citation-Coverage Meta-Test").
+#
+# Authoritative sources for the per-loan-type LTV ceilings (RESEARCH §"LTV /
+# CLTV Ceiling Authority"):
+#   conventional 0.97  — Fannie 97% LTV (HomeReady or first-time-buyer; v1
+#                        unconditional per Assumption A1 — FTHB modeling out
+#                        of v1 scope; T-04-04-03 accepted)
+#   jumbo        1.00  — No v1 enforcement; non-agency LTV varies 80-90% in
+#                        practice (sentinel ceiling)
+#   fha          0.965 — HUD Handbook 4000.1; credit_score >= 580
+#   va           1.00  — Full-entitlement vets per VA Pamphlet 26-7 Chapter 3
+#   usda         1.00  — USDA SFH GLP per 7 CFR Part 3555
+
+# LTV ceiling per target_loan_type (RESEARCH §"LTV / CLTV Ceiling Authority").
+LTV_CEILING_BY_TARGET: Final[dict[str, Decimal]] = {
+    "conventional": Decimal("0.97"),
+    "jumbo": Decimal("1.00"),
+    "fha": Decimal("0.965"),
+    "va": Decimal("1.00"),
+    "usda": Decimal("1.00"),
+}
+
+# CLTV ceiling per target_loan_type (RESEARCH §"CLTV ceilings"; mirrors LTV by
+# default — junior-lien semantics push CLTV but ceilings track the senior-lien
+# program's ceiling for v1 personal-use scope).
+CLTV_CEILING_BY_TARGET: Final[dict[str, Decimal]] = {
+    "conventional": Decimal("0.97"),
+    "jumbo": Decimal("1.00"),
+    "fha": Decimal("0.965"),
+    "va": Decimal("1.00"),
+    "usda": Decimal("1.00"),
+}
+
+# ----- Hard blockers: response.blocked_by candidates -----
+# Format-string templates: callers use .format(...) at the call site.
+# Plan 04-06 citation-coverage meta-test discovers these via grep on the
+# `BLOCKED_BY_` prefix.
+
+BLOCKED_BY_LTV_CEILING_TEMPLATE: Final[str] = "LTV-CEILING-{LOAN_TYPE}"
+BLOCKED_BY_CLTV_CEILING_TEMPLATE: Final[str] = "CLTV-CEILING-{LOAN_TYPE}"
+BLOCKED_BY_DTI_CAP_TEMPLATE: Final[str] = "DTI-CAP-{LOAN_TYPE}"
+BLOCKED_BY_USDA_INCOME_TEMPLATE: Final[str] = "USDA-INCOME-LIMIT-{state_fips}-{county_fips}"
+BLOCKED_BY_ATR_QM_PRICE_FIRST: Final[str] = "ATR-QM-PRICE-FIRST"
+# ATR-QM-PRICE-SUBORDINATE: out-of-scope for v1 (first-lien residential only;
+# CONTEXT.md / RESEARCH §"First-lien vs subordinate-lien").
+
+# The VA-residual citation is NOT a constant here — it's read VERBATIM from
+# the predicate's `result.binding_rule_citation` field per Phase 2 D-11
+# (format f"VA-RESIDUAL-{region.upper()}-FAMILY-{family_size}"). DO NOT
+# re-construct or format-shadow that string in Phase 4 — drift between
+# predicate and consumer breaks ROADMAP SC-3 + Phase 2 D-11 contract.
+# The pattern below is for the citation-coverage meta-test only (regex match
+# — Plan 04-06 meta-test asserts at least one fixture's blocked_by matches
+# this pattern).
+BLOCKED_BY_VA_RESIDUAL_PATTERN: Final[str] = (
+    r"^VA-RESIDUAL-(NORTHEAST|MIDWEST|SOUTH|WEST)-FAMILY-\d+$"
+)
+
+# ----- Soft warnings (response.warnings candidates) -----
+WARNING_HPA_PMI_REQUIRED: Final[str] = "HPA-PMI-REQUIRED"
+WARNING_ATR_QM_NOT_EVALUATED: Final[str] = "ATR-QM-NOT-EVALUATED-MISSING-APR-OR-APOR"
+WARNING_FANNIE_LLPA_TEMPLATE: Final[str] = "FANNIE-LLPA-{FICO_BUCKET}-{LTV_BUCKET}"
+WARNING_FREDDIE_INELIGIBLE_TEMPLATE: Final[str] = "FREDDIE-INELIGIBLE-{FICO_BUCKET}-{LTV_BUCKET}"
+
+
 # ---------------------------------------------------------------------------
 # Leaf Pydantic models (D-01, D-05, D-06, D-15)
 # ---------------------------------------------------------------------------

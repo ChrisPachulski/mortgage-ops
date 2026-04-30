@@ -535,3 +535,81 @@ def test_AFFD_08_cli_smoke() -> None:
 def test_AFFD_09_household_example_yml_e2e() -> None:
     """AFFD-09 + SC-4: config/household.example.yml end-to-end via subprocess (D-15 + D-17 fixture)."""
     raise NotImplementedError("Wave 0 stub — implementation comes in Plan 04-06")
+
+
+# ---------------------------------------------------------------------------
+# Plan 04-04 Task 1: D-11 blocker citation constants + ceiling tables
+# ---------------------------------------------------------------------------
+
+
+def test_ltv_ceiling_table_values() -> None:
+    """Plan 04-04 Task 1 Tests 1-5: LTV_CEILING_BY_TARGET per RESEARCH §LTV/CLTV."""
+    from lib.affordability import LTV_CEILING_BY_TARGET
+
+    assert LTV_CEILING_BY_TARGET["conventional"] == Decimal("0.97")
+    assert LTV_CEILING_BY_TARGET["fha"] == Decimal("0.965")
+    assert LTV_CEILING_BY_TARGET["va"] == Decimal("1.00")
+    assert LTV_CEILING_BY_TARGET["usda"] == Decimal("1.00")
+    assert LTV_CEILING_BY_TARGET["jumbo"] == Decimal("1.00")
+
+
+def test_cltv_ceiling_table_values() -> None:
+    """Plan 04-04 Task 1: CLTV_CEILING_BY_TARGET mirrors LTV ceilings for v1."""
+    from lib.affordability import CLTV_CEILING_BY_TARGET
+
+    assert CLTV_CEILING_BY_TARGET["conventional"] == Decimal("0.97")
+    assert CLTV_CEILING_BY_TARGET["fha"] == Decimal("0.965")
+    assert CLTV_CEILING_BY_TARGET["va"] == Decimal("1.00")
+    assert CLTV_CEILING_BY_TARGET["usda"] == Decimal("1.00")
+    assert CLTV_CEILING_BY_TARGET["jumbo"] == Decimal("1.00")
+
+
+def test_blocked_by_citation_template_constants() -> None:
+    """Plan 04-04 Task 1 Tests 6-10: hard-blocker citation templates."""
+    from lib.affordability import (
+        BLOCKED_BY_ATR_QM_PRICE_FIRST,
+        BLOCKED_BY_CLTV_CEILING_TEMPLATE,
+        BLOCKED_BY_DTI_CAP_TEMPLATE,
+        BLOCKED_BY_LTV_CEILING_TEMPLATE,
+        BLOCKED_BY_USDA_INCOME_TEMPLATE,
+        BLOCKED_BY_VA_RESIDUAL_PATTERN,
+    )
+
+    assert BLOCKED_BY_DTI_CAP_TEMPLATE == "DTI-CAP-{LOAN_TYPE}"
+    assert BLOCKED_BY_LTV_CEILING_TEMPLATE == "LTV-CEILING-{LOAN_TYPE}"
+    assert BLOCKED_BY_CLTV_CEILING_TEMPLATE == "CLTV-CEILING-{LOAN_TYPE}"
+    assert BLOCKED_BY_USDA_INCOME_TEMPLATE == "USDA-INCOME-LIMIT-{state_fips}-{county_fips}"
+    assert BLOCKED_BY_ATR_QM_PRICE_FIRST == "ATR-QM-PRICE-FIRST"
+    assert (
+        BLOCKED_BY_VA_RESIDUAL_PATTERN == r"^VA-RESIDUAL-(NORTHEAST|MIDWEST|SOUTH|WEST)-FAMILY-\d+$"
+    )
+
+
+def test_warning_citation_constants() -> None:
+    """Plan 04-04 Task 1 Tests 11-14: soft-warning citation strings + templates."""
+    from lib.affordability import (
+        WARNING_ATR_QM_NOT_EVALUATED,
+        WARNING_FANNIE_LLPA_TEMPLATE,
+        WARNING_FREDDIE_INELIGIBLE_TEMPLATE,
+        WARNING_HPA_PMI_REQUIRED,
+    )
+
+    assert WARNING_HPA_PMI_REQUIRED == "HPA-PMI-REQUIRED"
+    assert WARNING_ATR_QM_NOT_EVALUATED == "ATR-QM-NOT-EVALUATED-MISSING-APR-OR-APOR"
+    assert WARNING_FANNIE_LLPA_TEMPLATE == "FANNIE-LLPA-{FICO_BUCKET}-{LTV_BUCKET}"
+    assert WARNING_FREDDIE_INELIGIBLE_TEMPLATE == "FREDDIE-INELIGIBLE-{FICO_BUCKET}-{LTV_BUCKET}"
+
+
+def test_citation_constants_module_level_exposure() -> None:
+    """Plan 04-04 Task 1 Test 15: BLOCKED_BY_* + WARNING_* constants are
+    module-level (citation-coverage meta-test in Plan 04-06 introspects via
+    `dir(lib.affordability)` to discover them)."""
+    import lib.affordability as aff
+
+    names = dir(aff)
+    blocked_by_constants = [n for n in names if n.startswith("BLOCKED_BY_")]
+    warning_constants = [n for n in names if n.startswith("WARNING_")]
+    # Plan 04-06 grep introspection target: at least 5 BLOCKED_BY_* constants
+    assert len(blocked_by_constants) >= 5, blocked_by_constants
+    # ... and at least 4 WARNING_* constants
+    assert len(warning_constants) >= 4, warning_constants
