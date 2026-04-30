@@ -354,13 +354,87 @@ def test_evaluate_forward_returns_response_for_valid_request() -> None:
     assert response.loan_type == "conforming"
 
 
-def test_evaluate_reverse_is_cross_plan_stub() -> None:
-    """Test 14: evaluate_reverse raises NotImplementedError citing Plan 04-03."""
-    from lib.affordability import evaluate_reverse
+def test_evaluate_reverse_returns_response_for_valid_request() -> None:
+    """Test 14: evaluate_reverse positive behavior — SC-2 anchor (replaces Plan 04-01 stub-presence test).
 
-    with pytest.raises(NotImplementedError) as exc:
-        evaluate_reverse(None)  # type: ignore[arg-type]
-    assert "Plan 04-03" in str(exc.value)
+    SC-2 anchor: max_dti=0.43, joint income=10000, no debts, no escrow,
+    conventional, target_ltv=0.80, 7%/30yr, down_payment=100000.
+    Verifies response shape (mode='reverse'; assumed_ltv_pct echoed;
+    assumed_monthly_mi=0 for conventional<=80; max_loan_amount > 0;
+    implied_pi > 0; loan_type populated).
+
+    Round-trip closure (D-09) is asserted in Plan 04-06's fixture-based
+    test_AFFD_05_reverse_round_trip; this test verifies only the basic
+    contract that evaluate_reverse returns a populated AffordabilityResponse
+    on a happy-path request.
+    """
+    from lib.affordability import (
+        AffordabilityResponse,
+        Applicant,
+        EscrowInputs,
+        Household,
+        LocationFIPS,
+        MonthlyDebts,
+        ReverseModeRequest,
+        evaluate_reverse,
+    )
+
+    req = ReverseModeRequest(
+        mode="reverse",
+        household=Household(
+            location=LocationFIPS(
+                state_fips="53",
+                county_fips="033",
+                county_name="King",
+                state="WA",
+            ),
+            applicants=[
+                Applicant(
+                    name="A",
+                    gross_monthly_income=Decimal("5000.00"),
+                    credit_score=720,
+                ),
+                Applicant(
+                    name="B",
+                    gross_monthly_income=Decimal("5000.00"),
+                    credit_score=680,
+                ),
+            ],
+            size=2,
+            monthly_debts=MonthlyDebts(),
+            escrow=EscrowInputs(
+                property_tax_monthly=Decimal("0.00"),
+                insurance_monthly=Decimal("0.00"),
+                hoa_monthly=Decimal("0.00"),
+            ),
+        ),
+        max_dti=Decimal("0.430000"),
+        target_loan_type="conventional",
+        term_months=360,
+        annual_rate=Decimal("0.070000"),
+        down_payment=Decimal("100000.00"),
+        target_ltv_pct=Decimal("0.800000"),
+    )
+    resp = evaluate_reverse(req)
+    assert isinstance(resp, AffordabilityResponse)
+    assert resp.mode == "reverse"
+    assert resp.assumed_ltv_pct == Decimal("0.800000")
+    # Conventional + LTV<=0.80 → no PMI
+    assert resp.assumed_monthly_mi == Decimal("0.00")
+    # Forward-only fields are None in reverse mode
+    assert resp.dti_front is None
+    assert resp.dti_back is None
+    assert resp.ltv is None
+    assert resp.cltv is None
+    assert resp.monthly_pi is None
+    assert resp.piti is None
+    # Reverse-only fields populated
+    assert resp.max_loan_amount is not None
+    assert resp.max_loan_amount > Decimal("0.00")
+    assert resp.implied_pi is not None
+    assert resp.implied_pi > Decimal("0.00")
+    # Loan-type classified (no blocker for SC-2 anchor)
+    assert resp.loan_type is not None
 
 
 def test_response_required_fields() -> None:

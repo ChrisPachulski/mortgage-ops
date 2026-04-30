@@ -175,15 +175,15 @@ from __future__ import annotations
 
 import warnings
 from datetime import date
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal, localcontext
 from typing import TYPE_CHECKING, Annotated, Any, Final, Literal
 
-import numpy_financial as npf  # noqa: F401  # used by Plan 04-03 reverse; preloaded here
+import numpy_financial as npf
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from lib.amortize import build_schedule
 from lib.models import Loan, Money, Rate
-from lib.money import quantize_cents
+from lib.money import MONEY_CONTEXT, quantize_cents
 from lib.rules._loader import StaleReferenceWarning
 
 # Phase 2 predicate full-path imports per Phase 2 D-08 (one predicate per citation).
@@ -526,6 +526,27 @@ def _build_county(location: LocationFIPS) -> County:
     )
 
 
+# Rate quantization — Phase 4 ratios (LTV/CLTV/DTI) must fit the lib.models.Rate
+# Annotated[Decimal, Field(max_digits=7, decimal_places=6)] constraint. Money
+# uses quantize_cents (2 places); rates use this 6-place quantize. Single source
+# of truth, same end-of-period discipline (Phase 3 D-04 PITFALLS).
+_RATE_QUANTUM: Final[Decimal] = Decimal("0.000001")
+
+
+def _quantize_rate(rate: Decimal) -> Decimal:
+    """Quantize a fractional rate to 6 decimal places (lib.models.Rate constraint).
+
+    Round-trip closure (D-09; SC-2) exposes that ltv = max_loan_amount /
+    derived_property_value can produce 28-digit Decimals; the response Rate
+    field rejects more than 7 total digits. Apply ROUND_HALF_UP via
+    lib.money.MONEY_CONTEXT (CLAUDE.md money discipline; Phase 1 PITFALLS:
+    US consumer finance uses ROUND_HALF_UP, never Python's default
+    ROUND_HALF_EVEN banker's rounding).
+    """
+    with localcontext(MONEY_CONTEXT):
+        return rate.quantize(_RATE_QUANTUM, rounding=ROUND_HALF_UP)
+
+
 def _build_loan_for_amortization(
     principal: Decimal,
     annual_rate: Decimal,
@@ -818,20 +839,31 @@ def evaluate_forward(request: ForwardModeRequest) -> AffordabilityResponse:
     )
     piti = quantize_cents(piti_pre_quantize)
 
-    # 9-10. LTV + CLTV (use financed_loan_amount for FHA UFMIP semantics)
-    ltv = _compute_ltv(financed_loan_amount, request.property_value)
-    cltv = _compute_cltv(
-        financed_loan_amount,
-        request.junior_liens,
-        request.property_value,
+    # 9-10. LTV + CLTV (use financed_loan_amount for FHA UFMIP semantics).
+    #       Ratios quantized to 6 decimal places to fit Rate's max_digits=7
+    #       constraint (lib.models — `Rate = Annotated[Decimal, Field(...,
+    #       max_digits=7, decimal_places=6)]`). Round-trip closure (D-09)
+    #       exposes this requirement: a max_loan_amount divided by an
+    #       approximate property_value can produce 28-digit Decimal ratios
+    #       that fail Rate validation. Quantize ONCE at the response boundary,
+    #       same end-of-period discipline as money via quantize_cents.
+    ltv = _quantize_rate(_compute_ltv(financed_loan_amount, request.property_value))
+    cltv = _quantize_rate(
+        _compute_cltv(
+            financed_loan_amount,
+            request.junior_liens,
+            request.property_value,
+        )
     )
 
-    # 11. DTI front + back
-    dti_front, dti_back = _compute_dti(
+    # 11. DTI front + back (also quantized to 6 places for Rate validation).
+    dti_front_raw, dti_back_raw = _compute_dti(
         piti=piti,
         sum_monthly_debts=sum_monthly_debts,
         total_gross_monthly_income=total_gross_monthly_income,
     )
+    dti_front = _quantize_rate(dti_front_raw)
+    dti_back = _quantize_rate(dti_back_raw)
 
     # 12. Build response — blocked / blocked_by reflect ONLY the loan-type-classify
     # blocker (D-11 step 1). Plan 04-04 wraps evaluate_forward with the rest of the
@@ -859,19 +891,191 @@ def evaluate_forward(request: ForwardModeRequest) -> AffordabilityResponse:
 
 
 def evaluate_reverse(request: ReverseModeRequest) -> AffordabilityResponse:
-    """Reverse-mode affordability: known max_dti + down_payment → max_loan_amount via npf.pv.
+    """Reverse-mode affordability: max_loan_amount via npf.pv (AFFD-05; D-08).
 
-    Body shipped in Plan 04-03 (cross-plan stub idiom). Wave 1 / Plan 04-03 will:
-      1. compute total_gross_monthly_income + total_monthly_debts
-      2. max_PITI = max_dti * income - debts
-      3. subtract escrow (tax + ins + HOA) + estimated monthly_mi → max_PI
-      4. max_loan_amount = quantize_cents(-npf.pv(rate=annual_rate/12,
-         nper=term_months, pmt=-max_PI, fv=0)) (D-08; npf bug #130 avoided
-         via fv=0 default)
-      5. evaluate blockers (loan-type-classify uses max_loan_amount + implied
-         property_value)
-      6. round-trip closure within Decimal('0.0001') is verified by
-         evaluate_forward(reconstructed_forward_req).dti_back <= max_dti +
-         tolerance (D-09; SC-2)
+    One-shot solve — no iteration. Wraps numpy-financial's pv directly per
+    RESEARCH §"numpy-financial npf.pv Conventions". The caller pins LTV via
+    target_ltv_pct + down_payment, so chicken-and-egg between MI and
+    loan_amount is resolved by a zero-MI seed npf.pv solve, then refining
+    MI from the seed-implied financed_loan_amount before the final solve.
+
+    Pipeline (D-08 steps):
+      1. Sum joint income; compute total monthly debts.
+      2. max_PITI = max_dti * income - debts                       (step 1)
+      3. max_PI_plus_MI = max_PITI - (tax + ins + hoa)              (step 2)
+      4. monthly_rate = annual_rate / Decimal("12")     (Phase 3 D-04 convention)
+      5. Zero-MI seed npf.pv solve to get a candidate financed_loan_amount;
+         derive a candidate property_value via target_ltv_pct.
+      6. Estimate assumed_monthly_mi via _compute_monthly_mi at the candidate
+         financed_loan_amount + property_value (FHA branch needs a Loan to
+         call fha_mip_compute; conventional branch uses caller-supplied
+         monthly_pmi; VA / USDA / jumbo follow predicate-derived rules).
+      7. max_PI = max_PI_plus_MI - assumed_monthly_mi               (step 4)
+      8. raw_pv = npf.pv(rate=monthly_rate, nper=term_months,
+                          pmt=-max_PI, fv=0)                        (step 5)
+         — NEGATIVE pmt per cash-flow convention (RESEARCH §"Sign conventions");
+         — fv=0 ALWAYS per Phase 3 D-09 + numpy-financial #130 avoidance.
+      9. max_loan_amount = quantize_cents(-raw_pv) — NEGATE raw return per
+         standard cash-flow convention; quantize ONCE at end (CLAUDE.md money
+         discipline).
+     10. derived_property_value = max_loan_amount / target_ltv_pct (used for
+         downstream classify call only; NOT surfaced on response — reverse
+         mode commits to LTV, not a specific property).
+     11. Build County; classify_target_loan_type with derived_property_value
+         to surface FHFA-LIMIT-* / HUD-LIMIT-* / VA-LIMIT / USDA-LIMIT
+         blockers if classified type is outside target's accepted set.
+     12. Build response with mode="reverse"; populate max_loan_amount,
+         implied_pi=max_PI (positive Decimal — the input to npf.pv),
+         assumed_ltv_pct=target_ltv_pct (echoed for traceability),
+         assumed_monthly_mi.
+
+    Round-trip closure target (D-09; SC-2) — actual assertion ships in Plan 04-06:
+      forward(ForwardModeRequest(loan_amount=resp.max_loan_amount,
+                                  property_value=resp.max_loan_amount/target_ltv_pct,
+                                  ...)).dti_back <= req.max_dti + Decimal("0.0001")
+      AND forward.loan_amount == reverse.max_loan_amount  (exact Decimal equality)
+
+    Note on monthly_pi vs implied_pi naming:
+      implied_pi is the reverse-mode counterpart to forward's monthly_pi —
+      the monthly principal-and-interest IMPLIED by the npf.pv solve. Naming
+      distinct fields keeps the response shape unambiguous about which mode
+      produced the value (forward = computed via build_schedule;
+      reverse = computed via npf.pv inversion).
+
+    Note on UFMIP financing:
+      Reverse mode does NOT auto-finance UFMIP because target_ltv_pct +
+      down_payment pin both sides of the LTV ratio; financing UFMIP would
+      shift LTV out of the target bucket, breaking D-08's one-shot premise
+      (T-04-03-07 in plan threat model). The forward-mode round-trip caller
+      reconstructs property_value from max_loan_amount / target_ltv_pct
+      (no UFMIP add-on) so the closure is exact.
     """
-    raise NotImplementedError("reverse evaluation shipped in Plan 04-03")
+    # 1. Joint applicant aggregation (D-06 + D-05 + D-07; mirrors evaluate_forward)
+    applicants = request.household.applicants
+    total_gross_monthly_income = sum(
+        (a.gross_monthly_income for a in applicants),
+        start=Decimal("0"),
+    )
+    debts = request.household.monthly_debts
+    sum_monthly_debts = debts.auto + debts.student_loans + debts.credit_cards + debts.other
+
+    escrow = request.household.escrow
+    endorsement_date = request.endorsement_date_override or date.today()
+
+    # 2. max_PITI (D-08 step 1)
+    max_piti = request.max_dti * total_gross_monthly_income - sum_monthly_debts
+
+    # 3. max_PI_plus_MI (D-08 step 2)
+    max_pi_plus_mi = max_piti - (
+        escrow.property_tax_monthly + escrow.insurance_monthly + escrow.hoa_monthly
+    )
+
+    # 4-11: capture staleness warnings across the predicate pipeline (D-11)
+    captured_warnings: list[str] = []
+    with warnings.catch_warnings(record=True) as captured:
+        warnings.simplefilter("always", StaleReferenceWarning)
+
+        # 4. monthly_rate (Phase 3 D-04)
+        monthly_rate = request.annual_rate / Decimal("12")
+
+        # 5. Zero-MI seed solve (resolves FHA chicken-and-egg between
+        #    financed_loan_amount and MI estimate). Same sign-convention as
+        #    the final solve (step 8): npf.pv(pmt=NEGATIVE, fv=0) returns a
+        #    POSITIVE Decimal directly under numpy_financial 1.0.0; no
+        #    second negation. See sign-convention note at the final solve.
+        zero_mi_pv = npf.pv(
+            rate=monthly_rate,
+            nper=request.term_months,
+            pmt=-max_pi_plus_mi,
+            fv=0,
+        )
+        zero_mi_loan_amount = quantize_cents(zero_mi_pv)
+        zero_mi_property_value = quantize_cents(zero_mi_loan_amount / request.target_ltv_pct)
+
+        # 6. Estimate assumed_monthly_mi at the candidate financed_loan_amount.
+        #    For FHA the call uses zero_mi_loan_amount as the seed; the result
+        #    feeds back into the FINAL npf.pv solve (one refinement pass; D-08
+        #    one-shot premise — no iteration loop).
+        assumed_monthly_mi, _ = _compute_monthly_mi(
+            target_loan_type=request.target_loan_type,
+            financed_loan_amount=zero_mi_loan_amount,
+            property_value=zero_mi_property_value,
+            annual_rate=request.annual_rate,
+            term_months=request.term_months,
+            monthly_pmi=request.monthly_pmi,
+            endorsement_date=endorsement_date,
+        )
+
+        # 7. max_PI (D-08 step 4)
+        max_pi = max_pi_plus_mi - assumed_monthly_mi
+
+        # 8. Final npf.pv solve (D-08 step 5; RESEARCH §"numpy-financial npf.pv
+        #    Conventions"). pmt=-max_pi per cash-flow convention; fv=0 per
+        #    Phase 3 D-09 + numpy-financial #130.
+        raw_pv = npf.pv(
+            rate=monthly_rate,
+            nper=request.term_months,
+            pmt=-max_pi,
+            fv=0,
+        )
+
+        # 9. Quantize ONCE at end (CLAUDE.md money discipline).
+        #
+        # Sign-convention note: RESEARCH §"Sign conventions" + §"reverse pseudocode"
+        # prescribe `max_loan_amount = quantize_cents(-raw_pv)` based on the
+        # theoretical cash-flow convention (pv NEGATIVE under standard sign
+        # rules; negate to express principal received as positive).
+        # Empirically numpy_financial 1.0.0 returns POSITIVE pv when pmt is
+        # NEGATIVE — the library already inverts internally — so the
+        # additional negation prescribed by RESEARCH would yield a NEGATIVE
+        # max_loan_amount that fails Pydantic's Money ge=0 constraint
+        # (verified via direct npf.pv test 2026-04-30: pmt=-1500 returns
+        # +225461.35; pmt=+1500 returns -225461.35). The deviation from
+        # RESEARCH pseudocode is pinned by the round-trip closure assertion
+        # (D-09; SC-2: forward(reverse(req)).loan_amount == reverse.max_loan_amount
+        # exactly).
+        max_loan_amount = quantize_cents(raw_pv)
+
+        # 10. Derive property_value for downstream classify call (NOT surfaced
+        #     on response — reverse mode commits to LTV, not a specific property).
+        derived_property_value = quantize_cents(max_loan_amount / request.target_ltv_pct)
+
+        # 11. Loan-type classification (D-11 step 1)
+        county = _build_county(request.household.location)
+        classified_loan_type, classify_blocker = _classify_target_loan_type(
+            loan_amount=max_loan_amount,
+            county=county,
+            target_loan_type=request.target_loan_type,
+        )
+
+        # Collect StaleReferenceWarning strings (D-11 propagation; mirrors
+        # evaluate_forward warnings capture).
+        for w in captured:
+            if issubclass(w.category, StaleReferenceWarning):
+                captured_warnings.append(str(w.message))
+
+    # derived_property_value is NOT surfaced on the response (reverse mode
+    # commits to assumed_ltv_pct, not a specific property_value). It exists
+    # solely to feed the classify call above. Underscore-prefixed-binding
+    # convention not used here because the value is referenced one line
+    # earlier (in classify); ruff F841 does not fire because the binding is
+    # used by the classify call site.
+    _ = derived_property_value  # documentation: intentional non-export
+
+    # 12. Build response — blocked / blocked_by reflect ONLY the loan-type-classify
+    # blocker (D-11 step 1). Plan 04-04 wraps evaluate_reverse with the rest of the
+    # precedence pipeline (LTV/CLTV ceiling -> DTI cap -> ATR/QM -> VA-residual)
+    # and mutates a NEW response (frozen models — model_copy(update={...})).
+    return AffordabilityResponse(
+        mode="reverse",
+        loan_type=classified_loan_type,
+        blocked=(classify_blocker is not None),
+        blocked_by=classify_blocker,
+        warnings=captured_warnings,
+        total_gross_monthly_income=quantize_cents(total_gross_monthly_income),
+        total_monthly_debts=quantize_cents(sum_monthly_debts),
+        max_loan_amount=max_loan_amount,
+        implied_pi=quantize_cents(max_pi),
+        assumed_ltv_pct=request.target_ltv_pct,
+        assumed_monthly_mi=quantize_cents(assumed_monthly_mi),
+    )
