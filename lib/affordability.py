@@ -189,12 +189,19 @@ from lib.rules._loader import StaleReferenceWarning
 # Phase 2 predicate full-path imports per Phase 2 D-08 (one predicate per citation).
 # Wave 2 (Plan 04-02) promotes these to runtime imports because evaluate_forward
 # calls them at runtime (RESEARCH §A.1-A.3 corrected signatures).
+# Wave 4 (Plan 04-04) adds atr_qm + fannie_eligibility + freddie_eligibility +
+# usda + va_residual_income for the D-11 blocker-precedence pipeline.
+from lib.rules.atr_qm import general_qm_passes
 from lib.rules.conventional_pmi import LTV_REQUEST_ELIGIBLE  # Decimal("0.80") — RESEARCH §A.2
+from lib.rules.fannie_eligibility import compute_llpa as fannie_compute_llpa
 from lib.rules.fha_mip import compute as fha_mip_compute
+from lib.rules.freddie_eligibility import evaluate as freddie_evaluate
 from lib.rules.loan_type import (
     classify as loan_type_classify,
 )
 from lib.rules.types import County, LoanType, Region  # Pydantic resolves at runtime
+from lib.rules.usda import evaluate as usda_evaluate
+from lib.rules.va_residual_income import evaluate as va_residual_evaluate
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -304,13 +311,15 @@ BLOCKED_BY_ATR_QM_PRICE_FIRST: Final[str] = "ATR-QM-PRICE-FIRST"
 # CONTEXT.md / RESEARCH §"First-lien vs subordinate-lien").
 
 # The VA-residual citation is NOT a constant here — it's read VERBATIM from
-# the predicate's `result.binding_rule_citation` field per Phase 2 D-11
-# (format f"VA-RESIDUAL-{region.upper()}-FAMILY-{family_size}"). DO NOT
-# re-construct or format-shadow that string in Phase 4 — drift between
-# predicate and consumer breaks ROADMAP SC-3 + Phase 2 D-11 contract.
-# The pattern below is for the citation-coverage meta-test only (regex match
-# — Plan 04-06 meta-test asserts at least one fixture's blocked_by matches
-# this pattern).
+# the predicate's `result.binding_rule_citation` field per Phase 2 D-11.
+# The stable predicate-side format is documented at
+# lib/rules/va_residual_income.py L115 — Phase 4 never constructs it.
+# DO NOT re-construct or format-shadow the predicate's citation string in
+# this module — drift between predicate and consumer breaks ROADMAP SC-3
+# + Phase 2 D-11 contract.
+# The regex pattern below is for the citation-coverage meta-test only —
+# Plan 04-06 meta-test asserts at least one fixture's blocked_by matches
+# this pattern.
 BLOCKED_BY_VA_RESIDUAL_PATTERN: Final[str] = (
     r"^VA-RESIDUAL-(NORTHEAST|MIDWEST|SOUTH|WEST)-FAMILY-\d+$"
 )
@@ -1150,3 +1159,355 @@ def evaluate_reverse(request: ReverseModeRequest) -> AffordabilityResponse:
         assumed_ltv_pct=request.target_ltv_pct,
         assumed_monthly_mi=quantize_cents(assumed_monthly_mi),
     )
+
+
+# ---------------------------------------------------------------------------
+# Plan 04-04: D-11 blocker-precedence pipeline + public evaluate() dispatcher
+# ---------------------------------------------------------------------------
+
+
+def _ltv_to_percentage_points(ltv_fraction: Decimal) -> Decimal:
+    """Convert fractional LTV (Decimal('0.80')) to percentage points
+    (Decimal('80.00')) for Fannie/Freddie predicate consumption.
+
+    Fannie/Freddie predicates take ltv_pct AS PERCENTAGE POINTS (RESEARCH
+    §"fannie_eligibility.py" line 246), NOT as a fraction. Quantizes to 2
+    decimal places; the predicates raise ValueError on higher-precision
+    input.
+    """
+    return (ltv_fraction * Decimal("100")).quantize(Decimal("0.01"))
+
+
+def _ltv_bucket_label(ltv_pct_points: Decimal) -> str:
+    """Coarse LTV bucket label for soft-warning citation strings
+    (FANNIE-LLPA-... + FREDDIE-INELIGIBLE-...). Buckets:
+    '60-OR-LESS', '60-75', '75-80', '80-85', '85-90', '90-95', 'OVER-95'.
+
+    Note: this label is for the citation STRING; it does NOT replace the
+    YAML-driven bucket lookup inside fannie_compute_llpa / freddie_evaluate
+    (those still consult their own bucket tables).
+    """
+    if ltv_pct_points <= Decimal("60.00"):
+        return "60-OR-LESS"
+    if ltv_pct_points <= Decimal("75.00"):
+        return "60-75"
+    if ltv_pct_points <= Decimal("80.00"):
+        return "75-80"
+    if ltv_pct_points <= Decimal("85.00"):
+        return "80-85"
+    if ltv_pct_points <= Decimal("90.00"):
+        return "85-90"
+    if ltv_pct_points <= Decimal("95.00"):
+        return "90-95"
+    return "OVER-95"
+
+
+def _credit_score_bucket_label(score: int) -> str:
+    """Coarse credit-score bucket label for soft-warning citation strings.
+    Phase 2 RUL-02 / RUL-03 use the standard 8-bucket boundaries
+    (620, 640, 660, 680, 700, 720, 740, 760)."""
+    if score < 620:
+        return "BELOW-620"
+    if score < 640:
+        return "620-639"
+    if score < 660:
+        return "640-659"
+    if score < 680:
+        return "660-679"
+    if score < 700:
+        return "680-699"
+    if score < 720:
+        return "700-719"
+    if score < 740:
+        return "720-739"
+    if score < 760:
+        return "740-759"
+    return "760-OR-ABOVE"
+
+
+def _evaluate_blockers(
+    response: AffordabilityResponse,
+    request: ForwardModeRequest | ReverseModeRequest,
+) -> AffordabilityResponse:
+    """Apply D-11 blocker precedence to a math-only response from
+    evaluate_forward / evaluate_reverse.
+
+    Precedence (D-11 + RESEARCH Open Q#4):
+      1. Loan-type classification — already wired in evaluate_forward /
+         evaluate_reverse; short-circuits the rest of D-11 if the math-only
+         pass already set response.blocked from the classify step.
+      2. USDA income eligibility (when target_loan_type=='usda'; per
+         RESEARCH Open Q#4 — placed AFTER classify, BEFORE LTV/CLTV ceiling).
+      3. LTV / CLTV ceiling per target_loan_type (RESEARCH §"LTV / CLTV
+         Ceiling Authority").
+      4. DTI cap exceeded (forward mode only — reverse mode's solver
+         enforces by construction per D-08; reverse mode never blocks here).
+      5. ATR/QM general-QM (when first-lien residential AND apr+apor
+         present; advisory if missing — RESEARCH §"Missing apr/apor").
+      6. VA residual income (when target_loan_type=='va'). Citation read
+         VERBATIM from result.binding_rule_citation per Phase 2 D-11.
+
+    Soft warnings (always evaluated, never block):
+      - Fannie LLPA hit (FANNIE-LLPA-{FICO_BUCKET}-{LTV_BUCKET})
+      - Freddie ineligibility (FREDDIE-INELIGIBLE-{FICO_BUCKET}-{LTV_BUCKET})
+      - HPA-PMI-REQUIRED (when conventional + LTV > 0.80)
+      - ATR-QM-NOT-EVALUATED-MISSING-APR-OR-APOR (when one or both missing)
+
+    Returns a new AffordabilityResponse with updated blocked / blocked_by /
+    warnings (Pydantic frozen — uses model_copy(update=...)).
+    """
+    # 1. Short-circuit: classify-step blocker already set in evaluate_forward
+    #    / evaluate_reverse — but ALWAYS append soft warnings regardless of
+    #    blocker state (T-04-04-05 mitigation: soft warnings must not be
+    #    silently dropped when blocked).
+    if response.blocked:
+        return _append_soft_warnings(response, request)
+
+    new_warnings: list[str] = list(response.warnings)
+    new_blocked_by: str | None = None
+
+    # Compute the LTV used for downstream checks (fraction; NOT percentage points).
+    if response.mode == "forward":
+        ltv_fraction = response.ltv  # already computed in evaluate_forward
+        cltv_fraction = response.cltv
+        dti_back = response.dti_back
+        financed_loan = response.financed_loan_amount or response.loan_amount
+    else:  # reverse
+        ltv_fraction = response.assumed_ltv_pct
+        # Reverse mode does NOT compute CLTV (no junior-lien semantics with no
+        # surfaced property_value); treat CLTV-ceiling as not-applicable here.
+        cltv_fraction = None
+        # Reverse mode never blocks on DTI — enforced by construction (D-08);
+        # consumers needing DTI-cap check must round-trip through forward mode.
+        dti_back = None
+        financed_loan = response.max_loan_amount
+
+    target = request.target_loan_type
+    loan_type_upper = target.upper()
+    location = request.household.location
+
+    # Capture warnings emitted by the predicates we call here (D-11 propagation
+    # of StaleReferenceWarning emitted by lib.rules._loader).
+    captured_warnings: list[str] = []
+    with warnings.catch_warnings(record=True) as captured:
+        warnings.simplefilter("always", StaleReferenceWarning)
+
+        # 2. USDA income eligibility (RESEARCH Open Q#4 + BLOCKER 2 fix)
+        if target == "usda" and new_blocked_by is None and financed_loan is not None:
+            county = _build_county(location)
+            # BLOCKER 2 fix: use request.household.size DIRECTLY (the FULL
+            # household size including non-applicant dependents). Do NOT
+            # infer from len(applicants) or va.family_size — silent
+            # approximation produces wrong USDA decisions for households
+            # with non-applicant dependents (e.g. 2-applicant + 3-children
+            # case: applicants=2 but actual household_size=5). Plan 04-01
+            # added the required `size` field; the validator pre-condition
+            # guarantees it is present and >= 1. Per CLAUDE.md +
+            # CONTEXT.md "fail loud, no inference".
+            household_size = request.household.size
+            household_income = response.total_gross_monthly_income * Decimal("12")
+            usda_result = usda_evaluate(
+                household_income=household_income,
+                household_size=household_size,
+                county=county,
+                loan_amount=financed_loan,
+            )
+            if not usda_result.income_eligible:
+                new_blocked_by = BLOCKED_BY_USDA_INCOME_TEMPLATE.format(
+                    state_fips=location.state_fips,
+                    county_fips=location.county_fips,
+                )
+
+        # 3. LTV / CLTV ceiling
+        if new_blocked_by is None and ltv_fraction is not None:
+            ltv_ceiling = LTV_CEILING_BY_TARGET[target]
+            if ltv_fraction > ltv_ceiling:
+                new_blocked_by = BLOCKED_BY_LTV_CEILING_TEMPLATE.format(
+                    LOAN_TYPE=loan_type_upper,
+                )
+
+        if new_blocked_by is None and cltv_fraction is not None:
+            cltv_ceiling = CLTV_CEILING_BY_TARGET[target]
+            if cltv_fraction > cltv_ceiling:
+                new_blocked_by = BLOCKED_BY_CLTV_CEILING_TEMPLATE.format(
+                    LOAN_TYPE=loan_type_upper,
+                )
+
+        # 4. DTI cap (forward only; reverse enforces by construction).
+        # Reverse mode never blocks on DTI — enforced by construction (D-08);
+        # consumers needing DTI-cap check must round-trip through forward mode.
+        if new_blocked_by is None and dti_back is not None and dti_back > request.max_dti:
+            new_blocked_by = BLOCKED_BY_DTI_CAP_TEMPLATE.format(
+                LOAN_TYPE=loan_type_upper,
+            )
+
+        # 5. ATR/QM general-QM (first-lien residential)
+        #    Phase 4 v1 scope: all evaluations are first-lien residential
+        #    (CONTEXT.md / RESEARCH §"Residential vs non-residential").
+        #    Half-supplied apr/apor case is rejected at request boundary by
+        #    _validate_common (Plan 04-01); both-None case falls through to
+        #    the warning emitted by _append_soft_warnings.
+        if (
+            new_blocked_by is None
+            and financed_loan is not None
+            and request.apr is not None
+            and request.apor is not None
+        ):
+            qm_passes = general_qm_passes(
+                apr=request.apr,
+                apor=request.apor,
+                loan_amount=financed_loan,
+                lien_position="first",
+            )
+            if not qm_passes:
+                new_blocked_by = BLOCKED_BY_ATR_QM_PRICE_FIRST
+
+        # 6. VA residual income (target=='va' only)
+        if new_blocked_by is None and target == "va" and financed_loan is not None:
+            # _validate_common already enforced va is not None when target=='va'.
+            va = request.household.va
+            assert va is not None  # validator pre-condition
+            va_result = va_residual_evaluate(
+                region=va.region,
+                family_size=va.family_size,
+                loan_amount=financed_loan,
+                actual_residual_income=va.actual_residual_income,
+            )
+            if va_result.status == "fail":
+                # READ VERBATIM (Phase 2 D-11 STABLE format; DO NOT
+                # format-shadow). The predicate's stable citation format is
+                # documented at lib/rules/va_residual_income.py L115; Phase 4
+                # reads it through unchanged via the .binding_rule_citation
+                # attribute below — never constructs the string here.
+                new_blocked_by = va_result.binding_rule_citation
+
+        # Capture stale warnings emitted by all the predicate calls above.
+        for w in captured:
+            if issubclass(w.category, StaleReferenceWarning):
+                captured_warnings.append(str(w.message))
+
+    new_warnings.extend(captured_warnings)
+
+    # Build intermediate response with hard blocker (if any) applied.
+    intermediate = response.model_copy(
+        update={
+            "blocked": new_blocked_by is not None,
+            "blocked_by": new_blocked_by,
+            "warnings": new_warnings,
+        }
+    )
+
+    # Always append soft warnings (T-04-04-05).
+    return _append_soft_warnings(intermediate, request)
+
+
+def _append_soft_warnings(
+    response: AffordabilityResponse,
+    request: ForwardModeRequest | ReverseModeRequest,
+) -> AffordabilityResponse:
+    """Append soft (non-blocking) warnings to response.warnings.
+
+    Always-evaluated, regardless of hard-blocker state (T-04-04-05):
+      - HPA-PMI-REQUIRED (when conventional + LTV > 0.80)
+      - ATR-QM-NOT-EVALUATED-MISSING-APR-OR-APOR (when both apr/apor None)
+      - FANNIE-LLPA-{FICO}-{LTV} (when compute_llpa returns positive bps)
+      - FREDDIE-INELIGIBLE-{FICO}-{LTV} (when freddie_evaluate.eligible == False)
+    """
+    soft: list[str] = []
+
+    ltv_fraction = response.ltv if response.mode == "forward" else response.assumed_ltv_pct
+
+    # HPA-PMI-REQUIRED — conventional + origination LTV > 0.80 (12 USC §4902).
+    if (
+        request.target_loan_type == "conventional"
+        and ltv_fraction is not None
+        and ltv_fraction > LTV_REQUEST_ELIGIBLE
+    ):
+        soft.append(WARNING_HPA_PMI_REQUIRED)
+
+    # ATR-QM-NOT-EVALUATED-MISSING-APR-OR-APOR — both missing case
+    # (half-supplied is rejected at request boundary by _validate_common).
+    if request.apr is None and request.apor is None:
+        soft.append(WARNING_ATR_QM_NOT_EVALUATED)
+
+    # Fannie LLPA + Freddie eligibility (only for conventional / jumbo
+    # targets; FHA/VA/USDA are out of GSE scope).
+    if request.target_loan_type in {"conventional", "jumbo"} and ltv_fraction is not None:
+        min_credit_score = min(a.credit_score for a in request.household.applicants)
+        ltv_pp = _ltv_to_percentage_points(ltv_fraction)
+        ltv_bucket = _ltv_bucket_label(ltv_pp)
+        fico_bucket = _credit_score_bucket_label(min_credit_score)
+
+        with warnings.catch_warnings(record=True) as cw:
+            warnings.simplefilter("always", StaleReferenceWarning)
+            try:
+                llpa_bps = fannie_compute_llpa(
+                    credit_score=min_credit_score,
+                    ltv_pct=ltv_pp,
+                    loan_purpose="purchase",
+                    occupancy="primary",
+                    unit_count=1,
+                )
+                if llpa_bps > Decimal("0"):
+                    soft.append(
+                        WARNING_FANNIE_LLPA_TEMPLATE.format(
+                            FICO_BUCKET=fico_bucket,
+                            LTV_BUCKET=ltv_bucket,
+                        )
+                    )
+            except (LookupError, ValueError):
+                # T-04-04-07 ACCEPTED: Phase 2 predicates raise LookupError
+                # on out-of-grid inputs (e.g., pre-2026 LLPA matrix bucket
+                # misses). Treat as advisory (no warning) rather than
+                # blocker — out-of-grid is informational; no actionable info.
+                pass
+
+            try:
+                freddie_result = freddie_evaluate(
+                    credit_score=min_credit_score,
+                    ltv_pct=ltv_pp,
+                    loan_purpose="purchase",
+                    occupancy="primary",
+                    unit_count=1,
+                )
+                if not freddie_result.eligible:
+                    soft.append(
+                        WARNING_FREDDIE_INELIGIBLE_TEMPLATE.format(
+                            FICO_BUCKET=fico_bucket,
+                            LTV_BUCKET=ltv_bucket,
+                        )
+                    )
+            except (LookupError, ValueError):
+                # Same T-04-04-07 rationale.
+                pass
+
+            for w in cw:
+                if issubclass(w.category, StaleReferenceWarning):
+                    soft.append(str(w.message))
+
+    if not soft:
+        return response
+
+    return response.model_copy(update={"warnings": [*response.warnings, *soft]})
+
+
+def evaluate(
+    request: ForwardModeRequest | ReverseModeRequest,
+) -> AffordabilityResponse:
+    """Public Phase 4 entrypoint. Dispatches by request.mode and post-processes
+    via the D-11 blocker-precedence pipeline.
+
+    This is the function `scripts/affordability.py` (Plan 04-05) calls AFTER
+    AffordabilityRequest.model_validate_json. AffordabilityRequest is the
+    Annotated[ForwardModeRequest | ReverseModeRequest, Field(discriminator="mode")]
+    union from Plan 04-01; Pydantic narrows the type at validation time so the
+    callsite passes a concrete request (ForwardModeRequest or ReverseModeRequest)
+    to this function.
+
+    Pipeline:
+      1. evaluate_forward / evaluate_reverse — pure math + classify blocker only.
+      2. _evaluate_blockers — D-11 precedence (USDA-income → LTV/CLTV → DTI →
+         ATR/QM → VA-residual) + soft warnings.
+    """
+    base = evaluate_forward(request) if request.mode == "forward" else evaluate_reverse(request)
+    return _evaluate_blockers(base, request)

@@ -613,3 +613,420 @@ def test_citation_constants_module_level_exposure() -> None:
     assert len(blocked_by_constants) >= 5, blocked_by_constants
     # ... and at least 4 WARNING_* constants
     assert len(warning_constants) >= 4, warning_constants
+
+
+# ---------------------------------------------------------------------------
+# Plan 04-04 Task 2: _evaluate_blockers + public evaluate() dispatcher
+# ---------------------------------------------------------------------------
+
+
+def _make_clean_household(**overrides: object) -> object:
+    """Build a clean household for blocker tests. Returns Household."""
+    from lib.affordability import (
+        Applicant,
+        EscrowInputs,
+        Household,
+        LocationFIPS,
+        MonthlyDebts,
+    )
+
+    defaults = dict(
+        location=LocationFIPS(
+            state="WA",
+            state_fips="53",
+            county_fips="033",
+            county_name="King",
+            zip="98101",
+        ),
+        applicants=[
+            Applicant(
+                name="A",
+                gross_monthly_income=Decimal("10000.00"),
+                credit_score=720,
+            ),
+        ],
+        size=1,
+        monthly_debts=MonthlyDebts(),
+        escrow=EscrowInputs(
+            property_tax_monthly=Decimal("0.00"),
+            insurance_monthly=Decimal("0.00"),
+            hoa_monthly=Decimal("0.00"),
+        ),
+    )
+    defaults.update(overrides)
+    return Household(**defaults)  # type: ignore[arg-type]
+
+
+def test_evaluate_clean_conventional_no_blocker() -> None:
+    """Task 2 Test 1: clean conv 80% LTV → blocked=False, blocked_by=None."""
+    from lib.affordability import ForwardModeRequest, evaluate
+
+    req = ForwardModeRequest(
+        mode="forward",
+        household=_make_clean_household(),  # type: ignore[arg-type]
+        max_dti=Decimal("0.430000"),
+        target_loan_type="conventional",
+        term_months=360,
+        annual_rate=Decimal("0.065000"),
+        loan_amount=Decimal("400000.00"),
+        property_value=Decimal("500000.00"),
+    )
+    resp = evaluate(req)
+    assert resp.blocked is False
+    assert resp.blocked_by is None
+
+
+def test_evaluate_va_residual_blocker_west_family_4_verbatim() -> None:
+    """Task 2 Test 2 + ROADMAP SC-3: VA WEST family-4 below M26-7 minimum (~$1,117)
+    → blocked=True, blocked_by='VA-RESIDUAL-WEST-FAMILY-4' VERBATIM from predicate."""
+    from lib.affordability import ForwardModeRequest, VAInputs, evaluate
+
+    household = _make_clean_household(
+        size=4,
+        va=VAInputs(
+            region="west",
+            family_size=4,
+            actual_residual_income=Decimal("500.00"),  # below $1,117 minimum
+        ),
+    )
+    req = ForwardModeRequest(
+        mode="forward",
+        household=household,  # type: ignore[arg-type]
+        max_dti=Decimal("0.430000"),
+        target_loan_type="va",
+        term_months=360,
+        annual_rate=Decimal("0.065000"),
+        loan_amount=Decimal("400000.00"),
+        property_value=Decimal("500000.00"),
+    )
+    resp = evaluate(req)
+    assert resp.blocked is True
+    assert resp.blocked_by == "VA-RESIDUAL-WEST-FAMILY-4"
+
+
+def test_evaluate_dti_cap_blocker() -> None:
+    """Task 2 Test 3: FHA loan with DTI back > max_dti → blocked_by='DTI-CAP-FHA'."""
+    from lib.affordability import (
+        EscrowInputs,
+        ForwardModeRequest,
+        MonthlyDebts,
+        evaluate,
+    )
+
+    debts = MonthlyDebts(
+        auto=Decimal("800.00"),
+        student_loans=Decimal("500.00"),
+        credit_cards=Decimal("200.00"),
+        other=Decimal("0.00"),
+    )
+    household = _make_clean_household(
+        monthly_debts=debts,
+        escrow=EscrowInputs(
+            property_tax_monthly=Decimal("400.00"),
+            insurance_monthly=Decimal("150.00"),
+            hoa_monthly=Decimal("0.00"),
+        ),
+    )
+    req = ForwardModeRequest(
+        mode="forward",
+        household=household,  # type: ignore[arg-type]
+        max_dti=Decimal("0.380000"),  # tight cap
+        target_loan_type="fha",
+        term_months=360,
+        annual_rate=Decimal("0.065000"),
+        loan_amount=Decimal("400000.00"),
+        property_value=Decimal("500000.00"),
+    )
+    resp = evaluate(req)
+    assert resp.blocked is True
+    assert resp.blocked_by == "DTI-CAP-FHA"
+
+
+def test_evaluate_ltv_ceiling_blocker_conventional() -> None:
+    """Task 2 Test 4: conv loan with LTV=0.98 (above 0.97 ceiling) → blocked_by='LTV-CEILING-CONVENTIONAL'."""
+    from lib.affordability import ForwardModeRequest, evaluate
+
+    req = ForwardModeRequest(
+        mode="forward",
+        household=_make_clean_household(),  # type: ignore[arg-type]
+        max_dti=Decimal("0.430000"),
+        target_loan_type="conventional",
+        term_months=360,
+        annual_rate=Decimal("0.065000"),
+        monthly_pmi=Decimal("250.00"),  # required for conv > 0.80 LTV
+        loan_amount=Decimal("490000.00"),
+        property_value=Decimal("500000.00"),  # LTV = 0.98
+    )
+    resp = evaluate(req)
+    assert resp.blocked is True
+    assert resp.blocked_by == "LTV-CEILING-CONVENTIONAL"
+
+
+def test_evaluate_classify_blocker_preserved_for_jumbo() -> None:
+    """Task 2 Test 5: jumbo-classify-step blocker (Plan 04-02) precedes precedence pipeline."""
+    from lib.affordability import Applicant, ForwardModeRequest, evaluate
+
+    household = _make_clean_household(
+        applicants=[
+            Applicant(
+                name="A",
+                gross_monthly_income=Decimal("50000.00"),  # high enough that DTI stays sane
+                credit_score=720,
+            ),
+        ],
+    )
+    req = ForwardModeRequest(
+        mode="forward",
+        household=household,  # type: ignore[arg-type]
+        max_dti=Decimal("0.430000"),
+        target_loan_type="conventional",
+        term_months=360,
+        annual_rate=Decimal("0.065000"),
+        loan_amount=Decimal("2000000.00"),  # jumbo-tier for King WA
+        property_value=Decimal("2500000.00"),
+    )
+    resp = evaluate(req)
+    assert resp.blocked is True
+    assert resp.blocked_by is not None
+    assert resp.blocked_by.startswith("FHFA-LIMIT-CONFORMING-")
+
+
+def test_evaluate_usda_income_blocker() -> None:
+    """Task 2 Test 6: USDA target with household income above USDA limit
+    → blocked_by='USDA-INCOME-LIMIT-{state_fips}-{county_fips}'."""
+    from lib.affordability import Applicant, ForwardModeRequest, evaluate
+
+    household = _make_clean_household(
+        applicants=[
+            Applicant(
+                name="A",
+                gross_monthly_income=Decimal("30000.00"),  # ~$360k/yr — way above USDA limit
+                credit_score=720,
+            ),
+        ],
+    )
+    req = ForwardModeRequest(
+        mode="forward",
+        household=household,  # type: ignore[arg-type]
+        max_dti=Decimal("0.430000"),
+        target_loan_type="usda",
+        term_months=360,
+        annual_rate=Decimal("0.065000"),
+        loan_amount=Decimal("300000.00"),
+        property_value=Decimal("300000.00"),
+    )
+    resp = evaluate(req)
+    assert resp.blocked is True
+    assert resp.blocked_by == "USDA-INCOME-LIMIT-53-033"
+
+
+def test_evaluate_atr_qm_blocker_when_apr_apor_present() -> None:
+    """Task 2 Test 7: first-lien residential with apr+apor + spread > threshold
+    → blocked_by='ATR-QM-PRICE-FIRST'."""
+    from lib.affordability import (
+        BLOCKED_BY_ATR_QM_PRICE_FIRST,
+        ForwardModeRequest,
+        evaluate,
+    )
+
+    req = ForwardModeRequest(
+        mode="forward",
+        household=_make_clean_household(),  # type: ignore[arg-type]
+        max_dti=Decimal("0.430000"),
+        target_loan_type="conventional",
+        term_months=360,
+        annual_rate=Decimal("0.065000"),
+        apr=Decimal("0.090000"),
+        apor=Decimal("0.040000"),  # 5pp spread > 2.25pp threshold for first-lien tier-1
+        loan_amount=Decimal("400000.00"),
+        property_value=Decimal("500000.00"),
+    )
+    resp = evaluate(req)
+    assert resp.blocked is True
+    assert resp.blocked_by == BLOCKED_BY_ATR_QM_PRICE_FIRST
+
+
+def test_evaluate_atr_qm_advisory_when_apr_apor_missing() -> None:
+    """Task 2 Test 8: both apr and apor None → ATR-QM-NOT-EVALUATED warning, no blocker."""
+    from lib.affordability import (
+        WARNING_ATR_QM_NOT_EVALUATED,
+        ForwardModeRequest,
+        evaluate,
+    )
+
+    req = ForwardModeRequest(
+        mode="forward",
+        household=_make_clean_household(),  # type: ignore[arg-type]
+        max_dti=Decimal("0.430000"),
+        target_loan_type="conventional",
+        term_months=360,
+        annual_rate=Decimal("0.065000"),
+        loan_amount=Decimal("400000.00"),
+        property_value=Decimal("500000.00"),
+    )
+    resp = evaluate(req)
+    assert WARNING_ATR_QM_NOT_EVALUATED in resp.warnings
+    # Not blocked on ATR/QM (advisory only when missing)
+    assert resp.blocked_by != "ATR-QM-PRICE-FIRST"
+
+
+def test_evaluate_hpa_pmi_required_warning_for_conv_above_80_ltv() -> None:
+    """Task 2 Test 9: conventional 85% LTV with monthly_pmi
+    → warnings contains 'HPA-PMI-REQUIRED'."""
+    from lib.affordability import WARNING_HPA_PMI_REQUIRED, ForwardModeRequest, evaluate
+
+    req = ForwardModeRequest(
+        mode="forward",
+        household=_make_clean_household(),  # type: ignore[arg-type]
+        max_dti=Decimal("0.430000"),
+        target_loan_type="conventional",
+        term_months=360,
+        annual_rate=Decimal("0.065000"),
+        monthly_pmi=Decimal("150.00"),
+        loan_amount=Decimal("425000.00"),
+        property_value=Decimal("500000.00"),  # LTV = 0.85
+    )
+    resp = evaluate(req)
+    assert WARNING_HPA_PMI_REQUIRED in resp.warnings
+
+
+def test_evaluate_invariant_blocked_iff_blocked_by() -> None:
+    """Task 2 Test 15: response.blocked is True iff response.blocked_by is not None."""
+    from lib.affordability import ForwardModeRequest, evaluate
+
+    req = ForwardModeRequest(
+        mode="forward",
+        household=_make_clean_household(),  # type: ignore[arg-type]
+        max_dti=Decimal("0.430000"),
+        target_loan_type="conventional",
+        term_months=360,
+        annual_rate=Decimal("0.065000"),
+        loan_amount=Decimal("490000.00"),
+        property_value=Decimal("500000.00"),  # LTV=0.98 → ceiling blocker
+        monthly_pmi=Decimal("250.00"),
+    )
+    resp = evaluate(req)
+    assert resp.blocked is (resp.blocked_by is not None)
+
+
+def test_evaluate_dispatcher_routes_reverse_mode() -> None:
+    """Task 2 Test 14: public evaluate() dispatches by mode → ReverseModeRequest."""
+    from lib.affordability import (
+        Applicant,
+        ReverseModeRequest,
+        evaluate,
+    )
+
+    household = _make_clean_household(
+        applicants=[
+            Applicant(name="A", gross_monthly_income=Decimal("5000.00"), credit_score=720),
+            Applicant(name="B", gross_monthly_income=Decimal("5000.00"), credit_score=680),
+        ],
+        size=2,
+    )
+    req = ReverseModeRequest(
+        mode="reverse",
+        household=household,  # type: ignore[arg-type]
+        max_dti=Decimal("0.430000"),
+        target_loan_type="conventional",
+        term_months=360,
+        annual_rate=Decimal("0.070000"),
+        down_payment=Decimal("100000.00"),
+        target_ltv_pct=Decimal("0.800000"),
+    )
+    resp = evaluate(req)
+    assert resp.mode == "reverse"
+    assert resp.max_loan_amount is not None
+    assert resp.max_loan_amount > Decimal("0")
+
+
+def test_evaluate_va_residual_pass_no_blocker() -> None:
+    """Task 2 Test 17: VA target with residual income above M26-7 minimum → no blocker."""
+    from lib.affordability import ForwardModeRequest, VAInputs, evaluate
+
+    household = _make_clean_household(
+        size=4,
+        va=VAInputs(
+            region="west",
+            family_size=4,
+            actual_residual_income=Decimal("2000.00"),  # well above $1,117 minimum
+        ),
+    )
+    req = ForwardModeRequest(
+        mode="forward",
+        household=household,  # type: ignore[arg-type]
+        max_dti=Decimal("0.430000"),
+        target_loan_type="va",
+        term_months=360,
+        annual_rate=Decimal("0.065000"),
+        loan_amount=Decimal("400000.00"),
+        property_value=Decimal("500000.00"),
+    )
+    resp = evaluate(req)
+    assert resp.blocked is False
+    assert resp.blocked_by is None
+
+
+def test_evaluate_non_va_target_skips_va_residual() -> None:
+    """Task 2 Test 16: non-VA target → no VA-residual evaluation surfaced."""
+    from lib.affordability import ForwardModeRequest, evaluate
+
+    req = ForwardModeRequest(
+        mode="forward",
+        household=_make_clean_household(),  # type: ignore[arg-type]
+        max_dti=Decimal("0.430000"),
+        target_loan_type="conventional",
+        term_months=360,
+        annual_rate=Decimal("0.065000"),
+        loan_amount=Decimal("400000.00"),
+        property_value=Decimal("500000.00"),
+    )
+    resp = evaluate(req)
+    # No VA-RESIDUAL citation in either blocked_by or warnings
+    if resp.blocked_by is not None:
+        assert not resp.blocked_by.startswith("VA-RESIDUAL")
+    assert all(not w.startswith("VA-RESIDUAL") for w in resp.warnings)
+
+
+def test_evaluate_va_residual_citation_read_verbatim_not_constructed() -> None:
+    """Task 2 Test 13: Phase 4 reads VA citation from predicate, never constructs it."""
+    import inspect
+
+    from lib import affordability
+
+    # Negative-grep gate: source must NOT contain `f"VA-RESIDUAL-` (anywhere
+    # — comments included, since the literal grep gate is the discipline).
+    source = inspect.getsource(affordability)
+    assert 'f"VA-RESIDUAL-' not in source, (
+        "Phase 4 must NEVER construct the VA-residual citation; reads "
+        "verbatim via va_result.binding_rule_citation per Phase 2 D-11"
+    )
+    # Positive evidence: the verbatim-read site exists.
+    assert "va_result.binding_rule_citation" in source
+
+
+def test_evaluate_blockers_appends_soft_warnings_even_when_blocked() -> None:
+    """Task 2 T-04-04-05: soft warnings always evaluated even when hard-blocked."""
+    from lib.affordability import (
+        WARNING_ATR_QM_NOT_EVALUATED,
+        ForwardModeRequest,
+        evaluate,
+    )
+
+    # LTV ceiling blocker fires first, but ATR-QM-NOT-EVALUATED warning
+    # must still appear (apr/apor both None).
+    req = ForwardModeRequest(
+        mode="forward",
+        household=_make_clean_household(),  # type: ignore[arg-type]
+        max_dti=Decimal("0.430000"),
+        target_loan_type="conventional",
+        term_months=360,
+        annual_rate=Decimal("0.065000"),
+        monthly_pmi=Decimal("250.00"),
+        loan_amount=Decimal("490000.00"),
+        property_value=Decimal("500000.00"),  # LTV=0.98 → blocker
+    )
+    resp = evaluate(req)
+    assert resp.blocked is True
+    assert resp.blocked_by == "LTV-CEILING-CONVENTIONAL"
+    assert WARNING_ATR_QM_NOT_EVALUATED in resp.warnings
