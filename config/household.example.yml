@@ -1,35 +1,101 @@
 # config/household.example.yml
 #
-# COMMITTED SKELETON — copy to config/household.yml and fill in your real values.
-# config/household.yml is in the User Layer (per DATA_CONTRACT.md): gitignored
-# and never auto-updated by any system process.
+# FINAL Phase 4 schema (AFFD-09). Copy to config/household.yml and fill in
+# your real values. config/household.yml is in the User Layer (per
+# DATA_CONTRACT.md): gitignored and never auto-updated by any system process;
+# protected by Phase 1's pre-commit hook scripts/hooks/block-user-layer.py
+# (FND-04). The hook's allowlist already permits *.example.yml, so this file
+# commits cleanly.
 #
-# Phase 4 (Affordability) consumes this schema. Phase 1 ships only this redacted
-# example so DATA_CONTRACT.md can cite a real path. Fields here are placeholders;
-# Phase 4 (AFFD-09) will document the full schema with units and constraints.
+# Phase 4 (Affordability) consumes this schema to produce DTI / LTV / CLTV /
+# PITI calculations and reverse-affordability ("what loan amount can I
+# qualify for?"). All money fields are Decimal strings (CLAUDE.md money
+# discipline; ROUND_HALF_UP). Phase 2 predicates are invoked by full path
+# per Phase 2 D-08.
 
 household:
-  # Location — used by Phase 2 rules predicates (loan_type classification needs county).
+  # Location — used by Phase 2 rules predicates (loan_type.classify and
+  # usda.evaluate require a County(state_fips, county_fips, name) per
+  # lib.rules.types.County). state_fips + county_fips are REQUIRED keys
+  # per RESEARCH §"Open Questions for Planner" #2.
   location:
-    state: "WA"
-    county: "King"            # Must match a county in data/reference/conforming-limits-*.yml (Phase 2)
-    zip: "00000"
+    state: "WA"                        # 2-letter state code (display only; not a regulatory key)
+    state_fips: "53"                   # 2-digit FIPS (REQUIRED for County construction;
+                                       # WA = 53; lookup at
+                                       # https://www.census.gov/library/reference/code-lists/ansi.html)
+    county_fips: "033"                 # 3-digit FIPS (REQUIRED; King WA = 033;
+                                       # consumed by lib.rules.loan_type.classify
+                                       # + lib.rules.usda.evaluate)
+    county_name: "King"                # Display name (matches data/reference/conforming-limits-2026.yml
+                                       # entries; documentation only)
+    zip: "00000"                       # ZIP code (display only; v2 PROP-02 may use
+                                       # for property-tax / insurance lookup)
 
-  # Joint applicants — Phase 4 supports two-income households.
+  # FULL household size — including non-applicant dependents (BLOCKER 2 fix; D-15).
+  # int >= 1; drives USDA income-eligibility lookups via lib.rules.usda.evaluate
+  # (which reads household_size to pick the right column of
+  # data/reference/usda-income-limits.yml). NOT inferred from len(applicants) —
+  # fail-loud, no inference (CLAUDE.md, CONTEXT.md).
+  # Example: 2-applicant + 3-children household sets size: 5 even though
+  # len(applicants) == 2. For a single-person household: size: 1.
+  size: 1
+
+  # Joint applicants — Phase 4 supports two-income households (D-06 + D-07).
+  # Single-applicant case is supported via a list of length 1 (no special-cased
+  # code path). For multi-applicant: income is summed (D-06); credit_score uses
+  # min across applicants for Fannie LLPA + Freddie eligibility lookups (D-05).
   applicants:
-    - name: "Applicant A"     # Display name only, not a legal identifier
-      gross_monthly_income: "0.00"   # Decimal string — see CLAUDE.md money discipline
-      credit_score: 0                # FICO 300-850; Phase 4 picks the lower-mid score per Fannie/Freddie convention
+    - name: "Applicant A"              # Display name only, not a legal identifier
+      gross_monthly_income: "0.00"     # Decimal string; D-06 sums across applicants
+      credit_score: 0                  # FICO 300-850; D-05 picks min across applicants for
+                                       # Fannie LLPA + Freddie eligibility (caller supplies their
+                                       # representative middle-of-three; mid-of-3 modeling out
+                                       # of v1 scope per CONTEXT.md D-05)
     - name: "Applicant B"
       gross_monthly_income: "0.00"
       credit_score: 0
 
-  # Monthly debts that count toward back-end DTI.
+  # Monthly debts that count toward back-end DTI (excluded from front-end DTI per
+  # standard mortgage convention). Sum is added to PITI for back-end DTI ratio.
   monthly_debts:
     auto: "0.00"
     student_loans: "0.00"
     credit_cards: "0.00"
     other: "0.00"
 
-  # Optional: existing housing payment (rent/own) for affordability comparison.
+  # Optional: existing housing payment (rent or own) for affordability comparison.
+  # Not consumed by Phase 4 math; reserved for Phase 8 stress-test "what-if-I-keep-renting"
+  # comparisons.
   current_housing_payment: "0.00"
+
+  # Phase 4 escrow inputs (D-01) — caller-supplied PITI components.
+  # Caller enters monthly $ directly; ZIP / county-keyed % rates deferred to v2
+  # per CONTEXT.md Deferred Items "% rate-based PITI inputs". User reads the
+  # Loan Estimate (LE) for these values. Quantize via Decimal-string per
+  # CLAUDE.md money discipline.
+  escrow:
+    property_tax_monthly: "0.00"       # Decimal string; consumed by AFFD-04 PITI composition
+    insurance_monthly: "0.00"          # Decimal string; consumed by AFFD-04 PITI composition
+    hoa_monthly: "0.00"                # Decimal string; default "0.00" when no HOA
+
+  # Phase 4 VA-only inputs (D-15 optional; REQUIRED at request boundary when
+  # target_loan_type=="va" per RESEARCH Open Question #7).
+  # AffordabilityRequest's @model_validator(mode="after") raises ValidationError
+  # if target_loan_type=="va" and this block is absent.
+  #
+  # When using this template for a non-VA loan, DELETE this block (Pydantic
+  # extra="forbid" accepts the absence).
+  va:
+    region: "west"                     # Literal["northeast","midwest","south","west"] —
+                                       # consumed by lib.rules.va_residual_income.evaluate;
+                                       # produces the stable citation
+                                       # (see lib/rules/va_residual_income.py L115 for format)
+                                       # per Phase 2 D-11 (DO NOT format-drift; ROADMAP SC-3
+                                       # uses the WEST family-4 form verbatim).
+    family_size: 4                     # int (>=1; sizes >5 add per_extra_member_increment
+                                       # per data/reference/va-residual-income.yml)
+    actual_residual_income: "0.00"     # Decimal string; current household residual income
+                                       # to compare against the VA M26-7 table minimum.
+                                       # Below the minimum → blocked_by uses the
+                                       # VA-RESIDUAL-{REGION}-FAMILY-{N} citation from the
+                                       # predicate.
