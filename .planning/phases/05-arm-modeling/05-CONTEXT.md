@@ -193,13 +193,16 @@ Build `lib/arm.py` — the ARM (adjustable-rate mortgage) modeling layer composi
 
 ### `references/arm-mechanics.md` (ARM-09)
 
-- **D-08: Lock the convention with explicit Selling Guide citations.** `references/arm-mechanics.md` MUST include:
-  1. **Reset month convention** (locked: rate change applies at START of month 61 for 5/1; month 85 for 7/1; month 121 for 10/1; month 61 for 5/6 with second reset at month 67) — cite Freddie Mac Single-Family Selling Guide Section on ARM mechanics + Fannie Mae Selling Guide Section B5-3.5-01 (ARM Loan Eligibility) for cross-reference
-  2. **Cap precedence** (initial_cap at first reset; periodic_cap at every subsequent reset; lifetime_cap measured against note_rate) — cite Freddie/Fannie Selling Guides
-  3. **Floor algebra** (effective_floor = max(margin, floor_rate); floor_rate is REQUIRED in this engine — no implicit margin fallback) — cite Freddie/Fannie Selling Guides
+- **D-08 [REVISED 2026-04-30]: Lock the convention with explicit Selling Guide citations.** `references/arm-mechanics.md` MUST include:
+  1. **Reset month convention** (locked: rate change applies at START of month 61 for 5/1; month 85 for 7/1; month 121 for 10/1; month 61 for 5/6 with second reset at month 67) — cite **Fannie Mae Selling Guide §B2-1.4-02 "Adjustable-Rate Mortgages (ARMs)"** (https://selling-guide.fanniemae.com/sel/b2-1.4-02/adjustable-rate-mortgages-arms, last updated 2025-12-10) + **Freddie Mac Single-Family Seller/Servicer Guide §6302.7(b)** + the **Freddie SOFR-Indexed ARMs product page** (https://sf.freddiemac.com/working-with-us/origination-underwriting/mortgage-products/sofr-indexed-arms) for cross-reference
+  2. **Cap precedence** (initial_cap at first reset; periodic_cap at every subsequent reset; lifetime_cap measured against note_rate) — cite Fannie B2-1.4-02 + Freddie 6302.7(b)
+  3. **Floor algebra** (effective_floor = max(margin, floor_rate); floor_rate is REQUIRED in this engine — no implicit margin fallback) — cite Fannie B2-1.4-02 + Freddie 6302.7(b)
   4. **Quantization** (rate quantize at 6 decimal places per Phase 4 D-09 `_quantize_rate`)
   5. **Negative amortization OUT of scope** (Phase 5 supports only fully-amortizing ARMs; Option ARM / payment-cap products deferred to v2)
   6. **`index_series_id` semantics** (metadata only in Phase 5; Phase 12 maps to FRED MCP series IDs)
+  7. **Teaser-ARM lifetime cap base — engine choice, not regulator-mandated.** D-02 measures the lifetime ceiling against `arm_terms.note_rate` (with `note_rate=None` collapsing to `loan.annual_rate`). CFPB §1951 (https://www.consumerfinance.gov/ask-cfpb/what-are-rate-caps-with-an-adjustable-rate-mortgage-arm-and-how-do-they-work-en-1951/) describes the lifetime cap as measured "from the initial rate" — for teaser-rate ARMs (where `loan.annual_rate < note_rate`), this engine deliberately uses `note_rate` as the lifetime base because that matches industry practice for teaser products. Document this as an explicit engine choice, not silent.
+
+  > **REVISION NOTE (2026-04-30, plan-phase research finding):** Original D-08 cited "Fannie Mae §B5-3.5-01" — that section returns 404. Verified correct location is §B2-1.4-02 (last updated 2025-12-10). Original cited "Freddie §4404" — that section is stale; modern equivalent is §6302.7(b) plus the SOFR-Indexed ARMs product page. Item 7 (CFPB-vs-engine teaser-ARM choice) added as researcher landmine LM-3 — disclosed as engine choice rather than left silent.
 
   The file lives at `<repo>/references/arm-mechanics.md` for Phase 5 (parallel to `<repo>/data/reference/*.yml`). Phase 10 either copies or symlinks it into `.claude/skills/mortgage-ops/references/arm-mechanics.md` (Phase 10 picks).
 
@@ -207,7 +210,9 @@ Build `lib/arm.py` — the ARM (adjustable-rate mortgage) modeling layer composi
 
 ### Test oracle strategy (ARM-06, ARM-07)
 
-- **D-04: MGIC capture-as-fixture + hand-calc per Freddie Selling Guide CROSS-VALIDATION.** Required fixture set in `tests/fixtures/arm/`:
+- **D-04 [REVISED 2026-04-30]: Bankrate + Vertex42 + AmericU capture-as-fixture + hand-calc per Selling Guide CROSS-VALIDATION.** Required fixture set in `tests/fixtures/arm/`:
+
+  > **REVISION NOTE (2026-04-30, plan-phase research finding):** Original D-04 cited MGIC's ARM calculator as the capture-as-fixture oracle. Direct verification (https://www.mgic.com/tools/consumer-calculators) confirmed MGIC publishes only 5 consumer calculators — none for ARMs. D-04 is REPLACED with a three-source oracle (one ground-truth source per product family) — see "Capture-as-oracle" subsection below.
 
   Hand-calculated (computed by Decimal arithmetic per Selling Guide formula, with citation comments):
   - `arm_5_1_payment_jump_at_61.json` — primary 5/1 ARM, asserts `payments[59].rate_in_effect == initial_rate`, `payments[59].payment == initial_pmt`, `payments[60].rate_in_effect == new_rate`, `payments[60].payment == new_pmt`. PRIMARY ROADMAP SC-2 fixture.
@@ -222,16 +227,30 @@ Build `lib/arm.py` — the ARM (adjustable-rate mortgage) modeling layer composi
   - `arm_continuous_period_numbering.json` — asserts `payments[i].period == i + 1` for all i; asserts `payments[-1].period == loan.term_months`; asserts `payments[-1].balance == Decimal("0.00")` (final epoch terminates correctly per Phase 3 D-09).
   - `arm_index_path_overrides.json` — supplies `index_path` with two overrides + `assumed_index_rate` fallback; verifies override-wins at exact reset trigger periods.
 
-  MGIC capture-as-oracle (ground-truth from MGIC ARM calculator at https://www.mgic.com/tools/calculators):
-  - `tests/fixtures/arm/oracle/mgic_5_1_capture_2026.pdf` — actual MGIC tool screenshot/PDF for one 5/1 ARM scenario.
-  - `tests/fixtures/arm/oracle/mgic_5_1_capture_2026.json` — JSON transcription of the MGIC scenario inputs + expected per-period rate/payment rows.
-  - One additional MGIC capture for a 7/1 or 10/1 product (planner picks).
-  - Test asserts: hand-calc per Selling Guide formula AND MGIC tool output AGREE EXACTLY (Decimal equality on `rate_in_effect` and `payment` for each transcribed row). Disagreement = bug in either our engine or our reading of MGIC's tool — surfaces as a test failure with both sides logged.
-  - Annual re-capture cadence (parallel to FFIEC for Phase 7 APR): if MGIC changes their tool, re-capture and re-validate.
+  Capture-as-oracle (three-source ground-truth, one per product family — replaces MGIC after 2026-04-30 verification):
 
-  Reason: hand-calc gives us mathematical correctness against the regulatory citation; MGIC capture gives us "borrower-facing UI matches engine" attestation. Both must agree — that's the credibility anchor for the whole phase.
+  **Primary oracle — Bankrate ARM Calculator** (https://www.bankrate.com/mortgages/adjustable-rate-mortgage-calculator/) — supports 3/1, 5/1, 7/1, 10/1. Produces per-period payment table. Used for 5/1, 7/1, 10/1 cross-validation.
+  - `tests/fixtures/arm/oracle/bankrate_5_1_capture_2026.pdf` — browser-print PDF of the Bankrate output for one 5/1 ARM scenario (committed artifact).
+  - `tests/fixtures/arm/oracle/bankrate_5_1_capture_2026.json` — JSON transcription (inputs + expected per-period rate/payment rows).
+  - `tests/fixtures/arm/oracle/bankrate_7_1_capture_2026.pdf` + `.json` — same shape, 7/1 ARM.
+  - `tests/fixtures/arm/oracle/bankrate_10_1_capture_2026.pdf` + `.json` — same shape, 10/1 ARM.
 
-- **D-09: Exact Decimal equality, never `assertAlmostEqual`.** All money fields in fixture `expected` blocks are quoted Decimal strings. Compare using `==` against `Decimal("...")` parsed values. Same discipline as Phase 1+3+4. The only tolerance allowed is for documented hand-calc-vs-MGIC discrepancies — and those should ZERO out (any non-zero discrepancy is a bug to investigate, not to assert away).
+  **Secondary oracle — Vertex42 Excel ARM Calculator** (https://www.vertex42.com/ExcelTemplates/arm-calculator.html) — transparent Excel formulas. Used as the deterministic "open-source-formula" cross-check against Bankrate's closed tool.
+  - `tests/fixtures/arm/oracle/vertex42_5_1_capture_2026.pdf` — print-to-PDF of the populated Excel sheet for the same 5/1 scenario as the Bankrate capture (committed artifact).
+  - `tests/fixtures/arm/oracle/vertex42_5_1_capture_2026.json` — JSON transcription.
+  - At least ONE other product (7/1 or 10/1) cross-captured via Vertex42 — planner picks.
+
+  **5/6 oracle — AmericU 5/6 SOFR ARM Disclosure** (https://www.americu.com/wp-content/uploads/2022/06/5_6-SOFR-ARM-Program-Disclosure-2_1_5-CAPS.pdf) — lender-published worked example with 2/1/5 caps. Bankrate does not support 5/6; this is the only credible 5/6 ground-truth source.
+  - `tests/fixtures/arm/oracle/americu_5_6_disclosure_2022.pdf` — committed PDF of the disclosure (already public lender artifact; no expiration).
+  - `tests/fixtures/arm/oracle/americu_5_6_disclosure.json` — JSON transcription of the disclosure's worked example (inputs + expected reset rates + expected payments at month 61, 67, 73).
+
+  Test asserts: hand-calc per Selling Guide formula AND tool output AGREE EXACTLY (Decimal equality on `rate_in_effect` and `payment` for each transcribed row). Disagreement = bug in either our engine or our reading of the tool — surfaces as a test failure with both sides logged.
+
+  **Annual re-capture cadence:** Bankrate + Vertex42 captures re-validated annually (parallel to FFIEC for Phase 7 APR). AmericU PDF is a frozen 2022 lender disclosure — no re-capture cycle, but re-validate annually that the URL still resolves; if the disclosure is withdrawn, fall back to a different lender's 5/6 SOFR disclosure (planner Phase 8+ concern).
+
+  Reason: hand-calc gives us mathematical correctness against the regulatory citation; the three captured oracles give us "industry-tool-output matches engine" attestation across all four product families (5/1, 7/1, 10/1, 5/6). Bankrate covers the most common products; Vertex42 provides a transparent-formula cross-check; AmericU's lender disclosure covers 5/6 SOFR which has no consumer-calculator equivalent. All must agree — that's the credibility anchor for the whole phase.
+
+- **D-09: Exact Decimal equality, never `assertAlmostEqual`.** All money fields in fixture `expected` blocks are quoted Decimal strings. Compare using `==` against `Decimal("...")` parsed values. Same discipline as Phase 1+3+4. The only tolerance allowed is for documented hand-calc-vs-oracle discrepancies (Bankrate/Vertex42/AmericU) — and those should ZERO out (any non-zero discrepancy is a bug to investigate, not to assert away).
 
 - **D-10: Citation-coverage meta-test.** Every `applied_cap` Literal value (`"initial"`, `"periodic"`, `"lifetime"`, `"floor"`, `"none"`) MUST be exercised by at least one fixture. `tests/test_arm.py::test_citation_coverage` asserts this (mirrors Phase 2 RUL-12/13 + Phase 4 D-17 inheritance). Catches "we added a new cap kind but never tested it" drift.
 
@@ -311,9 +330,13 @@ Build `lib/arm.py` — the ARM (adjustable-rate mortgage) modeling layer composi
 
 ### External Sources (regulatory + tool oracles)
 
-- https://selling-guide.fanniemae.com/ — Fannie Mae Single-Family Selling Guide §B5-3.5-01 (ARM Loan Eligibility); §B5-3.5-02 (ARM Loan Disclosures); §B5-3.5-03 (ARM Loan Re-Underwriting). Citation source for D-02 reset formula, D-08 reference doc, D-04 oracle hand-calc.
-- https://guide.freddiemac.com/ — Freddie Mac Single-Family Seller/Servicer Guide §4404 (ARM Mortgages); §4404.7 (Lookback periods + reset cadence). Citation source for D-02 reset formula, D-08 reference doc.
-- https://www.mgic.com/tools/calculators — MGIC's public ARM calculator. Capture-as-fixture oracle source for D-04. Annual re-capture cadence (parallel to FFIEC for Phase 7 APR).
+- https://selling-guide.fanniemae.com/sel/b2-1.4-02/adjustable-rate-mortgages-arms — Fannie Mae Single-Family Selling Guide §B2-1.4-02 "Adjustable-Rate Mortgages (ARMs)" (last updated 2025-12-10). Citation source for D-02 reset formula, D-08 reference doc, D-04 oracle hand-calc.
+- https://guide.freddiemac.com/ — Freddie Mac Single-Family Seller/Servicer Guide §6302.7(b) (ARM mechanics — modern equivalent of the legacy §4404). Citation source for D-02 reset formula, D-08 reference doc.
+- https://sf.freddiemac.com/working-with-us/origination-underwriting/mortgage-products/sofr-indexed-arms — Freddie Mac SOFR-Indexed ARMs product page. Cross-reference for SOFR-based 5/6 ARMs (D-15).
+- https://www.bankrate.com/mortgages/adjustable-rate-mortgage-calculator/ — Bankrate ARM Calculator (3/1, 5/1, 7/1, 10/1). Primary capture-as-fixture oracle for D-04 (5/1, 7/1, 10/1 products). Annual re-capture cadence.
+- https://www.vertex42.com/ExcelTemplates/arm-calculator.html — Vertex42 ARM Calculator (Excel, transparent formulas). Secondary oracle for D-04 cross-validation.
+- https://www.americu.com/wp-content/uploads/2022/06/5_6-SOFR-ARM-Program-Disclosure-2_1_5-CAPS.pdf — AmericU 5/6 SOFR ARM Disclosure (2/1/5 caps). Lender-published worked example; only credible 5/6 ARM ground-truth oracle for D-04.
+- https://www.consumerfinance.gov/ask-cfpb/what-are-rate-caps-with-an-adjustable-rate-mortgage-arm-and-how-do-they-work-en-1951/ — CFPB §1951 ARM rate caps explainer. Cited in D-08 item 7 (teaser-ARM lifetime cap base — engine choice vs CFPB consumer convention).
 - https://www.cfpb.gov/owning-a-home/loan-options/adjustable-rate-mortgage/ — CFPB ARM consumer disclosure (background reading; not load-bearing for engine math).
 - https://numpy.org/numpy-financial/latest/ — `npf.pmt` API docs (called per epoch via `lib.amortize.build_schedule`). Phase 3 STACK.md already cites; Phase 5 inherits.
 - https://github.com/numpy/numpy-financial/issues/130 — pmt fv-sign bug (Phase 3 D-19 / Phase 4 D-08 reinforced; Phase 5 inherits — `build_schedule` always passes `fv=0`).
