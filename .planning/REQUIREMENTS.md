@@ -55,7 +55,7 @@ User selected "all" scope; everything below is in v1.
 - [x] **AMRT-03**: Schedule generator handles biweekly payment frequency (`relativedelta(weeks=2)`)
 - [x] **AMRT-04**: Schedule generator handles arbitrary extra principal payments (single, recurring, or per-period)
 - [x] **AMRT-05**: Final payment cleanup ensures balance reaches exactly $0.00 (no float drift)
-- [ ] **AMRT-06**: `scripts/amortize.py` provides JSON-in / JSON-out CLI for skill use
+- [x] **AMRT-06**: `scripts/amortize.py` provides JSON-in / JSON-out CLI for skill use
 - [ ] **AMRT-07**: Tests assert `sum(principal_payments) == original_principal` exactly
 - [ ] **AMRT-08**: Tests pass against all four golden fixtures (Wikipedia, CFPB LE, computed $400k, computed $200k/15yr)
 
@@ -248,7 +248,7 @@ Mapped 2026-04-26 by gsd-roadmapper. Every v1 requirement is assigned to exactly
 | AMRT-03 | Phase 3 | Done (03-02) |
 | AMRT-04 | Phase 3 | Done (03-02) |
 | AMRT-05 | Phase 3 | Done (03-02) |
-| AMRT-06 | Phase 3 | Pending |
+| AMRT-06 | Phase 3 | Done (03-03) |
 | AMRT-07 | Phase 3 | Pending |
 | AMRT-08 | Phase 3 | Pending |
 | AFFD-01 | Phase 4 | Pending |

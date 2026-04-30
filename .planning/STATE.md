@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 03 plan 02 complete — lib/amortize.py engine shipped (numpy-financial wrapper, fixed + biweekly true/half-monthly + extra-principal); 4 golden oracles parity-match exactly; biweekly-true accelerates to 628 periods on 200k/6.5/30; 259/259 full suite green; ready for 03-03 CLI
-last_updated: "2026-04-30T05:30:00.000Z"
-last_activity: 2026-04-30 -- 03-02 complete (commits 1abdffa + 7d9c931 + 071f6dc)
+stopped_at: Phase 03 plan 03 complete — scripts/amortize.py CLI shipped (argparse + lazy-import + AmortizeRequest.model_validate_json + JSON-float pre-validation gate); D-18 structural lazy-import check passes; all 5 smoke acceptance commands produce expected outputs; 259/259 full suite green; ready for 03-04 (test surface + golden-oracle parity)
+last_updated: "2026-04-30T05:42:00.000Z"
+last_activity: 2026-04-30 -- 03-03 complete (commit 539aebf)
 progress:
   total_phases: 12
   completed_phases: 2
   total_plans: 17
-  completed_plans: 15
-  percent: 88
+  completed_plans: 16
+  percent: 94
 ---
 
 # Project State
@@ -26,26 +26,26 @@ See: .planning/PROJECT.md (updated 2026-04-26)
 ## Current Position
 
 Phase: 03 (core-amortization) — EXECUTING
-Plan: 3 of 4 (03-01 + 03-02 complete; 03-03 next)
+Plan: 4 of 4 (03-01 + 03-02 + 03-03 complete; 03-04 next — test surface)
 Status: Executing Phase 03
-Last activity: 2026-04-30 -- 03-02 complete (lib/amortize.py engine shipped; AMRT-01..05 closed)
+Last activity: 2026-04-30 -- 03-03 complete (scripts/amortize.py CLI shipped; AMRT-06 closed)
 
-Progress: [██░░░░░░░░] 17% (2/12 phases complete; Phase 3 at 2/4 plans)
+Progress: [██░░░░░░░░] 17% (2/12 phases complete; Phase 3 at 3/4 plans)
 
 ### Resume instructions
 
-Plan 03-03 (scripts/amortize.py CLI) is next. Recommended path:
+Plan 03-04 (tests/test_amortize.py + 7 fixtures + conftest extension) is next. Recommended path:
 
 1. `/clear`
-2. `/gsd-execute-plan 3 3` — wrap the engine in the JSON-in/JSON-out CLI surface (argparse + lazy-import + AmortizeRequest boundary)
+2. `/gsd-execute-plan 3 4` — pin AMRT-07/08 invariants + structural + biweekly + extra-principal + CLI subprocess + D-12/D-13 month-end + D-18 structural-lazy-import regression test
 
-Resume file: `.planning/phases/03-core-amortization/03-03-PLAN.md`
+Resume file: `.planning/phases/03-core-amortization/03-04-PLAN.md`
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 14
+- Total plans completed: 16
 - Phase 1 wall time: ~1.5 hours (orchestrated, sequential)
 - Phase 2 plan 01 wall time: ~35 min (sequential, single executor)
 - Phase 2 plan 02 wall time: ~7 min (sequential, single executor — fastest plan to date thanks to 02-01 foundation pattern)
@@ -56,6 +56,7 @@ Resume file: `.planning/phases/03-core-amortization/03-03-PLAN.md`
 - Phase 2 plan 07 wall time: ~4 min (sequential, single executor — audit-only gate; 3 new test files [mutation harness + YAML count audit + cross-predicate smoke] + 0 production code changes; 14 new tests; 1 Rule-1 deviation [removed inapplicable ruff RUF100 noqa: BLE001 from plan spec])
 - Phase 3 plan 01 wall time: ~4 min (sequential, single executor — model-only data-shape lock; 0 created + 2 modified; +5 new tests + 1 updated; 3 Rule-3 ruff-format/UP037 deviations [all formatting, no semantic changes]; new project velocity floor tied with 02-07)
 - Phase 3 plan 02 wall time: ~9 min (sequential, single executor — engine plan with high logical complexity but zero new test files; 1 new file (lib/amortize.py 460 lines); 0 modified; 1 Rule-1 deviation [extra-principal-induced negative-balance bug found via Task 3 smokes — formulaic-overshoot detection added BEFORE principal computation]; 4 Rule-3 deviations [npf.irr literal in docstring conflicting with negative grep gate; ruff F401/RUF100 on initial date import; ruff RUF100 on # noqa: S101; ruff format auto-wrap on each commit]; all 4 golden oracles parity-match exactly; biweekly-true accelerates to 628 periods exactly per RESEARCH §3.1 prediction)
+- Phase 3 plan 03 wall time: ~6 min (sequential, single executor — single-task plan: scripts/amortize.py CLI; 1 new file (scripts/amortize.py 187 lines); 0 modified; 3 deviations [Rule-3: ruff I001 reordered the lazy-imports automatically; Rule-1: script invocation `python scripts/amortize.py` failed with ModuleNotFoundError because Python adds `scripts/` not cwd to sys.path — fixed by injecting project root onto sys.path inside main() AFTER argparse.parse_args(); Rule-2: Pydantic v2 model_validate_json permissively coerces JSON floats into Decimal — added pre-validation `_find_json_float_loc` walker that emits Pydantic-shaped `decimal_type` error envelope to enforce the FND-01/D-19 money-string contract that the plan author assumed Pydantic would handle natively]; D-18 structural lazy-import check exits 0 with `D-18 OK`; all 5 smoke acceptance commands produce expected outputs; AMRT-06 closed)
 
 **By Phase:**
 
@@ -63,7 +64,7 @@ Resume file: `.planning/phases/03-core-amortization/03-03-PLAN.md`
 |-------|-------|--------|
 | 1     | 6/6   | Complete (PASS-WITH-CAVEATS) |
 | 2     | 7/7   | Complete — 02-01..02-07 green; 11 predicates + 10 reference YAMLs + citation-coverage + schema meta-tests + mutation-harness audit ratification; 224/224 tests pass; ready for Phase 4 affordability consumers |
-| 3     | 2/4   | Executing — 03-01 + 03-02 green (model contract + lib/amortize.py engine; numpy-financial wrapper with three frequency paths; 4 golden oracles parity-match exactly; biweekly-true 628 periods; 259/259 full suite); 03-03 (scripts/amortize.py CLI) is next |
+| 3     | 3/4   | Executing — 03-01 + 03-02 + 03-03 green (model contract + lib/amortize.py engine + scripts/amortize.py CLI; argparse + lazy-import + AmortizeRequest.model_validate_json + JSON-float pre-validation gate; D-18 structural lazy-import check exits 0; 5/5 smoke acceptance commands produce expected outputs; 259/259 full suite); 03-04 (tests/test_amortize.py + 7 fixtures) is next |
 
 **Plan-level metrics:**
 
@@ -78,11 +79,12 @@ Resume file: `.planning/phases/03-core-amortization/03-03-PLAN.md`
 | 02-07 | 4 min | 4 + 1 checkpoint (auto-approved) | 3 created + 0 modified | +14 net (7 mutation harness + 2 YAML count audit + 5 cross-predicate smoke; zero production code touched; audit-only gate) | green |
 | 03-01 | 4 min | 2 | 0 created + 2 modified | +5 new (D-14 cumulative-totals positive + default; D-15 mismatch raises + empty-payments skip; D-10 default) + 1 updated (test_schedule_aggregates_loan_and_payments now satisfies D-15); 19 in test_models.py (was 14); 259/259 full suite | green |
 | 03-02 | 9 min | 3 | 1 created (lib/amortize.py 460 lines) + 0 modified | 0 new tests this plan (Plan 03-04 brings test surface); 259/259 full suite (no regression) | green |
+| 03-03 | 6 min | 1 | 1 created (scripts/amortize.py 187 lines) + 0 modified | 0 new tests this plan (Plan 03-04 brings the CLI subprocess tests); 259/259 full suite (no regression) | green |
 
 **Recent Trend:**
 
-- Last 15 plans: 01-01..01-06 + 02-01..02-07 + 03-01 + 03-02 (all green; 259/259 tests pass)
-- Trend: clean — no node repairs, no rework cycles. 03-02 took 9 minutes (above the 4-min floor due to engine complexity: ~125-line locked-decisions docstring + three private build helpers + Rule-1 bug discovered via smoke testing the formulaic-overshoot edge case). Plan 03-04 will pin every behavior exhaustively. AMRT-01 requirement now satisfied (lib/amortize.py wraps numpy-financial PMT/IPMT/PPMT and all four golden oracles parity-match exactly); AMRT-02..05 also satisfied (fixed-rate, biweekly true/half-monthly, extra-principal, final-payment cleanup); AMRT-06..08 still pending — 03-03 closes AMRT-06 (CLI), 03-04 closes AMRT-07 (invariant) + AMRT-08 (golden oracle parity in test surface).
+- Last 16 plans: 01-01..01-06 + 02-01..02-07 + 03-01 + 03-02 + 03-03 (all green; 259/259 tests pass)
+- Trend: clean — no node repairs, no rework cycles. 03-03 took 6 minutes (single-task plan with 3 deviations absorbed inline: Rule-3 ruff I001, Rule-1 script-mode sys.path bug discovered via smoke 3, Rule-2 Pydantic-v2-JSON-float-coercion behavior discovered via smoke 5; the script-mode bug + the Pydantic JSON-float behavior were both surprises the plan author didn't anticipate but the smoke-acceptance criteria caught them). AMRT-01..05 satisfied (lib/amortize.py engine); AMRT-06 satisfied (scripts/amortize.py CLI); AMRT-07 + AMRT-08 still pending — 03-04 closes both via the test surface (AMRT-07 invariant + AMRT-08 golden-oracle parity in pytest, plus 7 fixtures + conftest extension + D-12/D-13 month-end + CLI subprocess tests + D-18 structural-lazy-import regression).
 
 *Updated after each plan completion*
 
@@ -154,6 +156,10 @@ Recent decisions affecting current work:
 - 03-02: Module-docstring locked-decision blocks (D-01..D-15) on `lib/amortize.py` mirror the `lib/rules/atr_qm.py` template (Phase 2 idiom): "LOCKED DECISION - D-XX (one-line summary; per CONTEXT.md):" followed by 2-5 lines of body. ~125 lines of docstring carrying the entire phase 3 decision contract is a load-bearing artifact; future refactors must preserve every D-XX block. Code-side `# D-XX:` inline citations are minimum 1 per decision, anchored on the line that implements the rule.
 - 03-02: When plan acceptance criteria includes BOTH a positive grep gate (e.g. `issues/131` cited in docstring) AND a negative grep gate referencing the same library function (e.g. `! grep -E 'npf\.irr'`), the planner-author may have written conflicting requirements. Resolution: rewrite the citation to use the project name + descriptive function name (e.g. "numpy-financial's irr function") instead of the literal `npf.irr`, satisfying both the positive citation gate and the negative call-detection gate. Future plan-authors should grep their own acceptance criteria for negative gates that reject literal strings appearing elsewhere in the plan.
 - 03-02: Pre-commit ruff format auto-wrap is a recurring source of grep-gate breakage. Long inline `Decimal("0.00")` expressions inside `any(...)` generators and long inline comments after `field: type = value` assignments both get reformatted across multiple lines, which can break single-line grep gates. Mitigations available: (a) write target expressions short enough to fit on one line at 100-char limit; (b) hoist long comments to the line above; (c) when neither is feasible, document as a Rule-3 deviation in the plan SUMMARY (the substance is preserved; only the line shape changes). 03-02 had four such instances absorbed without semantic impact.
+- 03-03: Pydantic v2 `model_validate_json` permissively accepts JSON-numbers-with-decimal-points for Decimal fields even with `strict=True` (documented Pydantic behavior — JSON has no distinct decimal type, so Pydantic coerces both JSON numbers and JSON strings into Decimal for `condecimal`-typed fields). The Phase-1 test `tests/test_models.py::test_loan_rejects_float_principal` verifies the **dict-validation** path (`Loan(principal=400000.0)`) which DOES reject. The CLI hits the **JSON-validation** path which does NOT. Mitigation: `scripts/amortize.py::_find_json_float_loc` pre-validation gate walks `json.loads(raw, parse_float=Decimal)` to mark JSON-floats and rejects them with a Pydantic-shaped `decimal_type` error envelope BEFORE handing to `AmortizeRequest.model_validate_json`. Pattern reusable for any future CLI consuming JSON Money/Rate inputs. The gate goes in the CLI (boundary), not in the library — library callers (Phase 5 ARM, Phase 8 stress) construct `AmortizeRequest` from typed Decimals and never see JSON.
+- 03-03: Python script-mode invocation (`python scripts/amortize.py ...`) puts the script's parent directory on `sys.path`, NOT the project root, so `from lib.amortize import ...` fails with `ModuleNotFoundError`. Mitigation: inject project root onto `sys.path[0]` inside `main()` AFTER `argparse.parse_args()` but BEFORE the lazy-import — preserves D-18 fast --help (the injection is microseconds and runs only on the actual-execution path) AND makes `subprocess.run([sys.executable, str(SCRIPT_PATH), ...])` work without setting `PYTHONPATH=.` in the subprocess env. Pattern reusable for any future runnable script under `scripts/`. The check `if _project_root not in sys.path` is idempotent so multiple invocations / re-imports don't bloat `sys.path`.
+- 03-03: Plan-author "Pydantic v2 strict-mode rejects float-in-money" assumption (locked into CONTEXT.md D-19 + RESEARCH §7) was a factual error about Pydantic's actual JSON-validation behavior. Resolution: the **intent** of D-19 (strict money-string contract at the boundary) is preserved, but the **enforcement layer** shifted from "Pydantic config" to "script-level pre-validation gate". Future plan-authors writing CLIs that consume JSON should verify Pydantic v2 actual behavior on JSON-number-vs-string for their specific field types before assuming `strict=True` will reject the wrong type. Disambiguator: dict-validation path is strict (rejects float); JSON-validation path is permissive (coerces JSON numbers to Decimal). The plan/CONTEXT/RESEARCH wording stays as-is since it correctly identifies the boundary as the enforcement point — only the implementation detail (pre-validation walker vs Pydantic-config flag) differs.
+- 03-03: Single-task plan (only 1 task) is a legitimate plan shape when the unit of work is a single coherent file with strong external contracts. 03-03's task pulled in 3 inline deviations that an over-decomposed plan would have spread across multiple commits — the single-task structure makes the deviation set legible in one SUMMARY rather than three. Reusable for future single-file CLI / single-module plans.
 
 ### Pending Todos
 
@@ -179,6 +185,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-04-30T05:30:00.000Z
-Stopped at: Phase 03 plan 02 complete — lib/amortize.py engine shipped (numpy-financial wrapper, fixed + biweekly true/half-monthly + extra-principal); 4 golden oracles parity-match exactly; biweekly-true accelerates to 628 periods on 200k/6.5/30; 259/259 full suite green; ready for plan 03-03 (scripts/amortize.py CLI)
-Resume file: .planning/phases/03-core-amortization/03-03-PLAN.md
+Last session: 2026-04-30T05:42:00.000Z
+Stopped at: Phase 03 plan 03 complete — scripts/amortize.py CLI shipped (argparse + lazy-import + AmortizeRequest.model_validate_json + JSON-float pre-validation gate); D-18 structural lazy-import check exits 0; 5/5 smoke acceptance commands produce expected outputs (happy path / no-input / nonexistent / float-in-money / D-02 violation); 259/259 full suite green; ready for plan 03-04 (test surface + 7 fixtures + conftest extension)
+Resume file: .planning/phases/03-core-amortization/03-04-PLAN.md

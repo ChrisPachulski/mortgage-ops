@@ -72,7 +72,7 @@ User selected **fine** (8-12 phases). This roadmap is **12 phases** — each cal
 **Plans:** 4 plans
 - [x] 03-01-PLAN.md — Extend lib/models.py (Payment cumulative totals + Schedule final_payment_adjusted + D-15 validator) — AMRT-01 [completed 2026-04-30, commits 9821d77 + 81beaca; 5 new + 1 updated tests; 19 in test_models.py; 259/259 full suite green]
 - [x] 03-02-PLAN.md — Build lib/amortize.py engine (numpy-financial wrapper + fixed-rate + biweekly true/half-monthly + extra-principal + D-09 cleanup) — AMRT-01..05 [completed 2026-04-30, commits 1abdffa + 7d9c931 + 071f6dc; lib/amortize.py 460 lines; all 4 oracles parity-match exactly; biweekly-true accelerates to 628 periods; 259/259 full suite green]
-- [ ] 03-03-PLAN.md — Build scripts/amortize.py CLI (argparse + lazy-import + AmortizeRequest boundary) — AMRT-06
+- [x] 03-03-PLAN.md — Build scripts/amortize.py CLI (argparse + lazy-import + AmortizeRequest boundary) — AMRT-06 [completed 2026-04-30, commit 539aebf; scripts/amortize.py 187 lines; D-18 structural lazy-import check exits 0 with "D-18 OK"; all 5 smoke acceptance commands produce expected outputs (happy path / no-input / nonexistent / float-in-money / D-02 violation); 259/259 full suite green]
 - [ ] 03-04-PLAN.md — Build tests/test_amortize.py + 7 fixtures + conftest extension (AMRT-07/08 invariants + structural + biweekly + extra + CLI + D-12/D-13) — AMRT-01..08
 
 ### Phase 4: Affordability
