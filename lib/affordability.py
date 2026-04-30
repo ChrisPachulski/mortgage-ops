@@ -1,0 +1,539 @@
+"""Household-aware affordability composition (AFFD-01..09).
+
+Phase 4 is the FIRST consumer of the Phase 2 rule predicate library. It composes
+Phase 1 models (lib.models — Loan/Money/Rate), Phase 2 predicates (lib.rules.* —
+loan_type/conventional_pmi/fha_mip/va_residual_income/usda/atr_qm/fannie/freddie),
+and the Phase 3 amortization engine (lib.amortize.build_schedule → Schedule.monthly_pi)
+into the household-aware DTI/LTV/CLTV/PITI surface plus a one-shot reverse-affordability
+solver via numpy-financial's pv function.
+
+Architecture map (mirrors lib/amortize.py shape):
+  evaluate_forward(req)  — forward-mode DTI/LTV/CLTV/PITI + blockers (Plan 04-02 body)
+  evaluate_reverse(req)  — reverse-mode npf.pv solver + blockers (Plan 04-03 body)
+  Helper layer (Plans 04-02..04-04 ship these private functions):
+    _compute_dti, _compute_ltv, _compute_cltv, _compute_piti,
+    _classify_target_loan_type (cross-walk per RESEARCH Open Q#3),
+    _evaluate_blockers (precedence pipeline per D-11)
+
+This plan (04-01) ships ONLY the Pydantic v2 type contract + cross-walk constants
++ documented stubs for evaluate_forward / evaluate_reverse. Plans 04-02 / 04-03 /
+04-04 add bodies to these stubs (Phase 2 D-08 cross-plan stub idiom).
+
+LOCKED DECISION - D-01 (caller-supplied monthly $ for tax/insurance/HOA; per CONTEXT.md):
+  EscrowInputs carries property_tax_monthly, insurance_monthly, hoa_monthly as
+  Money (Decimal max_digits=14, decimal_places=2). No county-keyed % inferences in
+  v1 — caller enters monthly $ directly. PMI/MIP are NOT in this block (D-02
+  derives them from predicates and a caller-supplied monthly_pmi for conventional).
+
+LOCKED DECISION - D-02 (PMI/MIP from Phase 2 predicates; per CONTEXT.md + RESEARCH Open Q#1):
+  Conventional + LTV > 0.80: caller MUST supply monthly_pmi (Money) on the request
+  because lib.rules.conventional_pmi.status returns a TERMINATION enum, not a rate
+  (RESEARCH §A.2). VA / USDA / conventional <= 0.80 LTV: no monthly MI added.
+  FHA: derived from lib.rules.fha_mip.compute (returns annual_mip_pct as fractional
+  Decimal). Phase 4 enforces caller-supplied monthly_pmi via _validate_common.
+
+LOCKED DECISION - D-03 (UFMIP auto-financed into principal; per RESEARCH §"FHA UFMIP Financing Convention"):
+  When target_loan_type == "fha", the request's loan_amount is the BASE loan amount;
+  Plan 04-02 will compute MIPResult.ufmip and add it to the principal that flows into
+  lib.amortize.build_schedule (option (b) per CONTEXT.md D-03). Surfaced in the
+  AffordabilityResponse as financed_loan_amount when FHA. Documented in CLI --help
+  in Plan 04-05 to match the financed schedule.
+
+LOCKED DECISION - D-04 (property_value per-request, not in household.yml; per CONTEXT.md):
+  ForwardModeRequest.property_value is supplied per scenario; ReverseModeRequest
+  computes the implied property_value from down_payment + max_loan_amount. Household
+  carries household-stable facts only (income, debts, escrow, location).
+
+LOCKED DECISION - D-05 (single credit_score: int per applicant; min reduction; per CONTEXT.md):
+  Applicant.credit_score is the caller-supplied representative score (caller picks
+  mid-of-three or whatever). Plan 04-04 reduces via min(applicants[].credit_score)
+  for Fannie LLPA + Freddie eligibility lookups. Three-bureau dict modeling is OUT
+  of v1 scope.
+
+LOCKED DECISION - D-06 (income aggregation = sum across applicants; per CONTEXT.md):
+  total_gross_monthly_income = sum(applicant.gross_monthly_income for applicant in
+  applicants). No income-type modeling (W-2 vs self-employed vs 1099). v1 personal-
+  use scope.
+
+LOCKED DECISION - D-07 (single-applicant via len(applicants)==1; per CONTEXT.md):
+  No special-cased single-applicant code path. min(...) reduces to the single
+  applicant's score; sum(...) reduces to the single applicant's income.
+
+LOCKED DECISION - D-08 (one-shot npf.pv reverse with target_ltv_pct; per CONTEXT.md):
+  ReverseModeRequest pins LTV via target_ltv_pct. Plan 04-03's evaluate_reverse
+  algorithm: max_PITI = max_dti * income - monthly_debts; subtract escrow + MI;
+  max_PI = remainder; max_loan_amount = quantize_cents(-npf.pv(rate=annual_rate/12,
+  nper=term_months, pmt=-max_PI, fv=0)). NEVER iterate; one-shot solve.
+
+LOCKED DECISION - D-09 (round-trip closure within Decimal('0.0001'); per CONTEXT.md):
+  Reverse → forward parity (SC-2): feed evaluate_reverse output back through
+  evaluate_forward and assert dti_back <= max_dti + Decimal('0.0001'). Tolerance
+  applies ONLY to the rate value, not to dollar amounts (which compare with strict
+  Decimal equality per D-18).
+
+LOCKED DECISION - D-10 (reverse-mode JSON request shape verbatim; per CONTEXT.md):
+  ReverseModeRequest fields: mode='reverse', household, max_dti, down_payment,
+  target_loan_type, target_ltv_pct, term_months, annual_rate. Plus shared common
+  fields (apr/apor optional, monthly_pmi optional, junior_liens default empty).
+
+LOCKED DECISION - D-11 (blocked_by + warnings shape with precedence; per CONTEXT.md):
+  AffordabilityResponse.blocked_by: str | None — first hard-fail citation in fixed
+  precedence: (1) loan-type-classify (FHFA-LIMIT-* / HUD-LIMIT-*), (2) USDA-income
+  (when target_loan_type=='usda'; per RESEARCH Open Q#4), (3) LTV/CLTV ceiling,
+  (4) DTI cap, (5) ATR/QM, (6) VA-residual. Soft signals go to warnings: list[str].
+
+LOCKED DECISION - D-12 (max_dti caller-supplied, no defaults; per CONTEXT.md):
+  AffordabilityRequest.max_dti is Required (Rate). No per-loan-type default YAML
+  in v1; explicit choice every call (matches "fail loud" discipline). ROADMAP SC-2
+  example uses 0.43.
+
+LOCKED DECISION - D-13 (CLI mirrors Phase 3 D-17/18/19; per CONTEXT.md):
+  scripts/affordability.py uses --input <path> only (no stdin); lazy-imports
+  lib.affordability after argparse; emits 6-key Pydantic envelope on stderr per
+  Phase 3 D-19; pretty-prints JSON to stdout. Phase 10 relocates to
+  .claude/skills/mortgage-ops/scripts/ via SCRIPT_PATH single-constant edit.
+
+LOCKED DECISION - D-14 (mode discriminator; per CONTEXT.md):
+  AffordabilityRequest is a Pydantic v2 discriminated union via Field(discriminator=
+  "mode"). ForwardModeRequest carries loan_amount + property_value; ReverseModeRequest
+  carries down_payment + target_ltv_pct. Both extend a shared _CommonRequestFields
+  base (household, max_dti, target_loan_type, term_months, annual_rate, optional
+  apr/apor/monthly_pmi/endorsement_date_override/junior_liens).
+
+LOCKED DECISION - D-15 (FINAL household.example.yml with state_fips + county_fips; per RESEARCH Open Q#2):
+  Household.location is a LocationFIPS Pydantic model REQUIRING state_fips +
+  county_fips (2-digit + 3-digit regex-validated strings). county_name and state
+  are documentation-only display fields. Phase 4 constructs lib.rules.types.County
+  at evaluation time from these FIPS codes (TYPE_CHECKING import; County is not
+  on the request surface). config/household.example.yml ships as FINAL after
+  Plan 04-06 (D-15 + Plan 04-05 ship the schema; this plan ships the model that
+  validates it).
+
+LOCKED DECISION - D-16 (User-Layer pre-commit discipline preserved; per CONTEXT.md):
+  config/household.yml stays gitignored + protected by Phase 1's
+  scripts/hooks/block-user-layer.py. Phase 4 only modifies
+  config/household.example.yml — the hook's allowlist already permits *.example.yml.
+
+LOCKED DECISION - D-17 (hand-calc golden fixtures; per CONTEXT.md):
+  Plan 04-06 ships tests/fixtures/affordability/*.json with citation comments.
+  This plan ships only the model surface that those fixtures will exercise via
+  AffordabilityRequest.model_validate_json + model_dump_json.
+
+LOCKED DECISION - D-18 (exact Decimal equality; per CONTEXT.md):
+  All money fields in fixture expected blocks are quoted Decimal strings; tests
+  compare using == against Decimal(...) parsed values. The Decimal('0.0001')
+  tolerance in D-09 applies ONLY to the round-trip DTI rate, not to dollar amounts.
+  Money/Rate fields use lib.models aliases (condecimal max_digits=14,
+  decimal_places=2 for Money; max_digits=7, decimal_places=6 for Rate).
+
+Phase 2 predicate signature corrections (RESEARCH §"Phase 2 Predicate Signature Audit"):
+  - loan_type.classify(loan_amount, county, program=, unit_count=) — program kwarg
+    is REQUIRED (defaults to 'conventional'); CONTEXT.md D-11 step 1's positional
+    call shape is wrong. Plans 04-02/04-04 derive program from target_loan_type via
+    TARGET_LOAN_TYPE_TO_PROGRAM cross-walk below.
+  - conventional_pmi.status(loan, scheduled_balance, original_property_value,
+    is_high_risk=, months_elapsed=) — does NOT take ltv_pct. CONTEXT.md D-02's call
+    shape is wrong. Phase 4 affordability uses LTV_REQUEST_ELIGIBLE constant
+    directly (RESEARCH §A.2) instead of calling .status() because the predicate
+    returns a TERMINATION enum, not a "needs PMI" boolean and not a PMI rate.
+  - fha_mip.compute(loan, original_property_value, endorsement_date) — needs a
+    Loan object + property_value + date. CONTEXT.md D-02's signature is wrong.
+    Returns MIPResult.ufmip + annual_mip_pct (fractional Decimal); Plan 04-02
+    derives monthly_mip = quantize_cents((loan.principal * annual_mip_pct) /
+    Decimal('12')).
+
+Loan-type cross-walk (RESEARCH Open Question #3):
+  target_loan_type    accepted Phase 2 LoanType values     program=
+  conventional        {conforming, high_balance}            "conventional"
+  jumbo               {jumbo}                                "conventional"
+  fha                 {fha_standard, fha_high_balance}      "fha"
+  va                  {va_standard, va_high_balance}        "va"
+  usda                {usda}                                 "usda"
+Note jumbo → "conventional" because FHFA limits are the authority that
+distinguishes conforming from jumbo within the conventional bucket; USDA / FHA /
+VA use HUD/USDA/VA's own per-program limit tables.
+
+Conventional PMI rate sourcing (RESEARCH Open Question #1):
+  monthly_pmi is a caller-supplied Money | None field on AffordabilityRequest.
+  REQUIRED when target_loan_type=='conventional' AND origination LTV > 0.80
+  (LTV_REQUEST_ELIGIBLE per HPA 12 USC §4902). Module enforces via
+  _validate_common. data/reference/ has no pmi-rates.yml because conventional PMI
+  rate is bureau-specific (MGIC / Genworth / Radian etc. all differ); industry
+  rule-of-thumb is ~0.0050-0.0125 annualized depending on credit-score / LTV
+  bucket. Caller fetches their own quote and supplies the monthly $ amount.
+
+Stale-warning expected behavior (RESEARCH §"_loader.py and StaleReferenceWarning"):
+  data/reference/fha-mip-rates.yml (effective 2023-03-20) and
+  data/reference/va-residual-income.yml (effective 2023-04-07) BOTH currently fire
+  StaleReferenceWarning on every YAML load (effective dates > 12 months old).
+  Plan 04-02 + Plan 04-03 surface these via warnings.catch_warnings() into the
+  AffordabilityResponse.warnings list per D-11. NOT a bug — by design loud-by-
+  default per Phase 2 D-12.
+"""
+
+from __future__ import annotations
+
+from datetime import date  # noqa: TC003  # Pydantic resolves annotations at runtime
+from decimal import Decimal
+from typing import TYPE_CHECKING, Annotated, Any, Literal
+
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+# Suppression rationale (one-line per code):
+#   F401 — Loan is re-exported for Plans 04-02..04-04 (cross-plan import surface).
+#   TC001 — Money + Rate are Annotated[Decimal, Field(...)] aliases used as Pydantic
+#           field types; Pydantic resolves annotations at runtime so these MUST be
+#           runtime imports (mirrors lib/models.py L16 datetime.date convention).
+from lib.models import Loan, Money, Rate  # noqa: F401, TC001
+
+# Phase 2 predicate full-path imports per Phase 2 D-08 (one predicate per citation).
+# Wave 1 plans 04-02/04-03/04-04 use these heavily; this plan only imports the
+# types they need to validate the request surface.
+from lib.rules.conventional_pmi import LTV_REQUEST_ELIGIBLE  # Decimal("0.80") — RESEARCH §A.2
+from lib.rules.types import LoanType, Region  # noqa: TC001  # Pydantic resolves at runtime
+
+if TYPE_CHECKING:
+    # County is constructed at evaluation time (Plans 04-02/04-03/04-04), not
+    # request validation time; type-only import keeps the Plan 04-01 model surface
+    # decoupled from Phase 2 internals. Plans 04-02..04-04 promote this to a
+    # runtime import when their bodies need it.
+    from lib.rules.types import County  # noqa: F401
+
+
+# ---------------------------------------------------------------------------
+# Module-level cross-walk constants (RESEARCH Open Question #3)
+# ---------------------------------------------------------------------------
+
+TARGET_LOAN_TYPE_CROSSWALK: dict[str, frozenset[str]] = {
+    "conventional": frozenset({"conforming", "high_balance"}),
+    "jumbo": frozenset({"jumbo"}),
+    "fha": frozenset({"fha_standard", "fha_high_balance"}),
+    "va": frozenset({"va_standard", "va_high_balance"}),
+    "usda": frozenset({"usda"}),
+}
+"""Cross-walk: target_loan_type → set of accepted Phase 2 LoanType values.
+
+Used by Plan 04-04's _classify_target_loan_type to detect FHFA-LIMIT-* /
+HUD-LIMIT-* blockers when lib.rules.loan_type.classify returns a LoanType
+that's outside the requested target_loan_type's accepted set."""
+
+TARGET_LOAN_TYPE_TO_PROGRAM: dict[str, Literal["conventional", "fha", "va", "usda"]] = {
+    "conventional": "conventional",
+    "jumbo": "conventional",
+    "fha": "fha",
+    "va": "va",
+    "usda": "usda",
+}
+"""Cross-walk: target_loan_type → program kwarg passed to lib.rules.loan_type.classify
+(RESEARCH §A.1). Note jumbo → 'conventional' because FHFA limits are the
+authority that distinguishes conforming vs jumbo within the conventional
+bucket."""
+
+TargetLoanType = Literal["conventional", "fha", "va", "usda", "jumbo"]
+"""Caller-facing loan-type literal — distinct from the 8-value
+lib.rules.types.LoanType which is the predicate-side return type."""
+
+
+# ---------------------------------------------------------------------------
+# Leaf Pydantic models (D-01, D-05, D-06, D-15)
+# ---------------------------------------------------------------------------
+
+
+class LocationFIPS(BaseModel):
+    """Household location FIPS codes (RESEARCH Open Question #2; D-15 amendment).
+
+    state_fips + county_fips are REQUIRED for County construction in Phase 2
+    predicates. county_name and state are documentation-only display fields.
+    """
+
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
+    state_fips: str = Field(min_length=2, max_length=2, pattern=r"^\d{2}$")
+    county_fips: str = Field(min_length=3, max_length=3, pattern=r"^\d{3}$")
+    county_name: str = Field(min_length=1)
+    state: str = Field(min_length=2, max_length=2)
+    zip: str | None = None
+
+
+class Applicant(BaseModel):
+    """One applicant on the loan (D-05, D-06, D-07).
+
+    credit_score is the caller-supplied representative score (mid-of-3 if 3
+    scores; lower-of-2 if 2). Plan 04-04 picks min across applicants for Fannie
+    LLPA + Freddie eligibility lookups (D-05).
+    """
+
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
+    name: str = Field(min_length=1)
+    gross_monthly_income: Money
+    credit_score: int = Field(ge=300, le=850)
+
+
+class MonthlyDebts(BaseModel):
+    """Back-end DTI inputs (CONTEXT.md household.example.yml schema)."""
+
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
+    auto: Money = Decimal("0.00")
+    student_loans: Money = Decimal("0.00")
+    credit_cards: Money = Decimal("0.00")
+    other: Money = Decimal("0.00")
+
+
+class EscrowInputs(BaseModel):
+    """Caller-supplied PITI components (D-01).
+
+    property_tax_monthly + insurance_monthly are REQUIRED. hoa_monthly defaults
+    to Decimal('0.00') when no HOA. PMI/MIP are NOT in this block — they are
+    derived from predicates (D-02) or caller-supplied via the request's
+    monthly_pmi field for conventional > 80% LTV (RESEARCH Open Q#1).
+    """
+
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
+    property_tax_monthly: Money
+    insurance_monthly: Money
+    hoa_monthly: Money = Decimal("0.00")
+
+
+class VAInputs(BaseModel):
+    """VA-specific inputs (D-15 optional; required-by-validator when target_loan_type=='va').
+
+    region + family_size produce the stable citation
+    f'VA-RESIDUAL-{region.upper()}-FAMILY-{family_size}' via
+    lib.rules.va_residual_income.evaluate (Phase 2 D-11; DO NOT format-drift).
+    """
+
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
+    region: Region
+    family_size: int = Field(ge=1)
+    actual_residual_income: Money
+
+
+class Household(BaseModel):
+    """Household-stable facts (D-04: property_value is per-request, NOT here).
+
+    size is REQUIRED and represents the FULL household size including
+    non-applicant dependents (BLOCKER 2 fix per CLAUDE.md + CONTEXT.md). Drives
+    USDA income-limit lookups via lib.rules.usda.evaluate (RESEARCH §lib/rules/
+    usda.py L198-211). Fail-loud, no inference from len(applicants) — for a
+    2-applicant + 3-children household, size=5 even though len(applicants)==2.
+    """
+
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
+    location: LocationFIPS
+    applicants: list[Applicant] = Field(min_length=1)
+    size: int = Field(
+        ge=1,
+        description=(
+            "Full household size including non-applicant dependents — drives "
+            "USDA income-limit lookups (RESEARCH §lib/rules/usda.py L198-211); "
+            "fail-loud, no inference from applicants count (BLOCKER 2 fix; "
+            "CLAUDE.md + CONTEXT.md). For a 2-applicant + 3-children household "
+            "size=5 even though len(applicants)==2."
+        ),
+    )
+    monthly_debts: MonthlyDebts
+    escrow: EscrowInputs
+    va: VAInputs | None = None
+    current_housing_payment: Money = Decimal("0.00")
+
+
+# ---------------------------------------------------------------------------
+# AffordabilityRequest discriminated union (D-14)
+# ---------------------------------------------------------------------------
+
+
+class _CommonRequestFields(BaseModel):
+    """Shared base fields for ForwardModeRequest + ReverseModeRequest. Not
+    instantiated directly."""
+
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
+    household: Household
+    max_dti: Rate  # caller-supplied per D-12 — no defaults
+    target_loan_type: TargetLoanType
+    term_months: int = Field(ge=1, le=600)
+    annual_rate: Rate
+    apr: Rate | None = None  # both-or-neither with apor (RESEARCH §"ATR/QM Gating")
+    apor: Rate | None = None
+    monthly_pmi: Money | None = None  # RESEARCH Open Q#1 — required for conventional > 80 LTV
+    endorsement_date_override: date | None = None  # RESEARCH Open Q#6
+    junior_liens: list[Money] = Field(default_factory=list)
+
+
+def _validate_common(req: _CommonRequestFields) -> Any:
+    """Cross-field validators applied to both ForwardModeRequest + ReverseModeRequest.
+
+    - VA-only fields required when target_loan_type=='va' (RESEARCH Open Q#7)
+    - apr/apor must be both-or-neither (RESEARCH §"ATR/QM Gating")
+    - monthly_pmi required when target_loan_type=='conventional' AND origination
+      LTV > LTV_REQUEST_ELIGIBLE (0.80) — RESEARCH Open Q#1; predicate has no rate
+    """
+    # VA conditional
+    if req.target_loan_type == "va" and req.household.va is None:
+        raise ValueError(
+            "household.va block is required when target_loan_type=='va' "
+            "(RESEARCH Open Question #7; D-15 + lib.rules.va_residual_income.evaluate)"
+        )
+    # apr / apor symmetry
+    if (req.apr is None) != (req.apor is None):
+        raise ValueError(
+            "apr and apor must both be supplied or both be omitted "
+            "(RESEARCH §'ATR/QM Gating'; reject half-supplied fabrication)"
+        )
+    # monthly_pmi conditional (conventional + LTV > 0.80)
+    if req.target_loan_type == "conventional":
+        if isinstance(req, ForwardModeRequest):
+            origination_ltv = req.loan_amount / req.property_value
+        elif isinstance(req, ReverseModeRequest):
+            origination_ltv = req.target_ltv_pct
+        else:  # pragma: no cover — defensive; req must be one of the two subtypes
+            return req
+        if origination_ltv > LTV_REQUEST_ELIGIBLE and req.monthly_pmi is None:
+            raise ValueError(
+                "monthly_pmi is required when target_loan_type=='conventional' "
+                "AND origination LTV > 0.80 (RESEARCH Open Question #1; "
+                "lib.rules.conventional_pmi.status returns termination status only, "
+                "not a rate; caller must supply the PMI premium)"
+            )
+    return req
+
+
+class ForwardModeRequest(_CommonRequestFields):
+    """Forward-mode request: known loan_amount + property_value → DTI/LTV/CLTV/PITI.
+
+    Plan 04-02 ships evaluate_forward(req) which consumes this shape.
+    """
+
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
+    mode: Literal["forward"] = "forward"
+    loan_amount: Money
+    property_value: Money
+
+    @model_validator(mode="after")
+    def _validate_forward(self) -> ForwardModeRequest:
+        _validate_common(self)
+        return self
+
+
+class ReverseModeRequest(_CommonRequestFields):
+    """Reverse-mode request: known max_dti + down_payment + target_ltv_pct →
+    max_loan_amount via npf.pv (D-08, D-10).
+
+    Plan 04-03 ships evaluate_reverse(req) which consumes this shape.
+    """
+
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
+    mode: Literal["reverse"] = "reverse"
+    down_payment: Money
+    target_ltv_pct: Rate
+
+    @model_validator(mode="after")
+    def _validate_reverse(self) -> ReverseModeRequest:
+        _validate_common(self)
+        return self
+
+
+AffordabilityRequest = Annotated[
+    ForwardModeRequest | ReverseModeRequest,
+    Field(discriminator="mode"),
+]
+"""Pydantic v2 discriminated union by `mode` field (D-14).
+
+Use TypeAdapter(AffordabilityRequest).validate_json(...) at the script
+boundary; the discriminator routes the raw payload to ForwardModeRequest or
+ReverseModeRequest based on the `mode` field's literal value."""
+
+
+# ---------------------------------------------------------------------------
+# AffordabilityResponse (D-11 shape)
+# ---------------------------------------------------------------------------
+
+
+class AffordabilityResponse(BaseModel):
+    """Phase 4 evaluation result (D-11 shape).
+
+    Forward-mode populates: loan_amount, property_value, financed_loan_amount
+    (= loan_amount + UFMIP if FHA per D-03), dti_front, dti_back, ltv, cltv,
+    piti, monthly_pi, monthly_mi.
+
+    Reverse-mode populates: max_loan_amount, implied_pi, assumed_ltv_pct,
+    assumed_monthly_mi.
+
+    Both modes always populate: mode, loan_type, blocked, blocked_by, warnings,
+    total_gross_monthly_income, total_monthly_debts.
+
+    blocked_by is the FIRST hard-fail citation in fixed precedence (D-11):
+    loan-type-classify (FHFA-LIMIT-* / HUD-LIMIT-*) → USDA-income (when usda) →
+    LTV/CLTV → DTI → ATR/QM → VA-residual. Soft signals go to warnings.
+    """
+
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
+
+    # Always populated
+    mode: Literal["forward", "reverse"]
+    loan_type: LoanType | None  # None when loan-type-classify raised MissingCountyDataError
+    blocked: bool
+    blocked_by: str | None  # exactly one citation; None when not blocked
+    warnings: list[str] = Field(default_factory=list)
+    total_gross_monthly_income: Money
+    total_monthly_debts: Money
+
+    # Forward-only (None in reverse mode)
+    loan_amount: Money | None = None
+    property_value: Money | None = None
+    financed_loan_amount: Money | None = None  # loan_amount + UFMIP for FHA per D-03
+    dti_front: Rate | None = None
+    dti_back: Rate | None = None
+    ltv: Rate | None = None
+    cltv: Rate | None = None
+    piti: Money | None = None
+    monthly_pi: Money | None = None
+    monthly_mi: Money | None = None
+
+    # Reverse-only (None in forward mode)
+    max_loan_amount: Money | None = None
+    implied_pi: Money | None = None
+    assumed_ltv_pct: Rate | None = None
+    assumed_monthly_mi: Money | None = None
+
+
+# ---------------------------------------------------------------------------
+# Cross-plan stub functions (Phase 2 D-08 stub idiom)
+# ---------------------------------------------------------------------------
+
+
+def evaluate_forward(request: ForwardModeRequest) -> AffordabilityResponse:
+    """Forward-mode affordability: known loan + property_value → DTI/LTV/CLTV/PITI.
+
+    Body shipped in Plan 04-02 (cross-plan stub idiom; Phase 2 02-01 precedent).
+    Wave 1 / Plan 04-02 will:
+      1. classify target_loan_type via lib.rules.loan_type.classify (using
+         TARGET_LOAN_TYPE_TO_PROGRAM cross-walk + LocationFIPS-derived County)
+      2. compute monthly_pi via lib.amortize.build_schedule(loan).monthly_pi
+      3. compute monthly_mi (FHA from fha_mip.compute; conventional from request.
+         monthly_pmi; VA / USDA / conventional <= 80 LTV → 0)
+      4. compute PITI via _compute_piti = quantize_cents(P&I + tax + ins + HOA + MI)
+      5. compute DTI front/back, LTV, CLTV
+      6. evaluate blockers via _evaluate_blockers (D-11 precedence) — uses
+         TARGET_LOAN_TYPE_CROSSWALK to detect FHFA-LIMIT-* / HUD-LIMIT-* blockers
+         when the predicate's returned LoanType is outside the requested target
+      7. capture StaleReferenceWarning into response.warnings
+    """
+    raise NotImplementedError("forward evaluation shipped in Plan 04-02")
+
+
+def evaluate_reverse(request: ReverseModeRequest) -> AffordabilityResponse:
+    """Reverse-mode affordability: known max_dti + down_payment → max_loan_amount via npf.pv.
+
+    Body shipped in Plan 04-03 (cross-plan stub idiom). Wave 1 / Plan 04-03 will:
+      1. compute total_gross_monthly_income + total_monthly_debts
+      2. max_PITI = max_dti * income - debts
+      3. subtract escrow (tax + ins + HOA) + estimated monthly_mi → max_PI
+      4. max_loan_amount = quantize_cents(-npf.pv(rate=annual_rate/12,
+         nper=term_months, pmt=-max_PI, fv=0)) (D-08; npf bug #130 avoided
+         via fv=0 default)
+      5. evaluate blockers (loan-type-classify uses max_loan_amount + implied
+         property_value)
+      6. round-trip closure within Decimal('0.0001') is verified by
+         evaluate_forward(reconstructed_forward_req).dti_back <= max_dti +
+         tolerance (D-09; SC-2)
+    """
+    raise NotImplementedError("reverse evaluation shipped in Plan 04-03")
