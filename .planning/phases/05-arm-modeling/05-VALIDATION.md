@@ -2,9 +2,10 @@
 phase: 5
 slug: arm-modeling
 status: draft
-nyquist_compliant: false
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-04-30
+updated: 2026-04-30
 ---
 
 # Phase 5 — Validation Strategy
@@ -24,7 +25,7 @@ created: 2026-04-30
 | **Full suite command** | `pytest -x` |
 | **Estimated runtime** | ~5–10s for `tests/test_arm.py`; ~30s for full suite (Phase 4 baseline 379 passed + 4 skipped, Phase 5 adds ~30–40 tests) |
 
-**Phase gate:** Full suite green + `mypy --strict` clean + `ruff` clean across `lib/arm.py`, `scripts/arm_simulate.py`, `tests/test_arm.py`, `scripts/_cli_helpers.py` (if factored) before `/gsd-verify-work`.
+**Phase gate:** Full suite green + `mypy --strict` clean + `ruff` clean across `lib/arm.py`, `scripts/arm_simulate.py`, `tests/test_arm.py`, `scripts/_cli_helpers.py` (factored by Plan 05-04a) before `/gsd-verify-work`.
 
 ---
 
@@ -39,14 +40,49 @@ created: 2026-04-30
 
 ## Per-Task Verification Map
 
-> Filled in by planner during plan creation (Wave 0 first; subsequent waves flip xfail decorators as engine slices land). Each task in each PLAN.md MUST cite the test name + fixture path that verifies its acceptance criteria.
+> Populated by planner per BLOCKER I-001 (gsd-plan-checker iteration 1, 2026-04-30).
+> Plan 05-04 has been split into 05-04a (cli-helpers-factor; hygiene) and 05-04b (arm-cli; ARM-08 closure) per BLOCKER I-003.
+> 29 tasks across 8 plans (05-00, 05-01, 05-02, 05-03, 05-04a, 05-04b, 05-05, 05-06).
+> Threat refs cite the threat IDs declared in each plan's `<threat_model>` section.
+> Status legend: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky.
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| TBD     | TBD  | 0    | (Wave 0 — stubs) | — | N/A (math layer) | unit | `pytest tests/test_arm.py -x` | ❌ W0 | ⬜ pending |
+| T-00-01 | 05-00 | 0 | (Wave 0 stubs) | — | N/A — fixture loader (test infra only) | unit | `python -c "from tests.conftest import *; print('OK')"` | ❌ W0 | ⬜ pending |
+| T-00-02 | 05-00 | 0 | (Wave 0 stubs) | — | N/A — empty fixture dirs | structural | `test -d tests/fixtures/arm && test -d tests/fixtures/arm/oracle` | ❌ W0 | ⬜ pending |
+| T-00-03 | 05-00 | 0 | (Wave 0 stubs) | — | N/A — xfail-decorated stubs only | meta | `pytest tests/test_arm.py -v --no-header` (all xfail) | ❌ W0 | ⬜ pending |
+| T-00-04 | 05-00 | 0 | (Wave 0 stubs) | — | Phase 4 baseline preserved | smoke | `pytest -q` (379+ passed, 4 skipped, ~32 xfailed) | ❌ W0 | ⬜ pending |
+| T-01-01 | 05-01 | 1 | (D-14 hygiene) | — | N/A — pure helper promotion | unit | `python -c "from lib.money import quantize_rate, _RATE_QUANTUM; print('OK')"` | ❌ W1 | ⬜ pending |
+| T-01-02 | 05-01 | 1 | (D-14 hygiene) | — | Phase 4 byte-equivalent | smoke | `pytest tests/test_affordability.py -q` | ❌ W1 | ⬜ pending |
+| T-01-03 | 05-01 | 1 | (D-14 hygiene) | — | quantize_rate ROUND_HALF_UP semantics | unit | `pytest tests/test_money.py::test_quantize_rate_round_half_up -x` | ❌ W1 | ⬜ pending |
+| T-01-04 | 05-01 | 1 | (D-14 hygiene) | — | Phase 3 + Phase 4 baselines preserved | smoke | `pytest -q` | ❌ W1 | ⬜ pending |
+| T-02-01 | 05-02 | 2 | ARM-01 | T-05-02, T-05-03 (model-layer) | Pydantic strict/frozen/forbid contract; required floor_rate; aligned index_path validator | unit | `python -c "from lib.arm import ARMTerms, IndexPathEntry, ARMRequest, ARMPayment, ResetEvent, ARMSchedule; print('OK')"` | ❌ W2 | ⬜ pending |
+| T-02-02 | 05-02 | 2 | ARM-01 | T-05-02, T-05-03 | extra="forbid" rejects unknown fields (I-007); missing floor_rate raises ValidationError; misaligned index_path raises | unit | `pytest tests/test_arm.py::test_arm_terms_field_set tests/test_arm.py::test_arm_terms_missing_floor_rate_raises tests/test_arm.py::test_note_rate_defaults_to_loan_annual_rate tests/test_arm.py::test_arm_request_misaligned_index_path_raises tests/test_arm.py::test_arm_request_aligned_index_path_succeeds -xvs` | ❌ W2 | ⬜ pending |
+| T-02-03 | 05-02 | 2 | (regression check) | T-05-25 | Phase 3 + Phase 4 + Wave 0/1 baselines preserved | smoke | `pytest -q` | ❌ W2 | ⬜ pending |
+| T-03-01 | 05-03 | 3 | ARM-02, ARM-03, ARM-04, ARM-05 | T-05-04..T-05-09 (engine layer) | D-02 reset formula; D-05 per-epoch re-amortize; D-09 final cleanup; bear-trap shortcut NOT taken (I-006) | unit | `python -c "from lib.arm import build_arm_schedule, _compute_reset_triggers, _compute_new_rate, ARMRequest; print('OK')"` | ❌ W3 | ⬜ pending |
+| T-03-02 | 05-03 | 3 | ARM-02, ARM-03, ARM-04, ARM-05, ARM-07 | T-05-04..T-05-09 | 8 invariant tests pinning engine math (period jumps, off-by-one, cap precedence, floor enforcement, continuous numbering, cumulative totals, full-remaining-term re-amortization, non-final-epoch balance > 0) | invariant | `pytest tests/test_arm.py -k "test_arm_5_1_payment_jump_at_61 or test_arm_initial_cap_at_first_reset or test_arm_lifetime_cap_binds or test_arm_floor_below_margin_blocked or test_arm_continuous_period_numbering or test_cumulative_totals_continuous_across_resets or test_full_remaining_term_re_amortization or test_non_final_epoch_does_not_zero_balance" -xvs` | ❌ W3 | ⬜ pending |
+| T-03-03 | 05-03 | 3 | (regression check) | T-05-25 | Phase 3 + Phase 4 + Wave 0/1/2 baselines preserved | smoke | `pytest -q` | ❌ W3 | ⬜ pending |
+| T-04a-01 | 05-04a | 4 | (D-discretion factor) | T-05-01 (helper layer), T-05-23 | scripts/_cli_helpers.py exports find_json_float_loc + make_decimal_type_envelope; lazy pydantic.VERSION import preserves D-18 fast --help | unit | `python -c "import sys; sys.path.insert(0, '.'); from scripts._cli_helpers import find_json_float_loc, make_decimal_type_envelope; print('OK')"` | ❌ W4 | ⬜ pending |
+| T-04a-02 | 05-04a | 4 | (D-discretion factor) | T-05-01 (helper layer), T-05-23 | 18 parametric tests pinning JSON-float walker + 6-key envelope shape | unit | `pytest tests/test_cli_helpers.py -xvs` | ❌ W4 | ⬜ pending |
+| T-04a-03 | 05-04a | 4 | (regression check) | T-05-25 | Phase 3 + Phase 4 byte-equivalent after refactor; inline _find_json_float_loc removed; imports added | smoke | `pytest tests/test_amortize.py tests/test_affordability.py tests/test_cli_helpers.py -q` | ❌ W4 | ⬜ pending |
+| T-04b-01 | 05-04b | 4 | ARM-08 | T-05-01 (CLI), T-05-24, T-05-26 | scripts/arm_simulate.py mirrors D-07; --help fast (no lib.arm import); sys.path injection precedes lazy imports | smoke | `python scripts/arm_simulate.py --help` | ❌ W4 | ⬜ pending |
+| T-04b-02 | 05-04b | 4 | ARM-08 | T-05-01 (CLI), T-05-24, T-05-26 | 8 ARM-08 stub flips: subprocess round-trip with last-trigger pin (I-005), --help no-import, 4× float-rejects, envelope uniformity, misaligned period | unit | `pytest tests/test_arm.py -k "test_cli_smoke_subprocess_round_trip or test_cli_help_does_not_import_lib_arm or test_cli_rejects_float_principal or test_cli_rejects_float_assumed_index_rate or test_cli_rejects_float_index_path_value or test_cli_rejects_float_floor_rate or test_cli_error_envelope_uniformity or test_cli_misaligned_index_path_period_rejected" -xvs` | ❌ W4 | ⬜ pending |
+| T-04b-03 | 05-04b | 4 | (regression check) | T-05-25 | Phase 3 + Phase 4 + Plan 05-04a baselines preserved; 418 passed + 14 xfailed | smoke | `pytest -q` | ❌ W4 | ⬜ pending |
+| T-05-01 | 05-05 | 5 | ARM-09 | — | references/arm-mechanics.md exists with 7 D-08 [REVISED] sections + corrected citations (Fannie B2-1.4-02, Freddie 6302.7(b), CFPB §1951, AmericU) | structural | `test -f references/arm-mechanics.md && grep -c 'b2-1.4-02' references/arm-mechanics.md` returns ≥ 1 | ❌ W5 | ⬜ pending |
+| T-05-02 | 05-05 | 5 | ARM-09 | — | ARMTerms docstring cites references/arm-mechanics.md (ROADMAP SC-5) | structural | `grep -c 'See references/arm-mechanics.md' lib/arm.py` returns 1 | ❌ W5 | ⬜ pending |
+| T-05-03 | 05-05 | 5 | ARM-09 | — | 3 ARM-09 stubs flipped: doc-sections-present, docstring-cites, citations-present | unit | `pytest tests/test_arm.py -k "test_arm_mechanics_doc_sections_present or test_arm_terms_docstring_cites_arm_mechanics or test_arm_mechanics_citations" -xvs` | ❌ W5 | ⬜ pending |
+| T-05-04 | 05-05 | 5 | (regression check) | T-05-25 | All prior baselines preserved | smoke | `pytest -q` | ❌ W5 | ⬜ pending |
+| T-06-01 | 05-06 | 6 | ARM-02..05 | T-05-32, T-05-36 | 11 hand-calc fixtures generated by engine + applied_cap classification spans all 5 Literals (D-10) + cap-bound trio has hand_calc_check Decimal witness (I-004 — Fannie B2-1.4-02 formula) | fixture | `python scripts/_generate_arm_fixtures.py && python -c "import json,glob; vals=set(); [vals.add(re['applied_cap']) for f in glob.glob('tests/fixtures/arm/*.json') for re in json.load(open(f))['expected']['reset_events']]; assert {'initial','periodic','lifetime','floor','none'} <= vals; print('OK')"` | ❌ W6 | ⬜ pending |
+| T-06-02 | 05-06 | 6 | ARM-06 | T-05-33, T-05-34 | 5 oracle PDFs captured (Bankrate 5/1/7/1/10/1 + Vertex42 5/1 + AmericU 5/6 SOFR) | smoke | `ls tests/fixtures/arm/oracle/*.pdf | wc -l` returns ≥ 5 | ❌ W6 | ⬜ pending |
+| T-06-03 | 05-06 | 6 | ARM-06 | T-05-33 | 5 oracle PDFs transcribed to .json with expected_per_period rows | structural | `bash -c 'for f in tests/fixtures/arm/oracle/*.json; do python -c "import json; d=json.load(open(\"$f\")); assert \"expected_per_period\" in d"; done'` | ❌ W6 | ⬜ pending |
+| T-06-04 | 05-06 | 6 | ARM-02, ARM-03, ARM-04, ARM-06, ARM-07 | T-05-33, T-05-35, T-05-36, T-05-37 | 11 fixture-based stub flips via _request_from_fixture helper (I-010); cap-bound fixtures cross-checked against hand_calc_check (I-004); applied_cap citation coverage verified | invariant | `pytest tests/test_arm.py -k "test_arm_5_1_payment_jump_at_61 or test_arm_7_1_payment_jump_at_85 or test_arm_10_1_payment_jump_at_121 or test_arm_5_6_payment_jump_at_61_and_67 or test_arm_initial_cap_at_first_reset or test_arm_lifetime_cap_binds or test_arm_floor_below_margin_blocked or test_arm_5_1_off_by_one_negative or test_oracle_cross_validation_5_1 or test_oracle_cross_validation_5_6 or test_applied_cap_citation_coverage" -xvs` | ❌ W6 | ⬜ pending |
+| T-06-05 | 05-06 | 6 | (final phase closure) | T-05-25 | 432 passed, 0 xfailed, 4 skipped; all 9 ARM-N closed; ROADMAP SC-1..SC-5 verified; mypy + ruff clean across 12 files | smoke | `pytest -q && mypy --strict lib/arm.py lib/money.py lib/affordability.py scripts/arm_simulate.py scripts/_cli_helpers.py scripts/amortize.py scripts/affordability.py scripts/_generate_arm_fixtures.py tests/test_arm.py tests/test_money.py tests/test_cli_helpers.py tests/conftest.py` | ❌ W6 | ⬜ pending |
+
+*File-Exists legend: ❌ Wn = file is created/modified by Wave n. ✅ = already exists in repo (Phase 1/3/4 artifacts). The Wave-0 row "❌ W0" means tests/test_arm.py is created in Wave 0 (Plan 05-00) and downstream waves flip its xfail decorators.*
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
-*Planner fills this table per plan; gsd-plan-checker enforces every task has a row.*
+
+*Planner-checker enforcement: every task has a row; threat refs cite per-plan `<threat_model>` IDs.*
 
 ---
 
@@ -116,9 +152,23 @@ Every value of `Literal["initial", "periodic", "lifetime", "floor", "none"]` MUS
 
 ---
 
+## hand_calc_check Witness Coverage (I-004 cap-bound oracle replacement)
+
+Cap-bound fixtures have NO external oracle (Bankrate/Vertex42/AmericU don't capture cap-bound paths). Per BLOCKER I-004 fix, each cap-bound fixture embeds a `hand_calc_check` block in `expected.reset_events[0]` containing a Decimal-arithmetic hand-calc per the locked D-02 formula (Fannie Mae §B2-1.4-02). The fixture-based test asserts engine output's first ResetEvent matches the hand-calc EXACTLY.
+
+| Cap-bound fixture | Hand-calc witness |
+|---|---|
+| `arm_lifetime_cap_binds.json` | `new_rate_expected="0.080000"`, `applied_cap_expected="lifetime"` |
+| `arm_initial_cap_at_first_reset.json` | `new_rate_expected="0.100000"`, `applied_cap_expected="initial"` |
+| `arm_floor_below_margin_blocked.json` | `new_rate_expected="0.040000"`, `applied_cap_expected="floor"` |
+
+Non-cap-bound fixtures (5/1, 7/1, 10/1, 5/6 vanilla, off-by-one, teaser, continuous-numbering, index-path-overrides) do NOT have a `hand_calc_check` block — they cross-validate against external Bankrate/Vertex42/AmericU oracles.
+
+---
+
 ## Wave 0 Requirements
 
-- [ ] `tests/test_arm.py` — full file with ~30 xfail stubs covering ARM-01..09 + cross-cutting + applied_cap citation coverage + 6-key envelope contract
+- [ ] `tests/test_arm.py` — full file with ~32 xfail stubs covering ARM-01..09 + cross-cutting + applied_cap citation coverage + 6-key envelope contract
 - [ ] `tests/conftest.py` extension — add `arm_fixture` loader (Phase 4 D-17 pattern; ~12 lines)
 - [ ] `tests/fixtures/arm/.gitkeep` — directory created
 - [ ] `tests/fixtures/arm/oracle/.gitkeep` — oracle directory created
@@ -138,11 +188,11 @@ Every value of `Literal["initial", "periodic", "lifetime", "floor", "none"]` MUS
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies (filled in per-plan)
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references (per-task map populated)
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 30s
-- [ ] `nyquist_compliant: true` set in frontmatter (after planner finalizes per-task map)
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies (per-task map populated in Per-Task Verification Map above; 29 tasks across 8 plans)
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify (every task row has an Automated Command)
+- [x] Wave 0 covers all MISSING references (per-task map populated; all xfail stubs land in Wave 0 (T-00-03), flipped by Waves 2/3/4/5/6)
+- [x] No watch-mode flags
+- [x] Feedback latency < 30s
+- [x] `nyquist_compliant: true` set in frontmatter (per-task map populated; threat refs cite per-plan threat_model IDs)
 
-**Approval:** pending
+**Approval:** pending (awaiting execution Wave 0)

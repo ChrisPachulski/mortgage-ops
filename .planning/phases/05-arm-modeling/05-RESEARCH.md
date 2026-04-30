@@ -635,17 +635,23 @@ The skeleton illustrates the slice-stitch pattern; the planner finalizes ResetEv
 
 ---
 
-## Open Landmines / Unresolved
+## Open Questions (RESOLVED)
 
-These are items where the locked CONTEXT.md decision conflicts with discovered reality. Each requires `/gsd-discuss-phase 5` re-entry to re-lock OR explicit acknowledgment in the planner's first plan.
+These are items where the locked CONTEXT.md decision conflicted with discovered reality. **LM-1 and LM-2 were RESOLVED on 2026-04-30 via inline CONTEXT.md revisions** to D-04 (oracle source) and D-08 (Selling Guide citations) — see the dated REVISION NOTES at the top of each decision in `05-CONTEXT.md`. LM-3, LM-4, LM-5 are NUANCES the planner must absorb verbatim into plan content; not blocking.
 
-### LM-1 (BLOCKER): MGIC has no ARM calculator (D-04)
+### LM-1 (RESOLVED 2026-04-30): MGIC has no ARM calculator (D-04)
+
+**Resolution:** D-04 inline-revised in `05-CONTEXT.md` to swap MGIC for the three-source oracle: Bankrate (5/1, 7/1, 10/1) + Vertex42 Excel (transparent-formula cross-check) + AmericU 5/6 SOFR Disclosure PDF. CONTEXT.md canonical_refs section updated accordingly. No `/gsd-discuss-phase 5` re-entry needed; planner consumes the revised D-04.
 
 - **What:** CONTEXT.md D-04 prescribes "MGIC capture-as-fixture" as the cross-validation oracle. MGIC's public site lists 5 calculators; none is an ARM calculator. The locked decision is unimplementable.
 - **Recommendation:** `/gsd-discuss-phase 5` to re-lock D-04 with replacement oracle source. Suggested replacement: "Bankrate ARM calculator + Vertex42 Excel template (3/1/5/1/7/1/10/1) + AmericU 5/6 SOFR ARM Disclosure PDF (5/6 product)."
 - **Risk if unaddressed:** Wave 0 cannot stub `test_oracle_cross_validation_*` accurately; Wave 6 cannot ship `tests/fixtures/arm/oracle/` faithfully; ROADMAP SC-3 ("ARM tests pass against published MGIC/Bankrate scenarios") is fulfilled by the fallback Bankrate clause but not by MGIC.
 
-### LM-2 (BLOCKER): D-08 Selling Guide section numbers are wrong
+### LM-2 (RESOLVED 2026-04-30): D-08 Selling Guide section numbers are wrong
+
+**Resolution:** D-08 inline-revised in `05-CONTEXT.md` with corrected citations: Fannie Mae §B2-1.4-02 "Adjustable-Rate Mortgages (ARMs)" (last updated 2025-12-10), Freddie Mac §6302.7(b), CFPB §1951 (cited in new D-08 item 7 for teaser-ARM lifetime base disclosure). Old citations (B5-3.5-01, §4404) removed from CONTEXT.md canonical_refs. Wave 5 plan must use the corrected citations verbatim — planner absorbs from revised D-08, NOT from this RESEARCH.md historical landmine note.
+
+#### Original landmine details (preserved for traceability):
 
 - **What:** CONTEXT.md D-08 cites "Fannie Mae §B5-3.5-01" (404) and "Freddie Mac §4404" (stale). The correct Fannie section is **B2-1.4-02 "Adjustable-Rate Mortgages (ARMs)" updated 2025-12-10**. Modern Freddie ARM material is on the SOFR-Indexed ARMs product page + Guide Section 6302.7(b) (delivery) + Chapter 4203 (LTV).
 - **Recommendation:** `/gsd-discuss-phase 5` to re-lock D-08 with corrected citations OR planner self-corrects in Wave 5 + `references/arm-mechanics.md` content (smaller blast radius — just don't carry the wrong section number forward into the actual file).
