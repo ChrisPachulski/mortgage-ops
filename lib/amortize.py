@@ -279,12 +279,18 @@ def _build_fixed_monthly(
         interest = quantize_cents(period_rate * balance)
 
         is_last_term_period = period == loan.term_months
-        if is_last_term_period:
+        # D-09 final-period detection: term reached OR formulaic principal would
+        # zero/overshoot the balance (extras accumulated have shrunk the balance
+        # below the formulaic level_pmt - interest amount).
+        formulaic_principal = quantize_cents(level_pmt - interest)
+        formulaic_overshoot = balance + interest <= level_pmt
+
+        if is_last_term_period or formulaic_overshoot:
             # D-09 final-period cleanup: principal = remaining balance
             principal_paid = balance
             payment_amount = quantize_cents(principal_paid + interest)
         else:
-            principal_paid = quantize_cents(level_pmt - interest)
+            principal_paid = formulaic_principal
             payment_amount = level_pmt
 
         # D-07 + D-08: extra-principal AFTER regular principal, capped at remaining balance
@@ -299,9 +305,9 @@ def _build_fixed_monthly(
             payment_amount = quantize_cents(principal_paid + interest + extra)
             balance_after = Decimal("0.00")
 
-        # Final-period detection: term reached OR extra-principal zeroed the balance
+        # Final-period detection: term reached OR formulaic overshoot OR extra zeroed balance
         extra_zeroed_balance = balance_after == Decimal("0.00") and extra > Decimal("0.00")
-        final_period = is_last_term_period or extra_zeroed_balance
+        final_period = is_last_term_period or formulaic_overshoot or extra_zeroed_balance
 
         cum_int = quantize_cents(cum_int + interest)
         cum_prin = quantize_cents(cum_prin + principal_paid)
