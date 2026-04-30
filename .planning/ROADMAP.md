@@ -70,7 +70,7 @@ User selected **fine** (8-12 phases). This roadmap is **12 phases** — each cal
   4. Extra-principal scenario (single, recurring, and per-period inputs) shortens the schedule and final row still balances to `Decimal("0.00")`
   5. `scripts/amortize.py --help` prints usage without importing heavy deps; running with no input prints a clear schema-error message (Pydantic validation surfaces at the script boundary)
 **Plans:** 4 plans
-- [ ] 03-01-PLAN.md — Extend lib/models.py (Payment cumulative totals + Schedule final_payment_adjusted + D-15 validator) — AMRT-01
+- [x] 03-01-PLAN.md — Extend lib/models.py (Payment cumulative totals + Schedule final_payment_adjusted + D-15 validator) — AMRT-01 [completed 2026-04-30, commits 9821d77 + 81beaca; 5 new + 1 updated tests; 19 in test_models.py; 259/259 full suite green]
 - [ ] 03-02-PLAN.md — Build lib/amortize.py engine (numpy-financial wrapper + fixed-rate + biweekly true/half-monthly + extra-principal + D-09 cleanup) — AMRT-01..05
 - [ ] 03-03-PLAN.md — Build scripts/amortize.py CLI (argparse + lazy-import + AmortizeRequest boundary) — AMRT-06
 - [ ] 03-04-PLAN.md — Build tests/test_amortize.py + 7 fixtures + conftest extension (AMRT-07/08 invariants + structural + biweekly + extra + CLI + D-12/D-13) — AMRT-01..08
@@ -193,7 +193,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 |-------|----------------|--------|-----------|
 | 1. Foundations & Money Discipline | 6/6 | Complete (PASS-WITH-CAVEATS) | 2026-04-26 |
 | 2. Regulatory Reference Data & Rules Predicates | 7/7 | Complete (PASSED) — 02-01..02-07 green; mutation harness proves citation-coverage + schema meta-tests have teeth; 11 predicates + 10 reference YAMLs; code review 14/14 fixed; 254/254 tests pass; verifier 5/5 must_haves PASSED 22/22 requirements SATISFIED | 2026-04-26 |
-| 3. Core Amortization | 0/4 | Not started | - |
+| 3. Core Amortization | 1/4 | Executing — 03-01 complete (D-10/D-14/D-15 model contracts shipped; 259/259 tests green); ready for 03-02 engine | - |
 | 4. Affordability | 0/TBD | Not started | - |
 | 5. ARM Modeling | 0/TBD | Not started | - |
 | 6. Refinance NPV | 0/TBD | Not started | - |

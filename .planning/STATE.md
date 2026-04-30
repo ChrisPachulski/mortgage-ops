@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: in_progress
-stopped_at: Phase 3 context gathered — 03-CONTEXT.md captures 19 decisions (biweekly both-modes, list-based extra-principal, final-principal-only cleanup, project-root scripts/, today-synthesized dates, cumulative totals on Payment); ready for /gsd-plan-phase 3
-last_updated: "2026-04-29T00:00:00.000Z"
-last_activity: 2026-04-29 -- Phase 3 discuss-phase complete; CONTEXT.md + DISCUSSION-LOG.md committed
+status: executing
+stopped_at: Phase 03 plan 01 complete — Payment + Schedule extended for D-10/D-14/D-15; 5 new tests + 1 updated; 259/259 full suite green; ready for plan 03-02 (lib/amortize.py engine)
+last_updated: "2026-04-30T05:14:00.000Z"
+last_activity: 2026-04-30 -- 03-01 complete (commits 9821d77 + 81beaca)
 progress:
   total_phases: 12
   completed_phases: 2
-  total_plans: 13
-  completed_plans: 13
-  percent: 17
+  total_plans: 17
+  completed_plans: 14
+  percent: 82
 ---
 
 # Project State
@@ -21,31 +21,31 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-26)
 
 **Core value:** Math correctness first — every dollar figure traces to a tested, deterministic Python function; the LLM is a router and narrator that never owns numbers.
-**Current focus:** Phase 3 context gathered — ready to plan Phase 3 (Core Amortization)
+**Current focus:** Phase 03 — core-amortization
 
 ## Current Position
 
-Phase: 3 of 12 — Core Amortization (context gathered; planning next)
-Plan: 0 of TBD — context done; plan/execute pending
-Status: Phase 3 discuss-phase complete. CONTEXT.md captures 19 decisions across biweekly semantics (both modes, default 'true'), extra-principal shape (single list-of-entries schema, period-indexed), final-payment cleanup (final-principal-only adjustment + `final_payment_adjusted` flag), date defaults (synthesize today when None), Schedule extension (cumulative totals on each Payment row), and CLI home (project-root `scripts/amortize.py`; Phase 10 migrates).
-Last activity: 2026-04-29 -- Phase 3 discuss-phase complete; CONTEXT.md + DISCUSSION-LOG.md committed
+Phase: 03 (core-amortization) — EXECUTING
+Plan: 2 of 4 (03-01 complete; 03-02 next)
+Status: Executing Phase 03
+Last activity: 2026-04-30 -- 03-01 complete (D-10/D-14/D-15 model contracts shipped)
 
-Progress: [██░░░░░░░░] 17% (2/12 phases complete)
+Progress: [██░░░░░░░░] 17% (2/12 phases complete; Phase 3 at 1/4 plans)
 
 ### Resume instructions
 
-Phase 3 plan-phase is next. Recommended path:
-1. `/clear`
-2. `/gsd-plan-phase 3` — create executable plan from CONTEXT.md
-3. `/gsd-execute-phase 3` — implement and verify
+Plan 03-02 (lib/amortize.py engine) is next. Recommended path:
 
-Resume file: `.planning/phases/03-core-amortization/03-CONTEXT.md`
+1. `/clear`
+2. `/gsd-execute-plan 3 2` — implement the numpy-financial wrapper engine atop the new model contract
+
+Resume file: `.planning/phases/03-core-amortization/03-02-PLAN.md`
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 12
+- Total plans completed: 14
 - Phase 1 wall time: ~1.5 hours (orchestrated, sequential)
 - Phase 2 plan 01 wall time: ~35 min (sequential, single executor)
 - Phase 2 plan 02 wall time: ~7 min (sequential, single executor — fastest plan to date thanks to 02-01 foundation pattern)
@@ -54,6 +54,7 @@ Resume file: `.planning/phases/03-core-amortization/03-CONTEXT.md`
 - Phase 2 plan 05 wall time: ~10 min (sequential, single executor — largest plan in Phase 2 by file count: 3 predicates + 2 reference YAMLs + 12 fixtures + 3 test files = 20 new files; Pitfall 6 boundary tests + twin-predicate-with-shared-bucket-structure)
 - Phase 2 plan 06 wall time: ~5 min (sequential, single executor — atr_qm + reg_z; CFPB Q4 2025 publication pin + Reg-Z statutory constants reuse the 02-05 idiom; 19 new files: 2 predicates + 1 YAML + 2 test files + 15 fixtures + 2 deviations both Rule-3 ruff I001)
 - Phase 2 plan 07 wall time: ~4 min (sequential, single executor — audit-only gate; 3 new test files [mutation harness + YAML count audit + cross-predicate smoke] + 0 production code changes; 14 new tests; 1 Rule-1 deviation [removed inapplicable ruff RUF100 noqa: BLE001 from plan spec])
+- Phase 3 plan 01 wall time: ~4 min (sequential, single executor — model-only data-shape lock; 0 created + 2 modified; +5 new tests + 1 updated; 3 Rule-3 ruff-format/UP037 deviations [all formatting, no semantic changes]; new project velocity floor tied with 02-07)
 
 **By Phase:**
 
@@ -61,6 +62,7 @@ Resume file: `.planning/phases/03-core-amortization/03-CONTEXT.md`
 |-------|-------|--------|
 | 1     | 6/6   | Complete (PASS-WITH-CAVEATS) |
 | 2     | 7/7   | Complete — 02-01..02-07 green; 11 predicates + 10 reference YAMLs + citation-coverage + schema meta-tests + mutation-harness audit ratification; 224/224 tests pass; ready for Phase 4 affordability consumers |
+| 3     | 1/4   | Executing — 03-01 green (D-10/D-14/D-15 model contracts; 5 new + 1 updated tests in test_models.py; 259/259 full suite); 03-02 (lib/amortize.py engine) is next |
 
 **Plan-level metrics:**
 
@@ -73,11 +75,12 @@ Resume file: `.planning/phases/03-core-amortization/03-CONTEXT.md`
 | 02-05 | 10 min | 3 | 20 created + 0 modified | +42 net (+9 conventional_pmi + +18 fannie_eligibility + +7 freddie_eligibility + +2 new schema params + +6 new citation-cov params; no cross-plan stub resolution) | green |
 | 02-06 | 5 min | 2 | 19 created + 0 modified | +29 net (+14 atr_qm + +10 reg_z + +1 new schema param [atr-qm-thresholds] + +4 new citation-cov params [atr_qm × 2, reg_z × 2]; no cross-plan stub resolution) | green |
 | 02-07 | 4 min | 4 + 1 checkpoint (auto-approved) | 3 created + 0 modified | +14 net (7 mutation harness + 2 YAML count audit + 5 cross-predicate smoke; zero production code touched; audit-only gate) | green |
+| 03-01 | 4 min | 2 | 0 created + 2 modified | +5 new (D-14 cumulative-totals positive + default; D-15 mismatch raises + empty-payments skip; D-10 default) + 1 updated (test_schedule_aggregates_loan_and_payments now satisfies D-15); 19 in test_models.py (was 14); 259/259 full suite | green |
 
 **Recent Trend:**
 
-- Last 13 plans: 01-01..01-06 + 02-01..02-07 (all green; 224/224 tests pass)
-- Trend: clean — no node repairs, no rework cycles. 02-07 set a NEW velocity floor at 4 min — fastest plan to date; audit-only plan (3 new test files + 0 production code changes) avoided the per-predicate research cost. Phase 2 is COMPLETE: 11 predicates ratified by mutation harness, YAML count pinned at 10, cross-predicate smoke green. One Rule-1 deviation (removed inapplicable ruff RUF100 noqa: BLE001 from plan spec — ruff config doesn't enable BLE rules). Phase 4 affordability is unblocked.
+- Last 14 plans: 01-01..01-06 + 02-01..02-07 + 03-01 (all green; 259/259 tests pass)
+- Trend: clean — no node repairs, no rework cycles. 03-01 ties 02-07 at the 4-min velocity floor (model-only data-shape lock; 0 new files; 2 modified; pre-commit hooks fired three formatting auto-fixes that were absorbed as Rule-3 deviations without semantic impact). Phase 3 engine plan (03-02) is unblocked; the data shape Plan 03-02 will produce is now pinned by the @model_validator. AMRT-01 requirement remains unchecked — Plan 03-01 only locked the contract, not the wrapper itself; AMRT-01 closes on 03-02.
 
 *Updated after each plan completion*
 
@@ -138,6 +141,11 @@ Recent decisions affecting current work:
 - 02-07: Paired count + stems assertions for filesystem audits. Two test functions (count match + stems set match) catch the rename-pair edge case where two YAMLs are renamed simultaneously and the count happens to balance. Reusable for Phase 9 DuckDB schema files, Phase 12 eval harness fixtures.
 - 02-07: Import-only smoke for the 9 YAML-backed predicates; happy-path call only for the 2 pure-Python predicates (reg_z + conventional_pmi). Calling all 11 with regulator-pinned inputs would duplicate per-predicate test files. Reusable cross-module smoke convention.
 - 02-07: Plan-author noqa speculation can fire ruff RUF100. The plan spec at line 775 included `# noqa: BLE001` but pyproject ruff config does NOT enable BLE rules. Future plan-authors should grep `pyproject.toml [tool.ruff.lint]` before pre-emptively writing noqa directives.
+- 03-01: D-15 invariant enforced as a Pydantic `@model_validator(mode="after")` on Schedule (not a test-only assertion) so EVERY Schedule constructor — including future Phase 5 ARM re-amortization paths and Phase 6 refi NPV synthetic schedules — gets the contract for free. Empty-payments early-return guard preserves constructor-convenience use cases. ValueError message prefix `D-15 invariant:` is grep-anchored in plan acceptance criteria so future refactors can't drop the citation tag silently.
+- 03-01: Phase-1 frozen-surface extension idiom: ALL new fields on existing Phase-1 Pydantic models MUST have default values that preserve existing callers. Verified end-to-end here: Payment.cumulative_interest/cumulative_principal default to Decimal("0.00"); Schedule.final_payment_adjusted defaults to False. Existing Phase-1 test test_payment_constructs_with_phase_3_shape constructs Payment with only Phase-1 fields — passes unchanged. Reusable convention for any future "extend a frozen model" plan.
+- 03-01: When `from __future__ import annotations` is enabled (project-wide), validator return-type annotations like `def validator(self) -> "Schedule":` get flagged by ruff UP037 (redundant string literal). Use unquoted forward references: `def validator(self) -> Schedule:`. Both forms are equivalent under PEP 563; UP037 enforces the unquoted form. Apply globally to any future @model_validator that returns its own class.
+- 03-01: Pre-commit ruff format will auto-wrap an assignment with a long inline comment into a parenthesized expression (e.g. `final_payment_adjusted: bool = (False  # comment)`) when the line exceeds the 100-char ruff line-length. This BREAKS grep gates that anchor on the original `field: type = value` shape. Mitigation: when the plan's grep gate anchors on a specific line shape AND the inline comment pushes line length past 100, hoist the comment to the line ABOVE the assignment, not after it. Applies to any future plan with grep-gated additions accompanied by long explanatory comments.
+- 03-01: Requirements-to-plan attribution can be 1-to-many. PLAN.md frontmatter `requirements: [AMRT-01]` was a planner shorthand for "this plan supports AMRT-01" but completing 03-01 alone does NOT close AMRT-01 ("`lib/amortize.py` wraps numpy-financial PMT/IPMT/PPMT"); the engine wrapper in 03-02 closes it. REQUIREMENTS.md AMRT-01 stays unchecked until 03-02 ships `lib/amortize.py`. Mark requirements complete only when ALL plans listing the requirement in frontmatter have shipped. Future plan executors should not auto-mark requirement complete on the first plan that lists it.
 
 ### Pending Todos
 
@@ -163,6 +171,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-04-29T00:00:00.000Z
-Stopped at: Phase 3 context gathered — 03-CONTEXT.md committed with 19 implementation decisions; ready for /gsd-plan-phase 3
-Resume file: .planning/phases/03-core-amortization/03-CONTEXT.md
+Last session: 2026-04-30T05:14:00.000Z
+Stopped at: Phase 03 plan 01 complete — Payment + Schedule extended for D-10/D-14/D-15; 5 new tests + 1 updated; 259/259 full suite green; ready for plan 03-02 (lib/amortize.py engine)
+Resume file: .planning/phases/03-core-amortization/03-02-PLAN.md
