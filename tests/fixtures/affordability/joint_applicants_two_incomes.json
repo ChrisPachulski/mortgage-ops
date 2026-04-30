@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "id": "joint_applicants_two_incomes",
+  "source": "ROADMAP SC-5 joint-applicants anchor + BLOCKER 2 size>len(applicants) demonstration",
+  "rounding": "ROUND_HALF_UP",
+  "notes": "Joint applicants: A=$6k/720 FICO + B=$4k/680 FICO; total income $10k, min credit score 680 \u2192 fico_bucket='680-699'. household.size=4 (2 applicants + 2 children) demonstrates BLOCKER 2 divergence: size > len(applicants). USDA + future household-size-keyed rules read request.household.size DIRECTLY (never inferred from len(applicants)).",
+  "request": {
+    "household": {
+      "location": {
+        "state_fips": "53",
+        "county_fips": "033",
+        "county_name": "King",
+        "state": "WA",
+        "zip": "98101"
+      },
+      "applicants": [
+        {
+          "name": "A",
+          "gross_monthly_income": "6000.00",
+          "credit_score": 720
+        },
+        {
+          "name": "B",
+          "gross_monthly_income": "4000.00",
+          "credit_score": 680
+        }
+      ],
+      "size": 4,
+      "monthly_debts": {
+        "auto": "0.00",
+        "student_loans": "0.00",
+        "credit_cards": "0.00",
+        "other": "0.00"
+      },
+      "escrow": {
+        "property_tax_monthly": "0.00",
+        "insurance_monthly": "0.00",
+        "hoa_monthly": "0.00"
+      },
+      "va": null,
+      "current_housing_payment": "0.00"
+    },
+    "max_dti": "0.430000",
+    "target_loan_type": "conventional",
+    "term_months": 360,
+    "annual_rate": "0.065000",
+    "apr": null,
+    "apor": null,
+    "monthly_pmi": null,
+    "endorsement_date_override": null,
+    "junior_liens": [],
+    "mode": "forward",
+    "loan_amount": "400000.00",
+    "property_value": "500000.00"
+  },
+  "expected_response": {
+    "mode": "forward",
+    "loan_type": "conforming",
+    "blocked": false,
+    "blocked_by": null,
+    "warnings": [
+      "ATR-QM-NOT-EVALUATED-MISSING-APR-OR-APOR",
+      "FANNIE-LLPA-680-699-75-80"
+    ],
+    "total_gross_monthly_income": "10000.00",
+    "total_monthly_debts": "0.00",
+    "loan_amount": "400000.00",
+    "property_value": "500000.00",
+    "financed_loan_amount": "400000.00",
+    "dti_front": "0.252827",
+    "dti_back": "0.252827",
+    "ltv": "0.800000",
+    "cltv": "0.800000",
+    "piti": "2528.27",
+    "monthly_pi": "2528.27",
+    "monthly_mi": "0.00",
+    "max_loan_amount": null,
+    "implied_pi": null,
+    "assumed_ltv_pct": null,
+    "assumed_monthly_mi": null
+  }
+}

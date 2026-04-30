@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "id": "forward_fha_above_dti_cap",
+  "source": "Plan 04-06 D-17 fixture list; tests DTI-CAP-FHA hard blocker",
+  "rounding": "ROUND_HALF_UP",
+  "notes": "Forward FHA at financed LTV ~0.958 (under 0.965 ceiling). max_dti=0.30 (tight); DTI back exceeds \u2192 blocked_by='DTI-CAP-FHA'. UFMIP auto-financed per D-03 (financed_loan_amount=$407k = $400k + $7k UFMIP at 1.75%); warnings include stale-warning string from fha-mip-rates.yml. BLOCKER 2: household.size=1.",
+  "request": {
+    "household": {
+      "location": {
+        "state_fips": "53",
+        "county_fips": "033",
+        "county_name": "King",
+        "state": "WA",
+        "zip": "98101"
+      },
+      "applicants": [
+        {
+          "name": "A",
+          "gross_monthly_income": "8000.00",
+          "credit_score": 680
+        }
+      ],
+      "size": 1,
+      "monthly_debts": {
+        "auto": "500.00",
+        "student_loans": "400.00",
+        "credit_cards": "200.00",
+        "other": "0.00"
+      },
+      "escrow": {
+        "property_tax_monthly": "400.00",
+        "insurance_monthly": "150.00",
+        "hoa_monthly": "0.00"
+      },
+      "va": null,
+      "current_housing_payment": "0.00"
+    },
+    "max_dti": "0.300000",
+    "target_loan_type": "fha",
+    "term_months": 360,
+    "annual_rate": "0.065000",
+    "apr": null,
+    "apor": null,
+    "monthly_pmi": null,
+    "endorsement_date_override": null,
+    "junior_liens": [],
+    "mode": "forward",
+    "loan_amount": "400000.00",
+    "property_value": "425000.00"
+  },
+  "expected_response": {
+    "mode": "forward",
+    "loan_type": "fha_standard",
+    "blocked": true,
+    "blocked_by": "DTI-CAP-FHA",
+    "warnings": [
+      "Reference data 'fha-mip-rates' has effective=2023-03-20, which is more than 12 months old (threshold: 2025-04-30). Annual regulatory refresh may be overdue.",
+      "ATR-QM-NOT-EVALUATED-MISSING-APR-OR-APOR"
+    ],
+    "total_gross_monthly_income": "8000.00",
+    "total_monthly_debts": "1100.00",
+    "loan_amount": "400000.00",
+    "property_value": "425000.00",
+    "financed_loan_amount": "407000.00",
+    "dti_front": "0.413633",
+    "dti_back": "0.551133",
+    "ltv": "0.957647",
+    "cltv": "0.957647",
+    "piti": "3309.06",
+    "monthly_pi": "2572.52",
+    "monthly_mi": "186.54",
+    "max_loan_amount": null,
+    "implied_pi": null,
+    "assumed_ltv_pct": null,
+    "assumed_monthly_mi": null
+  }
+}

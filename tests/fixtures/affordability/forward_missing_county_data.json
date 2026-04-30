@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "id": "forward_missing_county_data",
+  "source": "BLOCKER 1 fix; tests Phase 3 D-19 6-key envelope on MissingCountyDataError",
+  "rounding": "ROUND_HALF_UP",
+  "notes": "BLOCKER 1 fixture: county_fips='999' is NOT in data/reference/conforming-limits-2026.yml AND loan_amount > baseline ($832,750), so lib.rules.loan_type.classify raises MissingCountyDataError. scripts/affordability.py main() catches the exception and emits the Phase 3 D-19 6-key envelope on stderr instead of a Python traceback. Calling evaluate(request) DIRECTLY would raise MissingCountyDataError (Python exception, not blocked_by); only the CLI surface emits the envelope. Therefore this fixture has no expected_response \u2014 it has expected_stderr_envelope (matched by the test_cli_missing_county_data_emits_six_key_envelope test).",
+  "request": {
+    "household": {
+      "location": {
+        "state_fips": "53",
+        "county_fips": "999",
+        "county_name": "Unknown WA",
+        "state": "WA",
+        "zip": "00000"
+      },
+      "applicants": [
+        {
+          "name": "A",
+          "gross_monthly_income": "50000.00",
+          "credit_score": 720
+        }
+      ],
+      "size": 1,
+      "monthly_debts": {
+        "auto": "0.00",
+        "student_loans": "0.00",
+        "credit_cards": "0.00",
+        "other": "0.00"
+      },
+      "escrow": {
+        "property_tax_monthly": "0.00",
+        "insurance_monthly": "0.00",
+        "hoa_monthly": "0.00"
+      },
+      "va": null,
+      "current_housing_payment": "0.00"
+    },
+    "max_dti": "0.430000",
+    "target_loan_type": "conventional",
+    "term_months": 360,
+    "annual_rate": "0.065000",
+    "apr": null,
+    "apor": null,
+    "monthly_pmi": null,
+    "endorsement_date_override": null,
+    "junior_liens": [],
+    "mode": "forward",
+    "loan_amount": "1500000.00",
+    "property_value": "2000000.00"
+  },
+  "expected_stderr_envelope": [
+    {
+      "type": "value_error",
+      "loc": [
+        "household",
+        "location"
+      ],
+      "ctx": {
+        "class": "MissingCountyDataError"
+      }
+    }
+  ],
+  "expected_response": null
+}
