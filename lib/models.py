@@ -17,7 +17,7 @@ from datetime import date  # noqa: TC003  # Pydantic resolves annotations at run
 from decimal import Decimal
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # Public type aliases — Phase 4+ models import these.
 Money = Annotated[
@@ -57,6 +57,8 @@ class Payment(BaseModel):
     interest: Money
     extra_principal: Money = Decimal("0.00")
     balance: Money
+    cumulative_interest: Money = Decimal("0.00")  # D-14: running total through this period
+    cumulative_principal: Money = Decimal("0.00")  # D-14: running total through this period
 
 
 class Schedule(BaseModel):
@@ -67,4 +69,23 @@ class Schedule(BaseModel):
     loan: Loan
     monthly_pi: Money
     total_interest: Money
+    # D-10: True when final period principal != formulaic value
+    final_payment_adjusted: bool = False
     payments: list[Payment]
+
+    @model_validator(mode="after")
+    def _total_interest_matches_last_cumulative(self) -> Schedule:
+        """D-15: Schedule.total_interest == payments[-1].cumulative_interest exactly.
+
+        Skipped when payments is empty (constructor convenience for in-progress
+        scaffolds; Phase 3+ tests cover non-empty schedules end-to-end).
+        """
+        if not self.payments:
+            return self
+        last = self.payments[-1].cumulative_interest
+        if self.total_interest != last:
+            raise ValueError(
+                f"D-15 invariant: Schedule.total_interest ({self.total_interest}) != "
+                f"payments[-1].cumulative_interest ({last})"
+            )
+        return self
