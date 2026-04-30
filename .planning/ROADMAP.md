@@ -106,7 +106,35 @@ User selected **fine** (8-12 phases). This roadmap is **12 phases** — each cal
   3. ARM tests pass against published MGIC/Bankrate scenarios AND explicitly include both reset-month conventions (60 and 61) as separate fixtures with documented expected outputs
   4. Floor rule enforced: post-reset rate is never below `max(margin, configured_floor)` — verified by a fixture where the index drop would otherwise breach the floor
   5. `references/arm-mechanics.md` documents the chosen reset convention with Freddie/Fannie Selling Guide citations and is referenced from the ARMTerms model docstring
-**Plans**: TBD
+**Plans**:
+  - **Wave 0**
+    - 05-00 — test-infrastructure (arm_fixture loader + ~30 xfail stubs + .gitkeep dirs)
+  - **Wave 1** *(blocked on Wave 0 completion)*
+    - 05-01 — quantize-rate-promotion (D-14 lib.money.quantize_rate hygiene factor)
+  - **Wave 2** *(blocked on Wave 1 completion)*
+    - 05-02 — pydantic-models (ARMTerms + IndexPathEntry + ARMRequest + ARMPayment + ResetEvent + ARMSchedule + cross-field validator) — closes ARM-01
+  - **Wave 3** *(blocked on Wave 2 completion)*
+    - 05-03 — engine-build-arm-schedule (D-02 reset formula + D-05 per-epoch slice-stitch + applied_cap classification) — closes ARM-02, ARM-03, ARM-04, ARM-05
+  - **Wave 4** *(blocked on Wave 3 completion; 05-04a → 05-04b sequential)*
+    - 05-04a — cli-helpers-factor (scripts/_cli_helpers.py + Phase 3+4 byte-equivalent refactor)
+    - 05-04b — arm-cli (scripts/arm_simulate.py + 8 ARM-08 stub flips) — closes ARM-08
+  - **Wave 5** *(blocked on Waves 2-3 completion; can run in parallel with Wave 4 in principle, sequential per project config)*
+    - 05-05 — references-and-docstring (references/arm-mechanics.md with D-08 [REVISED] corrected citations + ARMTerms docstring cite) — closes ARM-09
+  - **Wave 6** *(blocked on Waves 3-5 completion; human-action checkpoint for oracle PDF captures)*
+    - 05-06 — fixtures-and-oracle (10 hand-calc fixtures + Bankrate 5/1/7/1/10/1 + Vertex42 5/1 + AmericU 5/6 SOFR oracle captures + hand_calc_check witness for cap-bound fixtures) — closes ARM-06, ARM-07
+
+  **Cross-cutting constraints:**
+  - All Pydantic models use `ConfigDict(strict=True, frozen=True, extra="forbid")` (Phase 1 D-08 inherited; LM-4 confirms config auto-inherits but explicit re-spec preferred for grep-discoverability)
+  - All money fields are `Decimal` constructed from strings; `quantize_cents` end-of-period only (Phase 1 PITFALLS inherited)
+  - All rate fields quantized at 6 decimal places via `lib.money.quantize_rate` (D-14 promotion in Wave 1)
+  - 6-key Pydantic envelope (type/loc/msg/input/url/ctx) on stderr for all CLI ValidationErrors (Phase 3 WR-02 + Phase 4 D-13 inherited)
+  - JSON-float pre-validation gate on all money/rate fields at script boundary (factored into `scripts/_cli_helpers.py` in Wave 4a)
+  - Per-epoch re-entry into `lib.amortize.build_schedule` with FULL remaining term + slice (D-05; bear-trap shortcut `term_months=reset_period_months` forbidden — RESEARCH guard test pins this)
+  - Continuous period numbering 1..N across epochs; cumulative totals carry across epoch boundaries; D-09 final-payment cleanup applies to FINAL epoch only (D-03/D-05)
+  - Oracle cross-validation: hand-calc per Selling Guide formula + external tool capture (Bankrate/Vertex42/AmericU) MUST agree exactly via Decimal `==` (D-04 [REVISED 2026-04-30]); cap-bound fixtures (no external oracle) get hand_calc_check witness
+  - References cite Fannie B2-1.4-02 + Freddie 6302.7(b) + CFPB §1951 + AmericU 5/6 SOFR Disclosure (D-08 [REVISED 2026-04-30]); old MGIC / B5-3.5-01 / §4404 forbidden in production reference doc
+  - Subprocess invocation in CLI tests (Phase 3 D-17 portability — Phase 10 may relocate scripts/arm_simulate.py)
+  - No new deps (pure composition over numpy-financial + pydantic + python-dateutil + lib.amortize + lib.money)
 
 ### Phase 6: Refinance NPV
 **Goal**: Calculate refinance NPV (rate-and-term + cash-out) and breakeven months from the borrower's perspective with sign-convention rigor enforced by Pydantic models
