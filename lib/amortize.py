@@ -54,6 +54,14 @@ LOCKED DECISION - D-05 (extra-principal list-of-entries shape; per CONTEXT.md):
   from its own period onward). One-shot entries (recurring=False) fire only when
   entry.period == p and stack ADDITIVELY on top of the recurring component.
 
+  Uniqueness rider (CR-01 closure): No two entries may share the same `period`
+  when both have `recurring=True` — that input class is order-of-list-ambiguous
+  under the "LATEST entry" rule above. Rejected at the AmortizeRequest boundary
+  by _no_duplicate_recurring_periods (raises ValidationError; surfaced as a
+  structured Pydantic error envelope by scripts/amortize.py per D-19). Duplicate
+  ONE-SHOT entries at the same period remain legal (additive stacking is order-
+  independent), as do recurring + one-shot pairs at the same period.
+
 LOCKED DECISION - D-06 (extra-principal period numbering; per CONTEXT.md):
   ExtraPrincipalEntry.period matches the schedule's natural cadence. For monthly
   schedules, period = month number (1..N). For biweekly schedules (true mode),
@@ -183,6 +191,35 @@ class AmortizeRequest(BaseModel):
         """
         if self.frequency == "monthly" and self.biweekly_mode is not None:
             raise ValueError("biweekly_mode must be None when frequency='monthly' (D-02)")
+        return self
+
+    @model_validator(mode="after")
+    def _no_duplicate_recurring_periods(self) -> AmortizeRequest:
+        """D-05 uniqueness rider (CR-01 closure): reject duplicate (period, recurring=True).
+
+        The locked D-05 selector ("the LATEST entry with entry.period <= p AND
+        entry.recurring=True") is order-of-list-ambiguous when two recurring
+        entries tie on `period`. We reject the ambiguity at the request boundary
+        instead of silently picking a tiebreaker — matches CLAUDE.md's
+        "Math correctness first ... deterministic Python function" rule.
+
+        Scope: this rider fires ONLY for recurring=True duplicates. Duplicate
+        one-shot entries at the same period remain legal (additive stacking
+        is commutative); recurring + one-shot at the same period also remains
+        legal (D-05 explicitly supports the composition).
+        """
+        seen_recurring_periods: set[int] = set()
+        for entry in self.extra_principal:
+            if not entry.recurring:
+                continue
+            if entry.period in seen_recurring_periods:
+                raise ValueError(
+                    f"duplicate recurring extra_principal at period {entry.period}; "
+                    f"two recurring entries at the same period are order-of-list-ambiguous "
+                    f"(D-05); use one recurring entry per period or set recurring=False "
+                    f"on duplicates to opt into additive stacking"
+                )
+            seen_recurring_periods.add(entry.period)
         return self
 
 
