@@ -36,7 +36,7 @@
       "current_housing_payment": "0.00"
     },
     "max_dti": "0.430000",
-    "target_loan_type": "conventional",
+    "target_loan_type": "fha",
     "term_months": 360,
     "annual_rate": "0.065000",
     "apr": null,
@@ -45,8 +45,8 @@
     "endorsement_date_override": null,
     "junior_liens": [],
     "mode": "forward",
-    "loan_amount": "1500000.00",
-    "property_value": "2000000.00"
+    "loan_amount": "700000.00",
+    "property_value": "780000.00"
   },
   "expected_stderr_envelope": [
     {
