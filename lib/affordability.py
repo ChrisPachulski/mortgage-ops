@@ -173,10 +173,11 @@ Stale-warning expected behavior (RESEARCH §"_loader.py and StaleReferenceWarnin
 
 from __future__ import annotations
 
-from datetime import date  # noqa: TC003  # Pydantic resolves annotations at runtime
+from datetime import date
 from decimal import Decimal
-from typing import TYPE_CHECKING, Annotated, Any, Literal
+from typing import TYPE_CHECKING, Annotated, Any, Final, Literal
 
+import numpy_financial as npf  # noqa: F401  # used by Plan 04-03 reverse; preloaded here
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # Suppression rationale (one-line per code):
@@ -184,20 +185,21 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 #   TC001 — Money + Rate are Annotated[Decimal, Field(...)] aliases used as Pydantic
 #           field types; Pydantic resolves annotations at runtime so these MUST be
 #           runtime imports (mirrors lib/models.py L16 datetime.date convention).
-from lib.models import Loan, Money, Rate  # noqa: F401, TC001
+from lib.models import Loan, Money, Rate
+from lib.money import quantize_cents
 
 # Phase 2 predicate full-path imports per Phase 2 D-08 (one predicate per citation).
-# Wave 1 plans 04-02/04-03/04-04 use these heavily; this plan only imports the
-# types they need to validate the request surface.
+# Wave 2 (Plan 04-02) promotes these to runtime imports because evaluate_forward
+# calls them at runtime (RESEARCH §A.1-A.3 corrected signatures).
 from lib.rules.conventional_pmi import LTV_REQUEST_ELIGIBLE  # Decimal("0.80") — RESEARCH §A.2
-from lib.rules.types import LoanType, Region  # noqa: TC001  # Pydantic resolves at runtime
+from lib.rules.fha_mip import compute as fha_mip_compute
+from lib.rules.loan_type import (
+    classify as loan_type_classify,
+)
+from lib.rules.types import County, LoanType, Region  # Pydantic resolves at runtime
 
 if TYPE_CHECKING:
-    # County is constructed at evaluation time (Plans 04-02/04-03/04-04), not
-    # request validation time; type-only import keeps the Plan 04-01 model surface
-    # decoupled from Phase 2 internals. Plans 04-02..04-04 promote this to a
-    # runtime import when their bodies need it.
-    from lib.rules.types import County  # noqa: F401
+    from collections.abc import Sequence
 
 
 # ---------------------------------------------------------------------------
@@ -232,6 +234,23 @@ bucket."""
 TargetLoanType = Literal["conventional", "fha", "va", "usda", "jumbo"]
 """Caller-facing loan-type literal — distinct from the 8-value
 lib.rules.types.LoanType which is the predicate-side return type."""
+
+# USDA annual guarantee fee rate (per lib.rules.usda compute formula
+# guarantee_fee_annual = loan_amount * 0.0035; RESEARCH §"lib/rules/usda.py").
+# Sourced directly here (not via predicate call) for Phase 4 PITI composition,
+# because USDA predicate's evaluate(...) is consulted by Plan 04-04 for blocker
+# precedence; the rate scalar is statutory/contractual and stable.
+USDA_ANNUAL_FEE_RATE: Final[Decimal] = Decimal("0.0035")
+
+# Citation prefix per target_loan_type (used when classified type is OUTSIDE
+# the target's accepted set — D-11 step 1 LTV-classification block).
+_LOAN_TYPE_BLOCKER_PREFIX: dict[str, str] = {
+    "conventional": "FHFA-LIMIT-CONFORMING",
+    "jumbo": "FHFA-LIMIT-JUMBO",
+    "fha": "HUD-LIMIT-FHA",
+    "va": "VA-LIMIT",
+    "usda": "USDA-LIMIT",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -493,6 +512,181 @@ class AffordabilityResponse(BaseModel):
     implied_pi: Money | None = None
     assumed_ltv_pct: Rate | None = None
     assumed_monthly_mi: Money | None = None
+
+
+# ---------------------------------------------------------------------------
+# Private helpers (Plan 04-02 — Wave 2 forward-affordability composition)
+# ---------------------------------------------------------------------------
+
+
+def _build_county(location: LocationFIPS) -> County:
+    """Construct a Phase 2 County from Household.location FIPS codes (RESEARCH Open Q#2)."""
+    return County(
+        state_fips=location.state_fips,
+        county_fips=location.county_fips,
+        name=location.county_name,
+    )
+
+
+def _build_loan_for_amortization(
+    principal: Decimal,
+    annual_rate: Decimal,
+    term_months: int,
+    origination_date: date | None = None,
+) -> Loan:
+    """Build a Phase 1 Loan for build_schedule consumption.
+
+    loan_type='fixed' is the amortization-mode tag (NOT regulatory classification).
+    Phase 2's 8-value LoanType is the regulatory result and lives on
+    AffordabilityResponse.loan_type, not on this internal Loan.
+    """
+    return Loan(
+        principal=quantize_cents(principal),
+        annual_rate=annual_rate,
+        term_months=term_months,
+        origination_date=origination_date or date.today(),
+        loan_type="fixed",
+    )
+
+
+def _compute_dti(
+    piti: Decimal,
+    sum_monthly_debts: Decimal,
+    total_gross_monthly_income: Decimal,
+) -> tuple[Decimal, Decimal]:
+    """Compute (front_end_dti, back_end_dti) per AFFD-01 + RESEARCH §"DTI Convention".
+
+    front_end = piti / income (housing-only ratio)
+    back_end  = (piti + non-housing-debts) / income (total-debt ratio)
+
+    Returns ratios as Decimal (NOT quantize_cents — DTI is a rate, not money;
+    ratios stay at full Decimal precision for the round-trip closure tolerance
+    in D-09).
+    """
+    front = piti / total_gross_monthly_income
+    back = (piti + sum_monthly_debts) / total_gross_monthly_income
+    return front, back
+
+
+def _compute_ltv(loan_amount: Decimal, property_value: Decimal) -> Decimal:
+    """LTV = loan_amount / property_value (AFFD-02). Decimal precision preserved."""
+    return loan_amount / property_value
+
+
+def _compute_cltv(
+    loan_amount: Decimal,
+    junior_liens: Sequence[Decimal],
+    property_value: Decimal,
+) -> Decimal:
+    """CLTV = (loan_amount + sum(junior_liens)) / property_value (AFFD-03).
+
+    v1 uses list[Money] (sum) per CONTEXT.md Claude's discretion. Empty junior_liens
+    reduces CLTV to LTV.
+    """
+    total = loan_amount + sum(junior_liens, start=Decimal("0"))
+    return total / property_value
+
+
+def _classify_target_loan_type(
+    loan_amount: Decimal,
+    county: County,
+    target_loan_type: TargetLoanType,
+) -> tuple[LoanType, str | None]:
+    """Run lib.rules.loan_type.classify with the corrected signature
+    (RESEARCH §A.1) and check the result against TARGET_LOAN_TYPE_CROSSWALK.
+
+    Returns (classified_type, blocker_citation):
+      - classified_type: the Phase 2 8-value LoanType returned by classify
+      - blocker_citation: None if classified_type is in the accepted set for
+        target_loan_type; otherwise a citation string formatted as:
+          FHFA-LIMIT-CONFORMING-{state_fips}-{county_fips}  (target=conventional, classified=jumbo)
+          FHFA-LIMIT-JUMBO-{state_fips}-{county_fips}        (target=jumbo, classified=conforming/high_balance)
+          HUD-LIMIT-FHA-{state_fips}-{county_fips}           (target=fha, classified=fha_high_balance excluded by HUD ceiling)
+          VA-LIMIT-{state_fips}-{county_fips}                (target=va, classified outside)
+          USDA-LIMIT-{state_fips}-{county_fips}              (target=usda, classified outside)
+
+    MissingCountyDataError raised by classify is propagated to caller — D-11
+    step 1 says it's a HARD ERROR (Pydantic-shaped envelope on stderr per
+    Phase 3 D-19), NOT a blocked_by string.
+    """
+    program = TARGET_LOAN_TYPE_TO_PROGRAM[target_loan_type]
+    classified: LoanType = loan_type_classify(
+        loan_amount=loan_amount,
+        county=county,
+        program=program,
+    )
+    accepted = TARGET_LOAN_TYPE_CROSSWALK[target_loan_type]
+    if classified in accepted:
+        return classified, None
+    citation_prefix = _LOAN_TYPE_BLOCKER_PREFIX[target_loan_type]
+    return classified, f"{citation_prefix}-{county.state_fips}-{county.county_fips}"
+
+
+def _compute_monthly_mi(
+    target_loan_type: TargetLoanType,
+    financed_loan_amount: Decimal,
+    property_value: Decimal,
+    annual_rate: Decimal,
+    term_months: int,
+    monthly_pmi: Decimal | None,
+    endorsement_date: date,
+) -> tuple[Decimal, Decimal]:
+    """Compute (monthly_mi, ufmip_or_zero) for the given target_loan_type.
+
+    Returns:
+      - monthly_mi: monthly mortgage-insurance / MIP / USDA annual fee component of PITI
+      - ufmip_or_zero: UFMIP dollar amount (FHA only; D-03 auto-finance) or 0 for others
+
+    Branches:
+      conventional + LTV>0.80 -> caller-supplied request.monthly_pmi (RESEARCH Open Q#1)
+      conventional + LTV<=0.80 -> Decimal("0.00")
+      fha -> fha_mip_compute(loan, property_value, endorsement_date); convert annual to monthly
+      va -> Decimal("0.00") (funding fee financed into principal at script boundary; not in PITI)
+      usda -> quantize_cents((loan_amount * USDA_ANNUAL_FEE_RATE) / 12)
+      jumbo -> Decimal("0.00") (caller responsible for jumbo-side MI if any)
+
+    Per RESEARCH §A.2/A.3 + Open Q#1.
+    """
+    if target_loan_type == "conventional":
+        origination_ltv = financed_loan_amount / property_value
+        if origination_ltv > LTV_REQUEST_ELIGIBLE:
+            # Plan 04-01 _validate_common already enforced monthly_pmi is not None here.
+            assert monthly_pmi is not None
+            return monthly_pmi, Decimal("0")
+        return Decimal("0.00"), Decimal("0")
+
+    if target_loan_type == "fha":
+        # RESEARCH §A.3: fha_mip.compute(loan, property_value, endorsement_date)
+        # NOT the CONTEXT.md D-02 (loan_amount, ltv_pct, term_months) signature.
+        loan = _build_loan_for_amortization(
+            principal=financed_loan_amount,
+            annual_rate=annual_rate,
+            term_months=term_months,
+            origination_date=endorsement_date,
+        )
+        mip = fha_mip_compute(
+            loan=loan,
+            original_property_value=property_value,
+            endorsement_date=endorsement_date,
+        )
+        monthly_mip = quantize_cents((financed_loan_amount * mip.annual_mip_pct) / Decimal("12"))
+        return monthly_mip, mip.ufmip
+
+    if target_loan_type == "va":
+        return Decimal("0.00"), Decimal("0")
+
+    if target_loan_type == "usda":
+        # RESEARCH §"lib/rules/usda.py": guarantee_fee_annual = loan * 0.0035
+        return (
+            quantize_cents((financed_loan_amount * USDA_ANNUAL_FEE_RATE) / Decimal("12")),
+            Decimal("0"),
+        )
+
+    if target_loan_type == "jumbo":
+        return Decimal("0.00"), Decimal("0")
+
+    # Defensive — Pydantic should already have rejected at request boundary
+    raise ValueError(f"Unknown target_loan_type: {target_loan_type}")
 
 
 # ---------------------------------------------------------------------------
