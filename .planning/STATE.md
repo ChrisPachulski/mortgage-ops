@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 03 plan 03 complete — scripts/amortize.py CLI shipped (argparse + lazy-import + AmortizeRequest.model_validate_json + JSON-float pre-validation gate); D-18 structural lazy-import check passes; all 5 smoke acceptance commands produce expected outputs; 259/259 full suite green; ready for 03-04 (test surface + golden-oracle parity)
-last_updated: "2026-04-30T05:42:00.000Z"
-last_activity: 2026-04-30 -- 03-03 complete (commit 539aebf)
+stopped_at: Phase 03 complete — plan 03-04 ships test surface (tests/test_amortize.py 25 functions / 35 parametrized cases + 7 JSON fixtures + amortize_fixture loader); AMRT-07 + AMRT-08 closed; all 8 phase requirements have direct test evidence; 294/294 full suite green; mypy --strict + ruff clean across 50 source files; ready for /gsd-verify-work + /gsd-transition to Phase 4
+last_updated: "2026-04-30T06:05:00.000Z"
+last_activity: 2026-04-30 -- 03-04 complete (commits b4eaa2d + cd7ae9f + 5ea3d67)
 progress:
   total_phases: 12
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 17
-  completed_plans: 16
-  percent: 94
+  completed_plans: 17
+  percent: 100
 ---
 
 # Project State
@@ -25,21 +25,23 @@ See: .planning/PROJECT.md (updated 2026-04-26)
 
 ## Current Position
 
-Phase: 03 (core-amortization) — EXECUTING
-Plan: 4 of 4 (03-01 + 03-02 + 03-03 complete; 03-04 next — test surface)
-Status: Executing Phase 03
-Last activity: 2026-04-30 -- 03-03 complete (scripts/amortize.py CLI shipped; AMRT-06 closed)
+Phase: 03 (core-amortization) — COMPLETE
+Plan: 4 of 4 (03-01 + 03-02 + 03-03 + 03-04 all green)
+Status: Phase 03 complete; ready for /gsd-verify-work + /gsd-transition to Phase 4
+Last activity: 2026-04-30 -- 03-04 complete (test surface shipped; AMRT-07 + AMRT-08 closed)
 
-Progress: [██░░░░░░░░] 17% (2/12 phases complete; Phase 3 at 3/4 plans)
+Progress: [███░░░░░░░] 25% (3/12 phases complete; Phase 3 at 4/4 plans)
 
 ### Resume instructions
 
-Plan 03-04 (tests/test_amortize.py + 7 fixtures + conftest extension) is next. Recommended path:
+Phase 3 is complete. Recommended path:
 
-1. `/clear`
-2. `/gsd-execute-plan 3 4` — pin AMRT-07/08 invariants + structural + biweekly + extra-principal + CLI subprocess + D-12/D-13 month-end + D-18 structural-lazy-import regression test
+1. `/gsd-verify-work` — verifier sweep across Phase-3 deliverables
+2. `/gsd-transition` to Phase 4 (Affordability) once verifier passes
+3. `/gsd-discuss-phase 4` — gather Phase-4 context before planning
+4. `/gsd-plan-phase 4` — plan Phase 4 deliverables
 
-Resume file: `.planning/phases/03-core-amortization/03-04-PLAN.md`
+Resume file (next): `.planning/phases/04-affordability/` (will be created by /gsd-discuss-phase 4)
 
 ## Performance Metrics
 
@@ -57,6 +59,7 @@ Resume file: `.planning/phases/03-core-amortization/03-04-PLAN.md`
 - Phase 3 plan 01 wall time: ~4 min (sequential, single executor — model-only data-shape lock; 0 created + 2 modified; +5 new tests + 1 updated; 3 Rule-3 ruff-format/UP037 deviations [all formatting, no semantic changes]; new project velocity floor tied with 02-07)
 - Phase 3 plan 02 wall time: ~9 min (sequential, single executor — engine plan with high logical complexity but zero new test files; 1 new file (lib/amortize.py 460 lines); 0 modified; 1 Rule-1 deviation [extra-principal-induced negative-balance bug found via Task 3 smokes — formulaic-overshoot detection added BEFORE principal computation]; 4 Rule-3 deviations [npf.irr literal in docstring conflicting with negative grep gate; ruff F401/RUF100 on initial date import; ruff RUF100 on # noqa: S101; ruff format auto-wrap on each commit]; all 4 golden oracles parity-match exactly; biweekly-true accelerates to 628 periods exactly per RESEARCH §3.1 prediction)
 - Phase 3 plan 03 wall time: ~6 min (sequential, single executor — single-task plan: scripts/amortize.py CLI; 1 new file (scripts/amortize.py 187 lines); 0 modified; 3 deviations [Rule-3: ruff I001 reordered the lazy-imports automatically; Rule-1: script invocation `python scripts/amortize.py` failed with ModuleNotFoundError because Python adds `scripts/` not cwd to sys.path — fixed by injecting project root onto sys.path inside main() AFTER argparse.parse_args(); Rule-2: Pydantic v2 model_validate_json permissively coerces JSON floats into Decimal — added pre-validation `_find_json_float_loc` walker that emits Pydantic-shaped `decimal_type` error envelope to enforce the FND-01/D-19 money-string contract that the plan author assumed Pydantic would handle natively]; D-18 structural lazy-import check exits 0 with `D-18 OK`; all 5 smoke acceptance commands produce expected outputs; AMRT-06 closed)
+- Phase 3 plan 04 wall time: ~25 min (sequential, single executor — full Phase-3 test surface: tests/conftest.py extended (+15 lines: amortize_fixture filename-stem loader); 7 JSON fixtures with engine-emitted values pasted verbatim; tests/test_amortize.py 25 functions / 35 parametrized cases (17 engine pinning + 8 CLI subprocess); 5 deviations [Rule-1: D-18 lazy-import test had to move into a fresh-Python subprocess because this test module's own top-level `from lib.amortize import ...` always pollutes sys.modules and forces the in-process variant into a permanent skip — relevant deviation pattern for any future "verify import not loaded" test; Rule-3 four times: top-level `import importlib.util` removed after Rule-1 fix (string still appears inside subprocess harness so plan grep gate satisfied); plan-author-speculative noqa directives `PLC0415` and `ARG003` removed after ruff RUF100 fired (mirrors 02-07 pattern); docstring text "assertAlmostEqual"/"freezegun" reworded to "fuzzy comparators"/"time-mocking dep" because the plan's negative grep gates are LITERAL greps that fire on docstring mentions (mirrors 02-05 reword pattern); ruff I001 auto-sorted the import block alphabetically]; full suite 294/294 (was 259 baseline + 35 new); AMRT-07 + AMRT-08 closed; Phase 3 complete)
 
 **By Phase:**
 
@@ -64,7 +67,7 @@ Resume file: `.planning/phases/03-core-amortization/03-04-PLAN.md`
 |-------|-------|--------|
 | 1     | 6/6   | Complete (PASS-WITH-CAVEATS) |
 | 2     | 7/7   | Complete — 02-01..02-07 green; 11 predicates + 10 reference YAMLs + citation-coverage + schema meta-tests + mutation-harness audit ratification; 224/224 tests pass; ready for Phase 4 affordability consumers |
-| 3     | 3/4   | Executing — 03-01 + 03-02 + 03-03 green (model contract + lib/amortize.py engine + scripts/amortize.py CLI; argparse + lazy-import + AmortizeRequest.model_validate_json + JSON-float pre-validation gate; D-18 structural lazy-import check exits 0; 5/5 smoke acceptance commands produce expected outputs; 259/259 full suite); 03-04 (tests/test_amortize.py + 7 fixtures) is next |
+| 3     | 4/4   | Complete — 03-01..03-04 green (model contract + lib/amortize.py engine + scripts/amortize.py CLI + tests/test_amortize.py 25 functions / 35 parametrized cases + 7 JSON fixtures + amortize_fixture loader); AMRT-01..08 all closed via direct test evidence; 294/294 tests pass; mypy --strict + ruff clean across 50 source files; ready for /gsd-verify-work and /gsd-transition to Phase 4 |
 
 **Plan-level metrics:**
 
@@ -80,11 +83,12 @@ Resume file: `.planning/phases/03-core-amortization/03-04-PLAN.md`
 | 03-01 | 4 min | 2 | 0 created + 2 modified | +5 new (D-14 cumulative-totals positive + default; D-15 mismatch raises + empty-payments skip; D-10 default) + 1 updated (test_schedule_aggregates_loan_and_payments now satisfies D-15); 19 in test_models.py (was 14); 259/259 full suite | green |
 | 03-02 | 9 min | 3 | 1 created (lib/amortize.py 460 lines) + 0 modified | 0 new tests this plan (Plan 03-04 brings test surface); 259/259 full suite (no regression) | green |
 | 03-03 | 6 min | 1 | 1 created (scripts/amortize.py 187 lines) + 0 modified | 0 new tests this plan (Plan 03-04 brings the CLI subprocess tests); 259/259 full suite (no regression) | green |
+| 03-04 | 25 min | 3 | 8 created (tests/test_amortize.py + 7 JSON fixtures) + 1 modified (tests/conftest.py) | 35 net (17 engine pinning + 8 CLI subprocess; 25 functions / 35 parametrized cases); 294/294 full suite | green |
 
 **Recent Trend:**
 
-- Last 16 plans: 01-01..01-06 + 02-01..02-07 + 03-01 + 03-02 + 03-03 (all green; 259/259 tests pass)
-- Trend: clean — no node repairs, no rework cycles. 03-03 took 6 minutes (single-task plan with 3 deviations absorbed inline: Rule-3 ruff I001, Rule-1 script-mode sys.path bug discovered via smoke 3, Rule-2 Pydantic-v2-JSON-float-coercion behavior discovered via smoke 5; the script-mode bug + the Pydantic JSON-float behavior were both surprises the plan author didn't anticipate but the smoke-acceptance criteria caught them). AMRT-01..05 satisfied (lib/amortize.py engine); AMRT-06 satisfied (scripts/amortize.py CLI); AMRT-07 + AMRT-08 still pending — 03-04 closes both via the test surface (AMRT-07 invariant + AMRT-08 golden-oracle parity in pytest, plus 7 fixtures + conftest extension + D-12/D-13 month-end + CLI subprocess tests + D-18 structural-lazy-import regression).
+- Last 17 plans: 01-01..01-06 + 02-01..02-07 + 03-01..03-04 (all green; 294/294 tests pass)
+- Trend: clean — no node repairs, no rework cycles. 03-04 took 25 minutes (3-task plan with 5 deviations absorbed inline: Rule-1 D-18 lazy-import test had to move into a fresh-Python subprocess because the test module's own `from lib.amortize import ...` always pollutes sys.modules; Rule-3 four times — top-level `import importlib.util` removed after Rule-1 fix, plan-author-speculative `# noqa: PLC0415` and `# noqa: ARG003` removed after ruff RUF100 fired, docstring "assertAlmostEqual"/"freezegun" reworded to "fuzzy comparators"/"time-mocking dep" because the plan's negative grep gates are LITERAL, ruff I001 auto-sorted import block). The D-18-test-skips-in-process bug was a real Rule-1 — the in-process design as written is unsatisfiable and the subprocess harness is the canonical fix; this is a pattern future "assert X not in sys.modules" tests across the project should follow. AMRT-07 + AMRT-08 closed; Phase 3 complete; ready for /gsd-verify-work + /gsd-transition to Phase 4.
 
 *Updated after each plan completion*
 
@@ -160,6 +164,10 @@ Recent decisions affecting current work:
 - 03-03: Python script-mode invocation (`python scripts/amortize.py ...`) puts the script's parent directory on `sys.path`, NOT the project root, so `from lib.amortize import ...` fails with `ModuleNotFoundError`. Mitigation: inject project root onto `sys.path[0]` inside `main()` AFTER `argparse.parse_args()` but BEFORE the lazy-import — preserves D-18 fast --help (the injection is microseconds and runs only on the actual-execution path) AND makes `subprocess.run([sys.executable, str(SCRIPT_PATH), ...])` work without setting `PYTHONPATH=.` in the subprocess env. Pattern reusable for any future runnable script under `scripts/`. The check `if _project_root not in sys.path` is idempotent so multiple invocations / re-imports don't bloat `sys.path`.
 - 03-03: Plan-author "Pydantic v2 strict-mode rejects float-in-money" assumption (locked into CONTEXT.md D-19 + RESEARCH §7) was a factual error about Pydantic's actual JSON-validation behavior. Resolution: the **intent** of D-19 (strict money-string contract at the boundary) is preserved, but the **enforcement layer** shifted from "Pydantic config" to "script-level pre-validation gate". Future plan-authors writing CLIs that consume JSON should verify Pydantic v2 actual behavior on JSON-number-vs-string for their specific field types before assuming `strict=True` will reject the wrong type. Disambiguator: dict-validation path is strict (rejects float); JSON-validation path is permissive (coerces JSON numbers to Decimal). The plan/CONTEXT/RESEARCH wording stays as-is since it correctly identifies the boundary as the enforcement point — only the implementation detail (pre-validation walker vs Pydantic-config flag) differs.
 - 03-03: Single-task plan (only 1 task) is a legitimate plan shape when the unit of work is a single coherent file with strong external contracts. 03-03's task pulled in 3 inline deviations that an over-decomposed plan would have spread across multiple commits — the single-task structure makes the deviation set legible in one SUMMARY rather than three. Reusable for future single-file CLI / single-module plans.
+- 03-04: "Assert X not in sys.modules" pytest tests cannot be hosted in the same test module that imports X (top-level imports). Resolution: spawn a fresh Python subprocess with an inline harness that prints a JSON dict of `sys.modules` keys post-execution; the pytest-side test parses the JSON and asserts membership. Subprocess startup is ~150ms — acceptable for a once-per-session lazy-import regression test. Pattern reusable for any future "verify Y was lazy-imported" or "verify Z is not loaded by --help fast path" test. The literal string `import importlib.util` lives inside the harness source string so plan grep gates that anchor on the string are still satisfied without ruff complaining about an unused top-level import.
+- 03-04: Plan-author noqa speculation (`# noqa: PLC0415`, `# noqa: ARG003`, `# noqa: BLE001`) recurs every plan that involves new test files; ruff RUF100 reliably catches them when those rules aren't enabled in `pyproject.toml [tool.ruff.lint]`. Mitigation: plan-authors should grep `pyproject.toml` for the rule code BEFORE writing pre-emptive noqa directives. Mirrors 02-07 + this plan's 03-04 deviation. Project-wide convention: do not write noqa directives speculatively — let ruff fire, then add the noqa only if the rule actually blocks.
+- 03-04: Negative grep gates that anchor on common docstring vocabulary (`assertAlmostEqual`, `pytest.approx`, `freezegun`) will fire on docstring mentions just as readily as on real anti-pattern uses. Mitigation: when a docstring text needs to communicate "do not use X", reword as "no X-style fuzzy comparators" or "no time-mocking dep" instead of inlining the literal banned token. Mirrors 02-05 reword pattern. Plan-authors who write negative grep gates should ALSO check whether their docstring template would trip the gate; this is a gate-design hygiene check.
+- 03-04: Engine-as-source-of-truth for fixture authoring. When pinning Decimal-equality contracts, run the engine first, capture its emitted strings, and paste verbatim into the fixture — never hand-compute or guess. This guarantees the fixture round-trips with `Decimal(expected) == schedule.actual`. Reusable for Phase 5 (ARM re-amortization fixtures), Phase 6 (refi NPV synthetic schedule fixtures), Phase 7 (APR Newton-Raphson convergence fixtures), Phase 8 (stress-sweep fixtures).
 
 ### Pending Todos
 
@@ -185,6 +193,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-04-30T05:42:00.000Z
-Stopped at: Phase 03 plan 03 complete — scripts/amortize.py CLI shipped (argparse + lazy-import + AmortizeRequest.model_validate_json + JSON-float pre-validation gate); D-18 structural lazy-import check exits 0; 5/5 smoke acceptance commands produce expected outputs (happy path / no-input / nonexistent / float-in-money / D-02 violation); 259/259 full suite green; ready for plan 03-04 (test surface + 7 fixtures + conftest extension)
-Resume file: .planning/phases/03-core-amortization/03-04-PLAN.md
+Last session: 2026-04-30T06:05:00.000Z
+Stopped at: Phase 03 complete — plan 03-04 ships test surface (tests/test_amortize.py 25 functions / 35 parametrized cases + 7 JSON fixtures + amortize_fixture loader); AMRT-07 + AMRT-08 closed (5 deviations absorbed inline: Rule-1 D-18-test-must-spawn-subprocess; Rule-3 importlib.util-removed-from-top-level / plan-author-speculative-noqa-removed (PLC0415, ARG003) / docstring-reworded-to-pass-negative-grep-gates / ruff-I001-auto-sort); 294/294 full suite green; mypy --strict + ruff clean across 50 source files; ready for /gsd-verify-work and /gsd-transition to Phase 4 (Affordability)
+Resume file: .planning/phases/04-affordability/ (will be created by /gsd-discuss-phase 4)

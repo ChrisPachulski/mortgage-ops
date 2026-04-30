@@ -16,7 +16,7 @@ User selected **fine** (8-12 phases). This roadmap is **12 phases** — each cal
 
 - [x] **Phase 1: Foundations & Money Discipline** - Lock Decimal/Pydantic v2 models, CI pipeline, DATA_CONTRACT, golden-value fixtures
 - [x] **Phase 2: Regulatory Reference Data & Rules Predicates** - Cited YAML + one-predicate-per-citation library (7/7 plans complete; 11 predicates + 10 reference YAMLs + audit-gate ratified)
-- [ ] **Phase 3: Core Amortization** - Wrap numpy-financial; fixed-rate, biweekly, extra-principal schedules
+- [x] **Phase 3: Core Amortization** - Wrap numpy-financial; fixed-rate, biweekly, extra-principal schedules
 - [ ] **Phase 4: Affordability** - DTI/LTV/CLTV/PITI + household-aware joint-applicant model
 - [ ] **Phase 5: ARM Modeling** - 5/1, 7/1, 10/1, 5/6 with caps/floor/margin/reset and re-amortization
 - [ ] **Phase 6: Refinance NPV** - Rate-and-term + cash-out, breakeven, sign-convention discipline
@@ -73,7 +73,7 @@ User selected **fine** (8-12 phases). This roadmap is **12 phases** — each cal
 - [x] 03-01-PLAN.md — Extend lib/models.py (Payment cumulative totals + Schedule final_payment_adjusted + D-15 validator) — AMRT-01 [completed 2026-04-30, commits 9821d77 + 81beaca; 5 new + 1 updated tests; 19 in test_models.py; 259/259 full suite green]
 - [x] 03-02-PLAN.md — Build lib/amortize.py engine (numpy-financial wrapper + fixed-rate + biweekly true/half-monthly + extra-principal + D-09 cleanup) — AMRT-01..05 [completed 2026-04-30, commits 1abdffa + 7d9c931 + 071f6dc; lib/amortize.py 460 lines; all 4 oracles parity-match exactly; biweekly-true accelerates to 628 periods; 259/259 full suite green]
 - [x] 03-03-PLAN.md — Build scripts/amortize.py CLI (argparse + lazy-import + AmortizeRequest boundary) — AMRT-06 [completed 2026-04-30, commit 539aebf; scripts/amortize.py 187 lines; D-18 structural lazy-import check exits 0 with "D-18 OK"; all 5 smoke acceptance commands produce expected outputs (happy path / no-input / nonexistent / float-in-money / D-02 violation); 259/259 full suite green]
-- [ ] 03-04-PLAN.md — Build tests/test_amortize.py + 7 fixtures + conftest extension (AMRT-07/08 invariants + structural + biweekly + extra + CLI + D-12/D-13) — AMRT-01..08
+- [x] 03-04-PLAN.md — Build tests/test_amortize.py + 7 fixtures + conftest extension (AMRT-07/08 invariants + structural + biweekly + extra + CLI + D-12/D-13) — AMRT-01..08 [completed 2026-04-30, commits b4eaa2d + cd7ae9f + 5ea3d67; tests/test_amortize.py 25 functions / 35 parametrized cases; 7 JSON fixtures + amortize_fixture loader; 294/294 full suite green; AMRT-07 + AMRT-08 closed]
 
 ### Phase 4: Affordability
 **Goal**: Compose Phase 1 models + Phase 2 rules into household-aware DTI/LTV/CLTV/PITI calculations and reverse-affordability ("what loan amount can I qualify for?")
@@ -193,7 +193,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 |-------|----------------|--------|-----------|
 | 1. Foundations & Money Discipline | 6/6 | Complete (PASS-WITH-CAVEATS) | 2026-04-26 |
 | 2. Regulatory Reference Data & Rules Predicates | 7/7 | Complete (PASSED) — 02-01..02-07 green; mutation harness proves citation-coverage + schema meta-tests have teeth; 11 predicates + 10 reference YAMLs; code review 14/14 fixed; 254/254 tests pass; verifier 5/5 must_haves PASSED 22/22 requirements SATISFIED | 2026-04-26 |
-| 3. Core Amortization | 2/4 | Executing — 03-01 + 03-02 complete (model contract + engine shipped; 4 golden oracles parity-match; biweekly-true accelerates to 628 periods; 259/259 tests green); ready for 03-03 CLI | - |
+| 3. Core Amortization | 4/4 | Complete — 03-01..03-04 green; lib/models.py extended (D-14 cumulative totals + D-15 validator); lib/amortize.py engine (numpy-financial wrapper, fixed-rate + biweekly true/half-monthly + extra-principal + D-09 final-cleanup); scripts/amortize.py CLI (argparse + lazy-import + JSON-float pre-validation gate); tests/test_amortize.py 25 functions / 35 parametrized cases + 7 JSON fixtures; 294/294 tests pass; AMRT-01..08 closed | 2026-04-30 |
 | 4. Affordability | 0/TBD | Not started | - |
 | 5. ARM Modeling | 0/TBD | Not started | - |
 | 6. Refinance NPV | 0/TBD | Not started | - |
