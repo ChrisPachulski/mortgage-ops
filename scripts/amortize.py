@@ -32,6 +32,32 @@ Input JSON shape (full):
       {"period": 60, "amount": "5000.00", "recurring": false}
     ]
   }
+
+Envelope Shape Contract (WR-02 closure):
+  All ValidationError-class boundary surfaces emit a uniform 6-key Pydantic v2
+  e.json() envelope on stderr:
+    [{"type": "<error_type>", "loc": [<JSON-pointer>],
+      "msg": "<message>",     "input": "<offending_value>",
+      "url": "<docs_url>",    "ctx": {"class": "<...>", ...}}]
+  Canonical URL pattern: https://errors.pydantic.dev/{MAJOR.MINOR}/v/{error_type}
+  with the version segment computed at runtime from `pydantic.VERSION` so that
+  a Pydantic minor upgrade (e.g. 2.13 -> 2.14) auto-aligns without code change.
+  This applies BOTH to native Pydantic ValidationError (the e.json() pass-through
+  path) AND to the pre-validation float-gate (which constructs an equivalent
+  envelope manually using `pydantic.VERSION` to populate the docs URL).
+
+  Downstream consumers parse stderr as a JSON list of 6-key error dicts:
+    - Phase 9 (Node orchestration / DuckDB persistence) — db-write.mjs ingests
+      the envelope as the canonical error record.
+    - Phase 10 (Claude SKILL.md narration) — modes/_shared.md narrates the
+      rejection by reading `loc` (which field) + `msg` (why) + `input` (the
+      rejected value). No conditional shape detection needed across the
+      ValidationError-class surfaces.
+
+  Out of scope for the 6-key contract: file-not-found and OSError surfaces use
+  the simpler `{"error": "<message>"}` shape (predates the envelope contract;
+  not Pydantic ValidationError surfaces). Argparse usage errors use argparse's
+  stderr formatting, also out of scope.
 """
 
 from __future__ import annotations
@@ -43,18 +69,22 @@ from pathlib import Path
 from typing import Any
 
 
-def _find_json_float_loc(raw: str) -> list[str | int] | None:
-    """Walk parsed JSON and return the first loc-path of a JSON-number-with-decimal.
+def _find_json_float_loc(raw: str) -> tuple[list[str | int], str] | None:
+    """Walk parsed JSON and return (loc-path, decimal-string) of the first JSON float.
 
     Pydantic v2 strict mode accepts JSON numbers for Decimal fields by design
     (https://docs.pydantic.dev/2.13/concepts/json/#json-parsing) — JSON has no
     distinct decimal type, so Pydantic permissively coerces JSON numbers. But
     the project's money-discipline contract (CLAUDE.md FND-01) and D-19 require
     money/rate fields be JSON STRINGS (e.g. "400000.00"). So we pre-parse with
-    `parse_float=Decimal` to mark JSON-numbers-with-decimal-points (which are
-    parsed by stdlib json into float at .) as Decimal instances, then walk the
-    parsed tree to find the first Decimal — its loc-path identifies the
-    offending field. None means no JSON floats present.
+    `parse_float=Decimal` to mark JSON-numbers-with-decimal-points as Decimal
+    instances, then walk the parsed tree to find the first Decimal — its
+    loc-path identifies the offending field.
+
+    WR-02 closure: returns BOTH the loc-path AND the offending input value
+    (as a Decimal-string) so the boundary error envelope can populate the
+    Pydantic-shape `input` key without re-walking the JSON. Returns None
+    when no JSON floats are present.
 
     The schema has zero fields that legitimately accept JSON floats:
       - principal / annual_rate / amount: must be JSON strings (Money/Rate)
@@ -72,9 +102,11 @@ def _find_json_float_loc(raw: str) -> list[str | int] | None:
         # Invalid JSON — let Pydantic's model_validate_json produce the canonical error.
         return None
 
-    def _walk(node: Any, path: list[str | int]) -> list[str | int] | None:
+    def _walk(node: Any, path: list[str | int]) -> tuple[list[str | int], str] | None:
         if isinstance(node, _Decimal):
-            return path
+            # str(Decimal) preserves the original lexical form (e.g. "400000.00"
+            # round-trips exactly when reconstructed via Decimal(str(...))).
+            return (path, str(node))
         if isinstance(node, dict):
             for k, v in node.items():
                 hit = _walk(v, [*path, k])
@@ -142,22 +174,41 @@ def main() -> int:
         )
         return 2
 
-    # D-19: pre-validation gate — reject JSON-numbers-with-decimal-points in money
-    # fields BEFORE handing to Pydantic. Pydantic v2 model_validate_json permissively
-    # coerces JSON floats into Decimal (documented behavior per Pydantic 2.13 JSON
-    # concepts); the project's CLAUDE.md FND-01 + CONTEXT.md D-19 require money/rate
-    # fields be JSON strings. Output a Pydantic-shaped error envelope so callers get
-    # a uniform structured-JSON error surface regardless of which gate fired.
-    float_loc = _find_json_float_loc(raw)
-    if float_loc is not None:
+    # D-19 + WR-02: pre-validation gate — reject JSON-numbers-with-decimal-points
+    # in money fields BEFORE handing to Pydantic. Pydantic v2 model_validate_json
+    # permissively coerces JSON floats into Decimal (documented behavior per
+    # Pydantic 2.13 JSON concepts); the project's CLAUDE.md FND-01 + CONTEXT.md
+    # D-19 require money/rate fields be JSON strings.
+    #
+    # Envelope shape: 6-key Pydantic v2 e.json() shape uniformly across ALL
+    # ValidationError-class boundary failure modes (WR-02 closure). Phase 9
+    # Node orchestration and Phase 10 SKILL.md narration parse stderr as a
+    # single uniform contract.
+    float_hit = _find_json_float_loc(raw)
+    if float_hit is not None:
+        float_loc, float_input = float_hit
+
+        # Lazy-imported pydantic.VERSION here (NOT at module top) to preserve
+        # D-18 fast --help. The version segment in the docs URL floats with
+        # the runtime Pydantic version so a 2.13 to 2.14 upgrade auto-aligns.
+        from pydantic import VERSION as _pydantic_version
+
+        _major_minor = ".".join(_pydantic_version.split(".")[:2])
         envelope = [
             {
                 "type": "decimal_type",
                 "loc": float_loc,
                 "msg": (
-                    "Input should be a JSON string for money/rate fields "
-                    "(JSON floats are rejected at the boundary per D-19)"
+                    "Input should be a valid decimal — JSON string required "
+                    "for money/rate fields per D-19 (JSON floats are rejected "
+                    "at the boundary)"
                 ),
+                "input": float_input,
+                "url": f"https://errors.pydantic.dev/{_major_minor}/v/decimal_type",
+                "ctx": {
+                    "class": "Decimal",
+                    "field_path": ".".join(str(p) for p in float_loc),
+                },
             }
         ]
         print(json.dumps(envelope), file=sys.stderr)
