@@ -50,3 +50,21 @@ def amortize_fixture() -> Callable[[str], dict[str, Any]]:
         return json.loads(path.read_text())  # type: ignore[no-any-return]
 
     return _load
+
+
+@pytest.fixture
+def affordability_fixture() -> Callable[[str], dict[str, Any]]:
+    """Return a callable that loads a single affordability fixture by filename
+    stem from tests/fixtures/affordability/. Mirrors `amortize_fixture` —
+    one-fixture-per-file shape; loader takes a filename stem like
+    "forward_va_residual_fail", not an id within an array.
+
+    Per CONTEXT.md D-17: every Phase 4 fixture lives under
+    tests/fixtures/affordability/ as one .json per scenario.
+    """
+
+    def _load(stem: str) -> dict[str, Any]:
+        path = FIXTURE_DIR / "affordability" / f"{stem}.json"
+        return json.loads(path.read_text())  # type: ignore[no-any-return]
+
+    return _load
