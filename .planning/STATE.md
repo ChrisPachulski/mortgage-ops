@@ -3,9 +3,9 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: in_progress
-stopped_at: Phase 2 complete — verifier PASSED 5/5 must_haves, 22/22 requirements satisfied, 254/254 tests pass; ready to advance to Phase 3 (Core Amortization)
-last_updated: "2026-04-26T22:50:00.000Z"
-last_activity: 2026-04-26 -- Phase 2 verification PASSED; code review 14/14 fixed; phase marked complete
+stopped_at: Phase 3 context gathered — 03-CONTEXT.md captures 19 decisions (biweekly both-modes, list-based extra-principal, final-principal-only cleanup, project-root scripts/, today-synthesized dates, cumulative totals on Payment); ready for /gsd-plan-phase 3
+last_updated: "2026-04-29T00:00:00.000Z"
+last_activity: 2026-04-29 -- Phase 3 discuss-phase complete; CONTEXT.md + DISCUSSION-LOG.md committed
 progress:
   total_phases: 12
   completed_phases: 2
@@ -21,25 +21,25 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-26)
 
 **Core value:** Math correctness first — every dollar figure traces to a tested, deterministic Python function; the LLM is a router and narrator that never owns numbers.
-**Current focus:** Phase 2 complete — ready to start Phase 3 (Core Amortization)
+**Current focus:** Phase 3 context gathered — ready to plan Phase 3 (Core Amortization)
 
 ## Current Position
 
-Phase: 3 of 12 — Core Amortization (not yet started)
-Plan: 0 of TBD — discuss/plan/execute pending
-Status: Phase 2 verified PASSED. 11 predicates + 10 reference YAMLs shipped; mutation harness ratified; 254/254 tests pass; all 22 requirements (REF-01..09, RUL-01..13) SATISFIED in REQUIREMENTS.md.
-Last activity: 2026-04-26 -- Phase 2 verification PASSED; phase marked complete in ROADMAP
+Phase: 3 of 12 — Core Amortization (context gathered; planning next)
+Plan: 0 of TBD — context done; plan/execute pending
+Status: Phase 3 discuss-phase complete. CONTEXT.md captures 19 decisions across biweekly semantics (both modes, default 'true'), extra-principal shape (single list-of-entries schema, period-indexed), final-payment cleanup (final-principal-only adjustment + `final_payment_adjusted` flag), date defaults (synthesize today when None), Schedule extension (cumulative totals on each Payment row), and CLI home (project-root `scripts/amortize.py`; Phase 10 migrates).
+Last activity: 2026-04-29 -- Phase 3 discuss-phase complete; CONTEXT.md + DISCUSSION-LOG.md committed
 
 Progress: [██░░░░░░░░] 17% (2/12 phases complete)
 
 ### Resume instructions
 
-Phase 3 is up next. Recommended path:
-1. `/gsd-discuss-phase 3` — gather context for amortization design (numpy-financial wrap, biweekly cadence, extra-principal handling)
-2. `/gsd-plan-phase 3` — create executable plan
+Phase 3 plan-phase is next. Recommended path:
+1. `/clear`
+2. `/gsd-plan-phase 3` — create executable plan from CONTEXT.md
 3. `/gsd-execute-phase 3` — implement and verify
 
-Or skip discuss-phase and go straight to `/gsd-plan-phase 3` if Phase 1's amortization-baseline pattern is sufficient guidance.
+Resume file: `.planning/phases/03-core-amortization/03-CONTEXT.md`
 
 ## Performance Metrics
 
@@ -163,6 +163,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-04-26T22:50:00.000Z
-Stopped at: Phase 2 VERIFIED & MARKED COMPLETE (5/5 must_haves PASSED; 22/22 requirements SATISFIED; 254/254 tests; code review 14/14 fixed; ready to start Phase 3 Core Amortization)
-Resume file: .planning/phases/02-regulatory-reference-data-rules-predicates/02-VERIFICATION.md
+Last session: 2026-04-29T00:00:00.000Z
+Stopped at: Phase 3 context gathered — 03-CONTEXT.md committed with 19 implementation decisions; ready for /gsd-plan-phase 3
+Resume file: .planning/phases/03-core-amortization/03-CONTEXT.md
