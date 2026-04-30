@@ -87,7 +87,14 @@ User selected **fine** (8-12 phases). This roadmap is **12 phases** — each cal
   3. When a binding rule blocks qualification (e.g., VA residual income failure), the output JSON includes a `blocked_by` field naming the predicate citation (e.g., `"blocked_by": "VA-RESIDUAL-WEST-FAMILY-4"`) — never silent
   4. `config/household.example.yml` is committed and documents the schema (joint income, applicants with credit scores, monthly debts, location); a fixture-based test loads it and runs through `scripts/affordability.py` end-to-end
   5. Joint-applicant test cases pass for both two-income households and dual-credit-score handling (lower-mid score selected per Fannie/Freddie convention)
-**Plans**: TBD
+**Plans:** 1/7 plans executed
+- [x] 04-00-test-infrastructure-PLAN.md — Wave 0: tests/conftest.py affordability_fixture + tests/fixtures/affordability/.gitkeep + tests/test_affordability.py 9 xfail stubs (Nyquist gate; AFFD-01..09 placeholder coverage)
+- [ ] 04-01-pydantic-models-PLAN.md — Wave 1: lib/affordability.py Pydantic v2 strict+frozen+forbid request/response models, discriminated union by mode, cross-walk constants, conditional model_validator (VA-required, monthly_pmi-for-conv-over-80%, apr/apor symmetry) — AFFD-01/02/03/04/06/07
+- [ ] 04-02-forward-affordability-PLAN.md — Wave 2: evaluate_forward + helper layer (_compute_dti, _compute_ltv, _compute_cltv, _compute_piti, _classify_target_loan_type, _compute_monthly_mi); composes lib.amortize.build_schedule + Phase 2 corrected predicates (loan_type/fha_mip/conventional_pmi); D-03 UFMIP auto-finance — AFFD-01/02/03/04/06
+- [ ] 04-03-reverse-affordability-PLAN.md — Wave 3: evaluate_reverse via one-shot npf.pv (negative pmt convention, fv=0); D-09 round-trip closure target — AFFD-05
+- [ ] 04-04-blocker-precedence-PLAN.md — Wave 4: _evaluate_blockers (D-11 precedence: classify → USDA-income → LTV/CLTV → DTI → ATR/QM → VA-residual); BLOCKED_BY_* citation constants; soft warnings; public evaluate() dispatcher; VA citation read VERBATIM from predicate — AFFD-07
+- [ ] 04-05-cli-and-config-PLAN.md — Wave 5: scripts/affordability.py JSON-in/JSON-out CLI mirroring scripts/amortize.py (Phase 3 D-13/17/18/19, WR-02 6-key envelope); config/household.example.yml FINAL schema with state_fips/county_fips/escrow/va blocks (AFFD-09; D-15) — AFFD-08/09
+- [ ] 04-06-tests-and-fixtures-PLAN.md — Wave 6: replace 9 Wave-0 stubs with real assertions; ship 9 fixtures per D-17; citation-coverage meta-test; D-18 lazy-import test; 6-key envelope test; ROADMAP SC-1..SC-5 verbatim coverage — AFFD-01..09 (all)
 
 ### Phase 5: ARM Modeling
 **Goal**: Model 5/1, 7/1, 10/1, 5/6 ARM products with explicit caps/floor/margin/reset semantics and verified handling of both reset-month conventions (60 vs 61)
@@ -196,7 +203,7 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 1. Foundations & Money Discipline | 6/6 | Complete (PASS-WITH-CAVEATS) | 2026-04-26 |
 | 2. Regulatory Reference Data & Rules Predicates | 7/7 | Complete (PASSED) — 02-01..02-07 green; mutation harness proves citation-coverage + schema meta-tests have teeth; 11 predicates + 10 reference YAMLs; code review 14/14 fixed; 254/254 tests pass; verifier 5/5 must_haves PASSED 22/22 requirements SATISFIED | 2026-04-26 |
 | 3. Core Amortization | 6/6 | Complete — 03-01..03-06 green; lib/models.py extended (D-14 cumulative totals + D-15 validator); lib/amortize.py engine (numpy-financial wrapper, fixed-rate + biweekly true/half-monthly + extra-principal + D-09 final-cleanup) + AmortizeRequest._no_duplicate_recurring_periods CR-01 closure; scripts/amortize.py CLI (argparse + lazy-import + JSON-float pre-validation gate emitting unified 6-key Pydantic envelope per WR-02); tests/test_amortize.py 27 functions / 42 cases + 7 JSON fixtures; 301/301 tests pass; AMRT-01..08 closed; CR-01 + WR-02 gaps closed | 2026-04-30 |
-| 4. Affordability | 0/TBD | Not started | - |
+| 4. Affordability | 1/7 | In Progress|  |
 | 5. ARM Modeling | 0/TBD | Not started | - |
 | 6. Refinance NPV | 0/TBD | Not started | - |
 | 7. Estimated APR (Reg Z Appendix J) | 0/TBD | Not started | - |

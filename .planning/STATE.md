@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Phase 4 context gathered
-last_updated: "2026-04-30T18:22:35.348Z"
-last_activity: 2026-04-30 -- Phase 04 planning complete
+stopped_at: Plan 04-00 complete (Wave 0 test scaffold)
+last_updated: "2026-04-30T19:01:25.843Z"
+last_activity: 2026-04-30
 progress:
   total_phases: 12
   completed_phases: 3
   total_plans: 26
-  completed_plans: 19
-  percent: 73
+  completed_plans: 20
+  percent: 77
 ---
 
 # Project State
@@ -21,27 +21,26 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-26)
 
 **Core value:** Math correctness first — every dollar figure traces to a tested, deterministic Python function; the LLM is a router and narrator that never owns numbers.
-**Current focus:** Phase 03 — core-amortization
+**Current focus:** Phase 4 — affordability
 
 ## Current Position
 
-Phase: 03 (core-amortization) — Plan 6 of 6 complete (Phase 3 done)
-Plan: 6 of 6 (03-01 + 03-02 + 03-03 + 03-04 + 03-05 + 03-06 all green)
+Phase: 4 (affordability) — EXECUTING
+Plan: 2 of 7
 Status: Ready to execute
-Last activity: 2026-04-30 -- Phase 04 planning complete
+Last activity: 2026-04-30
 
-Progress: [███░░░░░░░] 25% (3/12 phases complete; Phase 3 at 6/6 plans)
+Progress: [████████░░] 77%
 
 ### Resume instructions
 
-Phase 3 plan 03-06 is complete; Phase 3 (all 6 plans) is fully shipped. Recommended path:
+Phase 4 plan 04-00 (Wave 0 test infrastructure) is complete. Recommended path:
 
-1. `/gsd-verify-work` — verifier re-sweep over both gap-closure plans (03-05 CR-01 + 03-06 WR-02) and Phase-3 totality (re-verify the 5 ROADMAP success criteria + the two HUMAN_NEEDED items now closed)
-2. `/gsd-transition` to Phase 4 (Affordability) once verifier passes (PASSED status; both prior advisory gaps closed)
-3. `/gsd-discuss-phase 4` — gather Phase-4 context before planning
-4. `/gsd-plan-phase 4` — plan Phase 4 deliverables
+1. `/gsd-execute-phase 4` — continue executing Phase 4 plans 04-01..04-06 sequentially (Wave 1: 04-01 Pydantic models; Wave 2: 04-02 forward affordability; Wave 3: 04-03 reverse affordability; Wave 4: 04-04 blocker precedence; Wave 5: 04-05 CLI + config; Wave 6: 04-06 tests + fixtures)
+2. `/gsd-verify-work` — once all 7 Phase-4 plans ship, verifier re-sweeps Phase 4 against ROADMAP SC-1..SC-5
+3. `/gsd-transition` to Phase 5 (ARM Modeling) after verifier PASSED
 
-Resume file (next): no Phase 3 plan remaining; verifier or `/gsd-transition` is the next command.
+Resume file (next): `.planning/phases/04-affordability/04-01-pydantic-models-PLAN.md`.
 
 ## Performance Metrics
 
@@ -70,6 +69,7 @@ Resume file (next): no Phase 3 plan remaining; verifier or `/gsd-transition` is 
 | 1     | 6/6   | Complete (PASS-WITH-CAVEATS) |
 | 2     | 7/7   | Complete — 02-01..02-07 green; 11 predicates + 10 reference YAMLs + citation-coverage + schema meta-tests + mutation-harness audit ratification; 224/224 tests pass; ready for Phase 4 affordability consumers |
 | 3     | 6/6   | Complete — 03-01..03-06 all green (model contract + lib/amortize.py engine + scripts/amortize.py CLI + tests/test_amortize.py 42 functions + 7 JSON fixtures + amortize_fixture loader + AmortizeRequest._no_duplicate_recurring_periods CR-01 closure with 6 pinned tests + scripts/amortize.py 6-key Pydantic envelope WR-02 closure with 1 new + 1 tightened test); AMRT-01..08 all closed; CR-01 + WR-02 advisory gaps closed; 301/301 tests pass; mypy --strict + ruff clean across 50 source files; ready for verifier re-sweep before Phase 4 transition |
+| 4     | 1/7   | In progress — 04-00 green (Wave 0 test scaffold: tests/conftest.py affordability_fixture loader + tests/fixtures/affordability/.gitkeep + tests/test_affordability.py with 9 xfail stubs covering AFFD-01..09); Nyquist-compliant per-task verify gate enabled for Plans 04-01..04-06; 301 passed + 9 xfailed; mypy --strict + ruff clean; no AFFD-XX requirement closed yet (closure happens at Wave 1-3 / Plans 04-02..04-06) |
 
 **Plan-level metrics:**
 
@@ -88,11 +88,12 @@ Resume file (next): no Phase 3 plan remaining; verifier or `/gsd-transition` is 
 | 03-04 | 25 min | 3 | 8 created (tests/test_amortize.py + 7 JSON fixtures) + 1 modified (tests/conftest.py) | 35 net (17 engine pinning + 8 CLI subprocess; 25 functions / 35 parametrized cases); 294/294 full suite | green |
 | 03-05 | 3 min | 2 | 0 created + 2 modified (lib/amortize.py + tests/test_amortize.py) | 6 net (3 negative CR-01 reproducer + symmetric reverse + 3-way duplicate; 3 positive sibling D-05 step-up / duplicate one-shots / recurring+one-shot); 300/300 full suite; 0 deviations | green |
 | 03-06 | 4 min | 2 | 0 created + 2 modified (scripts/amortize.py + tests/test_amortize.py) | 1 net (test_cli_error_envelope_uniformity) + 1 tightened (test_cli_rejects_float_principal); 301/301 full suite; 3 Rule-3 deviations (ruff PT018 split compound asserts; ruff format auto-collapse on _walk signature; added 2nd errors.pydantic.dev URL reference in docstring to satisfy >=2 grep gate) | green |
+| 04-00 | 3 min | 3 | 2 created (tests/test_affordability.py + tests/fixtures/affordability/.gitkeep) + 1 modified (tests/conftest.py) | +9 xfail stubs (one per AFFD-01..09); 0 prior tests touched; 301 prior + 9 xfail = full suite still 301 passed + 9 xfailed; 2 Rule-3 deviations (drop plan-specified speculative imports json/subprocess/sys/Decimal/Any/Callable that ruff F401 flagged unused at Wave 0 — Wave 1+ plans add them back when bodies need them; ruff format auto-collapse on SCRIPT_PATH multi-line assignment when it fits at 100 chars) | green |
 
 **Recent Trend:**
 
-- Last 19 plans: 01-01..01-06 + 02-01..02-07 + 03-01..03-06 (all green; 301/301 tests pass)
-- Trend: clean — no node repairs, no rework cycles. 03-06 took 4 minutes with 3 Rule-3 hygiene deviations (all auto-fixable: ruff PT018 split of compound asserts, ruff format auto-collapse, +1 docstring URL reference for >=2 grep gate). The TDD cycle materialized exactly as the planner predicted: 2 expected RED-shape failures (`AssertionError: ... got ['loc', 'msg', 'type']` against `expected {'type','loc','msg','input','url','ctx'}`), then a clean GREEN turn that flipped both targeted tests to PASS without disturbing any of the 7 prior CLI sibling tests OR any of the 33 engine tests. The lazy-import of `pydantic.VERSION` inside the float_hit branch (deepest possible scope, AFTER args.parse_args() and AFTER the file-not-found / OSError gates) preserved D-18 fast --help byte-identically — verifier still emits `D-18 OK`. Phase 3 (6/6 plans) is fully shipped: AMRT-01..08 closed (Plans 03-01..03-04), CR-01 closed (Plan 03-05), WR-02 closed (Plan 03-06). Both human-needed advisory items from 03-VERIFICATION.md are now resolved with concrete validator/envelope tests pinning the contracts. Ready for verifier re-sweep before Phase 4 transition.
+- Last 20 plans: 01-01..01-06 + 02-01..02-07 + 03-01..03-06 + 04-00 (all green; 301 passed + 9 xfailed = 310 collected)
+- Trend: clean — no node repairs, no rework cycles. 04-00 took 3 minutes with 2 Rule-3 hygiene deviations: (1) trimmed plan-specified speculative imports (json, subprocess, sys, decimal.Decimal, typing.Any, collections.abc.Callable) that the Wave 0 stub bodies do not yet reference — every Wave 1+ test body will add back what it needs; this mirrors the 02-07 + 03-04 'no speculative noqa' convention extended to imports; (2) ruff format auto-collapsed the SCRIPT_PATH multi-line assignment to a single line when it fit at 100 chars — substance preserved (constant points at scripts/affordability.py with the same Phase 10 relocation seam docstring intact). 9 xfail stubs collected cleanly with structured reason strings ("Wave N: AFFD-XX implementation pending (Plan 04-NN)") for grep audit per threat-model T-04-00-02. AFFORDABILITY_MODULE_PATH + SCRIPT_PATH constants pin the Phase 10 relocation seam exactly per the Phase 3 D-17 idiom. Ready for Plan 04-01 (Pydantic models): every Wave 1+ task can now express `<verify><automated>pytest tests/test_affordability.py::test_AFFD_NN_xxx -x</automated></verify>` against a real (xfail-protected) test stub. Plan 04-00 establishes the Wave-0 xfail-stub-seeding pattern as a reusable convention for any future phase wanting pre-populated test surface BEFORE production code lands — the key insight is that stubs MUST raise NotImplementedError inside the function body (not at import time) so the test module can collect even when the production module it eventually tests does not yet exist.
 
 *Updated after each plan completion*
 
@@ -180,6 +181,10 @@ Recent decisions affecting current work:
 - 03-06: Lazy-import scope minimization for D-18 fast --help. The `from pydantic import VERSION` import is placed INSIDE the `if float_hit is not None:` branch, INSIDE `def main()`, AFTER `args = parser.parse_args()` AND AFTER the file-not-found / OSError gates. This is the deepest-possible scope: the import runs only on the actual-execution path that needs the version (the float-gate envelope construction), never on the --help path, never on the file-not-found path, never on the OSError path. D-18 structural verifier confirmed `lib.amortize` and `numpy_financial` stay out of `sys.modules` after --help. Reusable for any future lazy-import that should run only on a specific error-class path.
 - 03-06: Pydantic v2 emits the same 6-key e.json() shape for ALL `ValidationError` raised inside `@model_validator(mode="after")` regardless of whether the validator raises `ValueError` (Pydantic wraps to `value_error` type) OR a structured `pydantic.ValidationError` directly. Verified empirically: the 03-05 CR-01 validator (raises `ValueError`) and the 03-04-baseline D-02 `_biweekly_mode_consistency` validator (also raises `ValueError`) both emit `{"type": "value_error", "loc": [], "msg": "...", "input": {...}, "ctx": {"error": "..."}, "url": "https://errors.pydantic.dev/2.13/v/value_error"}` via `e.json()`. This means the float-gate's manually-constructed 6-key envelope (with `type: "decimal_type"`) is the only ValidationError-class surface that needed code changes for WR-02 — every other surface (D-02, CR-01, JSON parse errors, type errors, extra=forbid violations, etc.) was already 6-key by virtue of using `e.json()` pass-through. Disambiguator: any new manually-constructed envelope at a CLI boundary MUST follow the 6-key shape; any envelope flowing through `e.json()` is automatically conformant.
 - 03-06: Acceptance-gate-driven docstring expansion. Plan grep gates with `>=N` thresholds can quietly require additional documentation that the action body's edits don't supply. The Task 2 grep gate `grep -c "https://errors.pydantic.dev" scripts/amortize.py | grep -v '^#'` returns `>=2` was satisfied by the f-string in the envelope construction (1) PLUS a second URL reference in the module docstring (1) — but the action body only specified the f-string. Resolution: added "Canonical URL pattern: https://errors.pydantic.dev/{MAJOR.MINOR}/v/{error_type}..." sentence in the Envelope Shape Contract paragraph. This is a Rule-3 acceptance-gate deviation pattern: when a plan's grep gate threshold exceeds what the action body's edits provide, the executor adds the additional documentation in the most contextually-appropriate location (the docstring section the gate was clearly designed to anchor on). Reusable for any future plan with `>=N` grep gates whose action body specifies fewer than N occurrences.
+- [Phase 4]: 04-00: Wave-0 xfail-stub seeding pattern — every requirement gets a stub raising NotImplementedError inside the function body (not at import time) with structured xfail reason 'Wave N: AFFD-XX implementation pending (Plan 04-NN)' for grep audit; reusable for any future phase wanting pre-populated test surface before production code lands. Stub raises ensure xfail catches at execution time, not collection time — critical because production module 'lib.affordability' does not exist yet so a top-level import would break collection.
+- [Phase 4]: 04-00: Don't carry plan-specified speculative imports — Wave 0 stub bodies that just 'raise NotImplementedError' don't reference the imports the plan author specified for the eventual Wave 1+ test bodies (json/subprocess/sys/Decimal/Any/Callable). ruff F401 fires on every one; trim to only what the current commit uses; Wave 1+ plans (04-02..04-06) add each import back as their bodies need it. Mirrors 02-07 + 03-04 'no speculative noqa, no speculative imports' convention.
+- [Phase 4]: 04-00: Sibling-loader convention extended — each new phase appends a {phase}_fixture factory to tests/conftest.py mirroring amortize_fixture's filename-stem loader from FIXTURE_DIR / phase / f'{stem}.json'. Fixture-shape consistency across phases enables a future RUL-13-style citation-coverage meta-test if Phase 4+ ships one. Pattern reusable for Phase 5 (ARM) + Phase 6 (refi NPV) + Phase 8 (stress) test surfaces.
+- [Phase 4]: 04-00: SCRIPT_PATH single-constant Phase-10 relocation seam — tests/test_affordability.py's SCRIPT_PATH is the ONLY constant edited at Phase 10 when scripts/ relocates to .claude/skills/mortgage-ops/scripts/. Phase 4 callers MUST use subprocess invocation (NEVER 'import scripts.affordability') so the relocation stays a one-line change. Mirrors Phase 3 D-17 + tests/test_amortize.py:50-53 idiom.
 
 ### Pending Todos
 
@@ -205,6 +210,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-04-30T08:05:53.336Z
-Stopped at: Phase 4 context gathered
-Resume file: .planning/phases/04-affordability/04-CONTEXT.md
+Last session: 2026-04-30T19:01:25.837Z
+Stopped at: Plan 04-00 complete (Wave 0 test scaffold)
+Resume file: .planning/phases/04-affordability/04-01-pydantic-models-PLAN.md
