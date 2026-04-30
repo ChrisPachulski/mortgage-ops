@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "id": "biweekly_half_monthly_200k_6_5",
+  "source": "Wikipedia oracle (200k/6.5/30) in half-monthly biweekly mode per CONTEXT.md D-01 + D-04 + RESEARCH 3.2 Option A",
+  "rounding": "ROUND_HALF_UP",
+  "notes": "Half-monthly: rate/12 + monthly amortization; biweekly cashflow is a billing decoration (interest still booked monthly per D-04). Schedule emits 360 monthly rows. Engine-emitted values pasted verbatim.",
+  "loan": {
+    "principal": "200000.00",
+    "annual_rate": "0.065000",
+    "term_months": 360,
+    "origination_date": "2026-05-01",
+    "loan_type": "fixed"
+  },
+  "frequency": "biweekly",
+  "biweekly_mode": "half-monthly",
+  "extra_principal": [],
+  "expected_schedule_summary": {
+    "monthly_pi": "1264.14",
+    "total_interest": "255085.82",
+    "final_payment_adjusted": true,
+    "num_payments": 360,
+    "first_payment": {
+      "period": 1,
+      "payment_date": "2026-06-01",
+      "payment": "1264.14",
+      "principal": "180.81",
+      "interest": "1083.33",
+      "extra_principal": "0.00",
+      "balance": "199819.19",
+      "cumulative_interest": "1083.33",
+      "cumulative_principal": "180.81"
+    },
+    "last_payment": {
+      "period": 360,
+      "payment_date": "2056-05-01",
+      "payment": "1259.56",
+      "principal": "1252.77",
+      "interest": "6.79",
+      "extra_principal": "0.00",
+      "balance": "0.00",
+      "cumulative_interest": "255085.82",
+      "cumulative_principal": "200000.00"
+    }
+  }
+}

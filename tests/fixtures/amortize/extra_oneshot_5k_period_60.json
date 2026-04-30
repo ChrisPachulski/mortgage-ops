@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "id": "extra_oneshot_5k_period_60",
+  "source": "computed in-tree; one-shot extra principal per CONTEXT.md D-05",
+  "rounding": "ROUND_HALF_UP",
+  "notes": "Single $5000 extra at period 60. Surrounding periods have extra=0.00. Engine-emitted values pasted verbatim.",
+  "loan": {
+    "principal": "200000.00",
+    "annual_rate": "0.065000",
+    "term_months": 360,
+    "origination_date": "2026-05-01",
+    "loan_type": "fixed"
+  },
+  "frequency": "monthly",
+  "biweekly_mode": null,
+  "extra_principal": [
+    {"period": 60, "amount": "5000.00", "recurring": false}
+  ],
+  "expected_schedule_summary": {
+    "monthly_pi": "1264.14",
+    "total_interest": "236018.33",
+    "final_payment_adjusted": true,
+    "num_payments": 341,
+    "extra_at_period_60": "5000.00",
+    "extra_at_period_59": "0.00",
+    "extra_at_period_61": "0.00"
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "id": "extra_step_up_200_to_300",
+  "source": "computed in-tree; step-up recurring per CONTEXT.md D-05 (later recurring overrides earlier)",
+  "rounding": "ROUND_HALF_UP",
+  "notes": "Periods 1-12 have $200 extra; period 13 onward has $300. Tests later-recurring-overrides-earlier. Engine-emitted values pasted verbatim.",
+  "loan": {
+    "principal": "200000.00",
+    "annual_rate": "0.065000",
+    "term_months": 360,
+    "origination_date": "2026-05-01",
+    "loan_type": "fixed"
+  },
+  "frequency": "monthly",
+  "biweekly_mode": null,
+  "extra_principal": [
+    {"period": 1, "amount": "200.00", "recurring": true},
+    {"period": 13, "amount": "300.00", "recurring": true}
+  ],
+  "expected_schedule_summary": {
+    "monthly_pi": "1264.14",
+    "total_interest": "144161.32",
+    "final_payment_adjusted": true,
+    "num_payments": 221,
+    "extra_at_period_1": "200.00",
+    "extra_at_period_12": "200.00",
+    "extra_at_period_13": "300.00",
+    "extra_at_period_50": "300.00"
+  }
+}

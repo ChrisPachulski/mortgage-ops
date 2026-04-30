@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "id": "biweekly_true_200k_6_5",
+  "source": "scaled from Wikipedia oracle (https://en.wikipedia.org/wiki/Mortgage_calculator); biweekly-true mode per CONTEXT.md D-01 + D-04",
+  "rounding": "ROUND_HALF_UP",
+  "notes": "True biweekly: rate/26 + half-of-monthly-pmt; accelerates payoff per RESEARCH 3.1. Engine-emitted values pasted verbatim.",
+  "loan": {
+    "principal": "200000.00",
+    "annual_rate": "0.065000",
+    "term_months": 360,
+    "origination_date": "2026-05-01",
+    "loan_type": "fixed"
+  },
+  "frequency": "biweekly",
+  "biweekly_mode": "true",
+  "extra_principal": [],
+  "expected_schedule_summary": {
+    "monthly_pi": "1264.14",
+    "total_interest": "196339.36",
+    "final_payment_adjusted": true,
+    "num_payments": 628,
+    "first_payment": {
+      "period": 1,
+      "payment_date": "2026-05-15",
+      "payment": "632.07",
+      "principal": "132.07",
+      "interest": "500.00",
+      "extra_principal": "0.00",
+      "balance": "199867.93",
+      "cumulative_interest": "500.00",
+      "cumulative_principal": "132.07"
+    },
+    "last_payment": {
+      "period": 628,
+      "payment_date": "2050-05-27",
+      "payment": "31.47",
+      "principal": "31.39",
+      "interest": "0.08",
+      "extra_principal": "0.00",
+      "balance": "0.00",
+      "cumulative_interest": "196339.36",
+      "cumulative_principal": "200000.00"
+    }
+  }
+}

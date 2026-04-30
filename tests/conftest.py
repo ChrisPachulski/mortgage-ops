@@ -33,3 +33,20 @@ def golden_fixture() -> Callable[[str], dict[str, Any]]:
         raise KeyError(f"fixture id not found in golden_pmt.json: {fixture_id}")
 
     return _load
+
+
+@pytest.fixture
+def amortize_fixture() -> Callable[[str], dict[str, Any]]:
+    """Return a callable that loads a single amortize fixture by filename stem
+    from tests/fixtures/amortize/. Raises FileNotFoundError if the stem doesn't exist.
+
+    Phase 3 fixtures are one-fixture-per-file (richer schemas than the wrapped
+    array shape used by golden_pmt.json) so diffs stay readable. Loader takes a
+    filename stem like "biweekly_true_200k_6_5", not a fixture id within an array.
+    """
+
+    def _load(stem: str) -> dict[str, Any]:
+        path = FIXTURE_DIR / "amortize" / f"{stem}.json"
+        return json.loads(path.read_text())  # type: ignore[no-any-return]
+
+    return _load

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "id": "month_end_jan_31",
+  "source": "computed in-tree; relativedelta month-end clipping per CONTEXT.md D-13",
+  "rounding": "ROUND_HALF_UP",
+  "notes": "Origination Jan 31 -> first payment Feb 28 (relativedelta clips); subsequent dates also clip to month-end where applicable. Engine-emitted values pasted verbatim.",
+  "loan": {
+    "principal": "200000.00",
+    "annual_rate": "0.065000",
+    "term_months": 360,
+    "origination_date": "2026-01-31",
+    "loan_type": "fixed"
+  },
+  "frequency": "monthly",
+  "biweekly_mode": null,
+  "extra_principal": [],
+  "expected_schedule_summary": {
+    "monthly_pi": "1264.14",
+    "total_interest": "255085.82",
+    "final_payment_adjusted": true,
+    "num_payments": 360,
+    "first_payment_date": "2026-02-28",
+    "second_payment_date": "2026-03-31",
+    "third_payment_date": "2026-04-30"
+  }
+}

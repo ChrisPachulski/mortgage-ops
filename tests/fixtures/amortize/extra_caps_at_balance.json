@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "id": "extra_caps_at_balance",
+  "source": "computed in-tree; cap-at-balance per CONTEXT.md D-08",
+  "rounding": "ROUND_HALF_UP",
+  "notes": "Tiny loan + huge recurring extra: cap fires period 1; schedule terminates; final_payment_adjusted is true. Engine-emitted values pasted verbatim.",
+  "loan": {
+    "principal": "1000.00",
+    "annual_rate": "0.065000",
+    "term_months": 12,
+    "origination_date": "2026-05-01",
+    "loan_type": "fixed"
+  },
+  "frequency": "monthly",
+  "biweekly_mode": null,
+  "extra_principal": [
+    {"period": 1, "amount": "50000.00", "recurring": true}
+  ],
+  "expected_schedule_summary": {
+    "monthly_pi": "86.30",
+    "total_interest": "5.42",
+    "final_payment_adjusted": true,
+    "num_payments": 1
+  }
+}
