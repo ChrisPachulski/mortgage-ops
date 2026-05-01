@@ -175,7 +175,7 @@ from __future__ import annotations
 
 import warnings
 from datetime import date
-from decimal import ROUND_HALF_UP, Decimal, localcontext
+from decimal import Decimal
 from typing import TYPE_CHECKING, Annotated, Any, Final, Literal
 
 import numpy_financial as npf
@@ -183,7 +183,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from lib.amortize import build_schedule
 from lib.models import Loan, Money, Rate
-from lib.money import MONEY_CONTEXT, quantize_cents
+from lib.money import quantize_cents, quantize_rate
 from lib.rules._loader import StaleReferenceWarning
 
 # Phase 2 predicate full-path imports per Phase 2 D-08 (one predicate per citation).
@@ -606,27 +606,6 @@ def _build_county(location: LocationFIPS) -> County:
     )
 
 
-# Rate quantization — Phase 4 ratios (LTV/CLTV/DTI) must fit the lib.models.Rate
-# Annotated[Decimal, Field(max_digits=7, decimal_places=6)] constraint. Money
-# uses quantize_cents (2 places); rates use this 6-place quantize. Single source
-# of truth, same end-of-period discipline (Phase 3 D-04 PITFALLS).
-_RATE_QUANTUM: Final[Decimal] = Decimal("0.000001")
-
-
-def _quantize_rate(rate: Decimal) -> Decimal:
-    """Quantize a fractional rate to 6 decimal places (lib.models.Rate constraint).
-
-    Round-trip closure (D-09; SC-2) exposes that ltv = max_loan_amount /
-    derived_property_value can produce 28-digit Decimals; the response Rate
-    field rejects more than 7 total digits. Apply ROUND_HALF_UP via
-    lib.money.MONEY_CONTEXT (CLAUDE.md money discipline; Phase 1 PITFALLS:
-    US consumer finance uses ROUND_HALF_UP, never Python's default
-    ROUND_HALF_EVEN banker's rounding).
-    """
-    with localcontext(MONEY_CONTEXT):
-        return rate.quantize(_RATE_QUANTUM, rounding=ROUND_HALF_UP)
-
-
 def _build_loan_for_amortization(
     principal: Decimal,
     annual_rate: Decimal,
@@ -927,8 +906,8 @@ def evaluate_forward(request: ForwardModeRequest) -> AffordabilityResponse:
     #       approximate property_value can produce 28-digit Decimal ratios
     #       that fail Rate validation. Quantize ONCE at the response boundary,
     #       same end-of-period discipline as money via quantize_cents.
-    ltv = _quantize_rate(_compute_ltv(financed_loan_amount, request.property_value))
-    cltv = _quantize_rate(
+    ltv = quantize_rate(_compute_ltv(financed_loan_amount, request.property_value))
+    cltv = quantize_rate(
         _compute_cltv(
             financed_loan_amount,
             request.junior_liens,
@@ -942,8 +921,8 @@ def evaluate_forward(request: ForwardModeRequest) -> AffordabilityResponse:
         sum_monthly_debts=sum_monthly_debts,
         total_gross_monthly_income=total_gross_monthly_income,
     )
-    dti_front = _quantize_rate(dti_front_raw)
-    dti_back = _quantize_rate(dti_back_raw)
+    dti_front = quantize_rate(dti_front_raw)
+    dti_back = quantize_rate(dti_back_raw)
 
     # 12. Build response — blocked / blocked_by reflect ONLY the loan-type-classify
     # blocker (D-11 step 1). Plan 04-04 wraps evaluate_forward with the rest of the
