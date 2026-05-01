@@ -42,24 +42,109 @@ ARM_MODULE_PATH: Path = Path(__file__).resolve().parent.parent / "lib" / "arm.py
 # =========================================================================
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 05-02 implements ARMTerms")
 def test_arm_terms_field_set() -> None:
     """ARM-01 + ROADMAP SC-1: ARMTerms has 8 explicit fields + REQUIRED floor_rate + optional note_rate."""
-    pytest.fail("Wave 0 stub")
+    from decimal import Decimal
+
+    from lib.arm import ARMTerms
+    from pydantic import ValidationError as _VErr
+
+    terms = ARMTerms(
+        initial_period_months=60,
+        reset_period_months=12,
+        initial_cap_bps=500,
+        periodic_cap_bps=200,
+        lifetime_cap_bps=500,
+        floor_rate=Decimal("0.030000"),
+        margin_bps=250,
+        index_series_id="MORTGAGE30US",
+    )
+    # All 8 ARM-01 fields plus the optional note_rate must exist on the model.
+    field_names = set(ARMTerms.model_fields.keys())
+    assert field_names == {
+        "initial_period_months",
+        "reset_period_months",
+        "initial_cap_bps",
+        "periodic_cap_bps",
+        "lifetime_cap_bps",
+        "floor_rate",
+        "margin_bps",
+        "index_series_id",
+        "note_rate",
+    }
+    # Locked-shape model: strict, frozen, forbid extras.
+    assert terms.model_config["strict"] is True
+    assert terms.model_config["frozen"] is True
+    assert terms.model_config["extra"] == "forbid"
+    # Verify default for optional note_rate
+    assert terms.note_rate is None
+    # I-007: behavioral assertion — extra="forbid" actually rejects unknown fields at construction.
+    with pytest.raises(_VErr) as exc:
+        ARMTerms(
+            initial_period_months=60,
+            reset_period_months=12,
+            initial_cap_bps=500,
+            periodic_cap_bps=200,
+            lifetime_cap_bps=500,
+            floor_rate=Decimal("0.030000"),
+            margin_bps=250,
+            index_series_id="MORTGAGE30US",
+            extra_field="x",  # type: ignore[call-arg]
+        )
+    extra_errors = [e for e in exc.value.errors() if "extra_field" in e["loc"]]
+    assert len(extra_errors) >= 1
+    assert extra_errors[0]["type"] == "extra_forbidden"
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 05-02 implements ARMTerms")
 def test_arm_terms_missing_floor_rate_raises() -> None:
     """ARM-01 + D-02: ARMTerms rejects missing floor_rate at construction (no default)."""
-    pytest.fail("Wave 0 stub")
+    from lib.arm import ARMTerms
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError) as exc:
+        # Same fields as test_arm_terms_field_set MINUS floor_rate.
+        ARMTerms(  # type: ignore[call-arg]
+            initial_period_months=60,
+            reset_period_months=12,
+            initial_cap_bps=500,
+            periodic_cap_bps=200,
+            lifetime_cap_bps=500,
+            margin_bps=250,
+            index_series_id="MORTGAGE30US",
+        )
+    errors = exc.value.errors()
+    # At least one error mentions the missing floor_rate field
+    floor_rate_errors = [e for e in errors if "floor_rate" in e["loc"]]
+    assert len(floor_rate_errors) >= 1
+    assert floor_rate_errors[0]["type"] == "missing"
 
 
-@pytest.mark.xfail(
-    strict=True, reason="Wave 0 stub — Plan 05-03 implements engine note_rate fallback"
-)
 def test_note_rate_defaults_to_loan_annual_rate() -> None:
-    """ARM-01 + D-02: note_rate=None means engine substitutes loan.annual_rate for lifetime base."""
-    pytest.fail("Wave 0 stub")
+    """ARM-01 + D-02 (model-layer half): note_rate defaults to None.
+
+    Wave 3 (Plan 05-03) replaces this test with the full engine assertion that
+    when note_rate=None, build_arm_schedule treats it as loan.annual_rate for
+    lifetime ceiling math.
+    """
+    from decimal import Decimal
+
+    from lib.arm import ARMTerms
+
+    terms = ARMTerms(
+        initial_period_months=60,
+        reset_period_months=12,
+        initial_cap_bps=500,
+        periodic_cap_bps=200,
+        lifetime_cap_bps=500,
+        floor_rate=Decimal("0.030000"),
+        margin_bps=250,
+        index_series_id="MORTGAGE30US",
+    )
+    # Wave 2 model-layer assertion: default is None when not supplied.
+    assert terms.note_rate is None
+    # Wave 2 model-layer assertion: explicit value preserved.
+    teaser_terms = terms.model_copy(update={"note_rate": Decimal("0.050000")})
+    assert teaser_terms.note_rate == Decimal("0.050000")
 
 
 # =========================================================================
@@ -320,3 +405,99 @@ def test_applied_cap_citation_coverage() -> None:
 def test_arm_teaser_rate(arm_fixture: Callable[[str], dict[str, Any]]) -> None:
     """D-02 + LM-3: teaser-rate ARM (loan.annual_rate=0.03, note_rate=0.05); lifetime base = note_rate."""
     pytest.fail("Wave 0 stub")
+
+
+# =========================================================================
+# Plan 05-02 NEW tests — ARMRequest model_validator at the model layer
+# (CLI half ships Wave 4 in test_cli_misaligned_index_path_period_rejected)
+# =========================================================================
+
+
+def test_arm_request_misaligned_index_path_raises() -> None:
+    """ARM-01 + D-01 (model-layer): ARMRequest._index_path_periods_align_to_reset_triggers
+    raises ValueError when an index_path entry's period is not a reset trigger.
+
+    Reset triggers for 5/1 ARM (initial=60, reset=12): {61, 73, 85, ...}.
+    Period 62 is NOT a trigger; construction must fail loud.
+
+    Wave 4 (Plan 05-04) ships test_cli_misaligned_index_path_period_rejected
+    which wraps this same validation through the scripts/arm_simulate.py CLI
+    and verifies the 6-key envelope on stderr.
+    """
+    from datetime import date
+    from decimal import Decimal
+
+    from lib.arm import ARMRequest, ARMTerms, IndexPathEntry
+    from lib.models import Loan
+    from pydantic import ValidationError
+
+    loan = Loan(
+        principal=Decimal("400000.00"),
+        annual_rate=Decimal("0.050000"),
+        term_months=360,
+        origination_date=date(2026, 1, 1),
+        loan_type="arm",
+    )
+    terms = ARMTerms(
+        initial_period_months=60,
+        reset_period_months=12,
+        initial_cap_bps=500,
+        periodic_cap_bps=200,
+        lifetime_cap_bps=500,
+        floor_rate=Decimal("0.030000"),
+        margin_bps=250,
+        index_series_id="MORTGAGE30US",
+    )
+    with pytest.raises(ValidationError) as exc:
+        ARMRequest(
+            loan=loan,
+            arm_terms=terms,
+            assumed_index_rate=Decimal("0.050000"),
+            index_path=[IndexPathEntry(period=62, value=Decimal("0.052500"))],
+        )
+    # ValueError raised in model_validator surfaces in errors()
+    errors = exc.value.errors()
+    # At least one error mentions period 62 misalignment
+    period_errors = [e for e in errors if "62" in str(e.get("msg", ""))]
+    assert len(period_errors) >= 1, f"Expected period-62 misalignment error, got: {errors}"
+
+
+def test_arm_request_aligned_index_path_succeeds() -> None:
+    """ARM-01 + D-01 (model-layer): ARMRequest accepts index_path entries that
+    align to reset triggers. 5/1 ARM trigger 61 + 73 should both pass.
+    """
+    from datetime import date
+    from decimal import Decimal
+
+    from lib.arm import ARMRequest, ARMTerms, IndexPathEntry
+    from lib.models import Loan
+
+    loan = Loan(
+        principal=Decimal("400000.00"),
+        annual_rate=Decimal("0.050000"),
+        term_months=360,
+        origination_date=date(2026, 1, 1),
+        loan_type="arm",
+    )
+    terms = ARMTerms(
+        initial_period_months=60,
+        reset_period_months=12,
+        initial_cap_bps=500,
+        periodic_cap_bps=200,
+        lifetime_cap_bps=500,
+        floor_rate=Decimal("0.030000"),
+        margin_bps=250,
+        index_series_id="MORTGAGE30US",
+    )
+    request = ARMRequest(
+        loan=loan,
+        arm_terms=terms,
+        assumed_index_rate=Decimal("0.050000"),
+        index_path=[
+            IndexPathEntry(period=61, value=Decimal("0.052500")),
+            IndexPathEntry(period=73, value=Decimal("0.055000")),
+        ],
+    )
+    assert len(request.index_path) == 2
+    assert request.index_path[0].period == 61
+    assert request.index_path[1].period == 73
