@@ -13,11 +13,15 @@ on ARMTerms (ROADMAP SC-5).
 
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Literal
 
+from dateutil.relativedelta import relativedelta
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from lib.amortize import build_schedule
 from lib.models import Loan, Money, Payment, Rate
+from lib.money import quantize_cents, quantize_rate
 
 
 class ARMTerms(BaseModel):
@@ -195,3 +199,251 @@ class ARMSchedule(BaseModel):
 
     final_payment_adjusted: bool = False
     """Only the FINAL epoch sets True (per Phase 3 D-09 / D-10 cleanup); intermediate epochs always False."""
+
+
+# =========================================================================
+# Engine — build_arm_schedule + private helpers (Wave 3 / Plan 05-03)
+# =========================================================================
+
+
+def _compute_reset_triggers(arm_terms: ARMTerms, term_months: int) -> list[int]:
+    """Return the list of reset trigger periods for an ARM.
+
+    Per RESEARCH §Q5: triggers = [initial_period_months + 1, +reset_period_months, ...]
+    up to and including term_months. The +1 implements the "rate change applies at
+    START of post-fixed-period month" off-by-one (PITFALL 5; ROADMAP SC-2/SC-3).
+
+    5/1 ARM 30yr (initial=60, reset=12, term=360) -> [61, 73, 85, ..., 349].
+    5/6 ARM 30yr (initial=60, reset=6,  term=360) -> [61, 67, 73, ..., 355].
+    """
+    triggers: list[int] = []
+    period = arm_terms.initial_period_months + 1
+    while period <= term_months:
+        triggers.append(period)
+        period += arm_terms.reset_period_months
+    return triggers
+
+
+def _compute_new_rate(
+    *,
+    prior_rate: Rate,
+    epoch_idx: int,
+    period: int,
+    req: ARMRequest,
+    loan_annual_rate: Rate,
+) -> tuple[Rate, Literal["initial", "periodic", "lifetime", "floor", "none"], Rate]:
+    """Compute the new rate at a reset trigger period per D-02.
+
+    Returns (new_rate, applied_cap, index_value_used).
+
+    Formula (D-02 verbatim):
+        index = req.index_path[period].value if period in index_path else req.assumed_index_rate
+        fully_indexed = quantize_rate(index + margin_bps/10000)
+        effective_floor = max(margin_bps/10000, floor_rate)
+        applicable_cap_bps = initial_cap_bps if epoch_idx == 1 else periodic_cap_bps
+        periodic_ceiling = prior_rate + applicable_cap_bps/10000
+        note_rate_eff = note_rate if note_rate is not None else loan.annual_rate
+        lifetime_ceiling = note_rate_eff + lifetime_cap_bps/10000
+        ceiling = min(periodic_ceiling, lifetime_ceiling)
+        new_rate = quantize_rate(clamp(fully_indexed, low=effective_floor, high=ceiling))
+
+    applied_cap classification (D-10):
+        "floor"     if new_rate == quantize_rate(effective_floor) AND lifted above fully_indexed
+        "lifetime"  if new_rate == quantize_rate(lifetime_ceiling) AND lifetime <= periodic AND held below fully_indexed
+        "initial"   if epoch_idx == 1 AND new_rate == quantize_rate(periodic_ceiling) AND held below fully_indexed
+        "periodic"  if epoch_idx >= 2 AND new_rate == quantize_rate(periodic_ceiling) AND held below fully_indexed
+        "none"      otherwise (fully_indexed itself fell strictly inside the open interval)
+    """
+    terms = req.arm_terms
+    # Step 1: resolve index value for this period (override-wins per D-01)
+    index_value: Rate = req.assumed_index_rate
+    for entry in req.index_path:
+        if entry.period == period:
+            index_value = entry.value
+            break
+
+    # Step 2: compute the candidate rate components (all using Decimal-from-bps, never floats)
+    margin_rate = Decimal(terms.margin_bps) / Decimal("10000")
+    fully_indexed = quantize_rate(index_value + margin_rate)
+
+    effective_floor = max(margin_rate, terms.floor_rate)
+
+    is_first_reset = epoch_idx == 1
+    applicable_cap_bps = terms.initial_cap_bps if is_first_reset else terms.periodic_cap_bps
+    periodic_ceiling = prior_rate + (Decimal(applicable_cap_bps) / Decimal("10000"))
+
+    note_rate_eff = terms.note_rate if terms.note_rate is not None else loan_annual_rate
+    lifetime_ceiling = note_rate_eff + (Decimal(terms.lifetime_cap_bps) / Decimal("10000"))
+
+    ceiling = min(periodic_ceiling, lifetime_ceiling)
+
+    # Step 3: clamp + final quantize
+    # Note: max(low, min(value, high)) implements clamp without an extra Python helper.
+    clamped = max(effective_floor, min(fully_indexed, ceiling))
+    new_rate = quantize_rate(clamped)
+
+    # Step 4: classify which constraint bound new_rate (for ResetEvent.applied_cap + D-10).
+    # Compare quantized values (avoid 1-ULP misses).
+    floor_q = quantize_rate(effective_floor)
+    periodic_q = quantize_rate(periodic_ceiling)
+    lifetime_q = quantize_rate(lifetime_ceiling)
+    fully_indexed_q = quantize_rate(fully_indexed)
+
+    applied_cap: Literal["initial", "periodic", "lifetime", "floor", "none"]
+    if new_rate == floor_q and new_rate > fully_indexed_q:
+        # Floor lifted the rate above the unconstrained fully_indexed value.
+        applied_cap = "floor"
+    elif new_rate == lifetime_q and lifetime_q <= periodic_q and new_rate < fully_indexed_q:
+        # Lifetime ceiling held below fully_indexed AND was the binding (smaller) ceiling.
+        applied_cap = "lifetime"
+    elif new_rate == periodic_q and new_rate < fully_indexed_q:
+        # Periodic ceiling held below fully_indexed.
+        applied_cap = "initial" if is_first_reset else "periodic"
+    else:
+        applied_cap = "none"
+
+    return new_rate, applied_cap, index_value
+
+
+def build_arm_schedule(req: ARMRequest) -> ARMSchedule:
+    """Build an ARM amortization schedule per D-05 per-epoch slice-stitch (ARM-02..05).
+
+    Algorithm:
+        1. Compute reset trigger periods (RESEARCH §Q5 formula).
+        2. For each epoch:
+            a. Compute current_rate (epoch 0 = loan.annual_rate; epoch >=1 = D-02 reset formula).
+            b. Synthesize a Loan with principal=remaining_balance, annual_rate=current_rate,
+               term_months=remaining_full_term (NOT reset_period_months — the bear trap from
+               RESEARCH Q1.2). Re-enter Phase 3's build_schedule.
+            c. Slice synthetic.payments[:epoch_window] for non-final epochs;
+               take ALL rows for the final epoch (which is where Phase 3 D-09 cleanup applies).
+            d. Stitch each sliced row's cumulative_interest + cumulative_principal by adding
+               the prior epoch's terminal cum totals.
+            e. Convert to ARMPayment with rate_in_effect = current_rate.
+            f. Carry remaining_balance forward (only for non-final epochs).
+        3. Record one ResetEvent per reset trigger period.
+        4. Final-epoch only: bubble up final_payment_adjusted from the synthetic schedule.
+
+    D-05 explicitly forbids the "shortcut" of synthesizing the per-epoch Loan with
+    term_months equal to the reset cadence (reset_period_months) because that fires
+    Phase 3's D-09 cleanup at every epoch end — silently zeroing the balance at every
+    reset (RESEARCH Q1.2 bear trap).
+
+    Phase 1 D-15 invariant preserved: ARMSchedule.total_interest == payments[-1].cumulative_interest.
+    """
+    loan = req.loan
+    terms = req.arm_terms
+
+    # Compute reset triggers + epoch boundaries.
+    triggers = _compute_reset_triggers(terms, loan.term_months)
+    # boundaries: list of (start_period, end_period_exclusive) per epoch.
+    boundaries: list[tuple[int, int]] = [(1, terms.initial_period_months + 1)]
+    for i, t in enumerate(triggers):
+        next_start = triggers[i + 1] if i + 1 < len(triggers) else loan.term_months + 1
+        boundaries.append((t, next_start))
+
+    # Iteration state
+    arm_payments: list[ARMPayment] = []
+    reset_events: list[ResetEvent] = []
+    remaining_balance: Money = loan.principal
+    prior_rate: Rate = loan.annual_rate
+    current_rate: Rate = loan.annual_rate
+    cum_int_carry: Money = Decimal("0.00")
+    cum_prin_carry: Money = Decimal("0.00")
+    final_payment_adjusted: bool = False
+    old_pmt_for_next_reset: Money = Decimal("0.00")  # populated at end of each non-final epoch
+
+    for epoch_idx, (start, end) in enumerate(boundaries):
+        epoch_window = end - start
+        is_final_epoch = end == loan.term_months + 1
+
+        # Step 2a: compute current_rate
+        applied_cap_for_event: Literal["initial", "periodic", "lifetime", "floor", "none"] = "none"
+        index_value_used: Rate = req.assumed_index_rate  # placeholder for epoch 0 (no reset event)
+        if epoch_idx == 0:
+            current_rate = loan.annual_rate
+        else:
+            current_rate, applied_cap_for_event, index_value_used = _compute_new_rate(
+                prior_rate=prior_rate,
+                epoch_idx=epoch_idx,
+                period=start,
+                req=req,
+                loan_annual_rate=loan.annual_rate,
+            )
+
+        # Step 2b: synthetic Loan over the FULL remaining term (D-05; never reset_period_months).
+        remaining_full_term = loan.term_months - start + 1
+        synthetic_loan = Loan(
+            principal=remaining_balance,
+            annual_rate=current_rate,
+            term_months=remaining_full_term,
+            origination_date=loan.origination_date,  # date offset applied below per row
+            loan_type="arm",
+        )
+        synthetic = build_schedule(
+            synthetic_loan,
+            frequency="monthly",
+            biweekly_mode=None,
+            extra_principal=(),
+        )
+
+        # Step 2c: slice
+        sliced = synthetic.payments if is_final_epoch else synthetic.payments[:epoch_window]
+
+        # Step 2d + 2e: stitch + convert to ARMPayment
+        for i, p in enumerate(sliced):
+            absolute_period = start + i
+            stitched_cum_int = quantize_cents(cum_int_carry + p.cumulative_interest)
+            stitched_cum_prin = quantize_cents(cum_prin_carry + p.cumulative_principal)
+            arm_payments.append(
+                ARMPayment(
+                    period=absolute_period,
+                    payment_date=loan.origination_date + relativedelta(months=absolute_period)
+                    if loan.origination_date is not None
+                    else p.payment_date,
+                    payment=p.payment,
+                    principal=p.principal,
+                    interest=p.interest,
+                    extra_principal=p.extra_principal,
+                    balance=p.balance,
+                    cumulative_interest=stitched_cum_int,
+                    cumulative_principal=stitched_cum_prin,
+                    rate_in_effect=current_rate,
+                )
+            )
+
+        # Step 3: emit ResetEvent (only for epoch >= 1; epoch 0 is the initial fixed period)
+        if epoch_idx >= 1:
+            # old_pmt is the LAST payment of the prior epoch; new_pmt is the FIRST of this epoch.
+            new_pmt = sliced[0].payment
+            reset_events.append(
+                ResetEvent(
+                    period=start,
+                    old_rate=prior_rate,
+                    new_rate=current_rate,
+                    old_pmt=old_pmt_for_next_reset,
+                    new_pmt=new_pmt,
+                    index_value_used=index_value_used,
+                    applied_cap=applied_cap_for_event,
+                )
+            )
+
+        # Step 2f: carry forward (for non-final epochs)
+        if not is_final_epoch:
+            cum_int_carry = arm_payments[-1].cumulative_interest
+            cum_prin_carry = arm_payments[-1].cumulative_principal
+            remaining_balance = arm_payments[-1].balance
+            old_pmt_for_next_reset = arm_payments[-1].payment
+            prior_rate = current_rate
+        else:
+            # Step 4: final_payment_adjusted bubbles up only from the final epoch's synthetic.
+            final_payment_adjusted = synthetic.final_payment_adjusted
+
+    return ARMSchedule(
+        loan=loan,
+        arm_terms=terms,
+        payments=arm_payments,
+        reset_events=reset_events,
+        total_interest=arm_payments[-1].cumulative_interest,  # Phase 1 D-15 invariant
+        final_payment_adjusted=final_payment_adjusted,
+    )
