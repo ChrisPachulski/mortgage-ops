@@ -543,61 +543,311 @@ def test_arm_5_1_off_by_one_negative(arm_fixture: Callable[[str], dict[str, Any]
 # =========================================================================
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 05-04 ships scripts/arm_simulate.py")
-def test_cli_smoke_subprocess_round_trip(
-    arm_fixture: Callable[[str], dict[str, Any]],
-    tmp_path: Path,
-) -> None:
-    """ARM-08: CLI subprocess round-trip — write JSON, invoke, parse stdout."""
-    pytest.fail("Wave 0 stub")
+def test_cli_smoke_subprocess_round_trip(tmp_path: Path) -> None:
+    """ARM-08: CLI subprocess round-trip — write JSON, invoke, parse stdout.
+
+    Wave 4 ships the basic round-trip (request/response shape correct).
+    Wave 6 (Plan 05-06) replaces this with a fixture-based assertion that
+    pins specific dollar values (arm_5_1_payment_jump_at_61.json).
+    """
+    import json
+    import subprocess
+    import sys
+
+    req = _make_5_1_arm_request()
+    request_path = tmp_path / "input.json"
+    # ARMRequest.model_dump_json gives JSON-strings for Decimal fields
+    # (CLAUDE.md money discipline).
+    request_path.write_text(req.model_dump_json())
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), "--input", str(request_path)],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert result.returncode == 0
+    out = json.loads(result.stdout)
+    # Smoke shape assertions
+    assert "loan" in out
+    assert "arm_terms" in out
+    assert "payments" in out
+    assert "reset_events" in out
+    assert "total_interest" in out
+    assert "final_payment_adjusted" in out
+    assert len(out["payments"]) == 360  # 30yr 5/1 ARM
+    # Continuous numbering invariant
+    assert out["payments"][0]["period"] == 1
+    assert out["payments"][-1]["period"] == 360
+    assert out["payments"][-1]["balance"] == "0.00"
+    # 5/1 ARM 30yr produces 25 reset events
+    assert len(out["reset_events"]) == 25
+    assert out["reset_events"][0]["period"] == 61
+    # I-005: pin the LAST reset trigger as well (catches off-by-one in the
+    # reset-trigger generator at the END of the schedule).
+    assert out["reset_events"][-1]["period"] == 349, (
+        f"expected last reset trigger at period 349, got {out['reset_events'][-1]['period']}"
+    )
 
 
-@pytest.mark.xfail(
-    strict=True, reason="Wave 0 stub — Plan 05-04 ships lazy-import in scripts/arm_simulate.py"
-)
 def test_cli_help_does_not_import_lib_arm() -> None:
-    """ARM-08 + D-18: --help fast (no lib.arm or numpy_financial import before argparse)."""
-    pytest.fail("Wave 0 stub")
+    """ARM-08 + D-18: --help fast path. Must NOT trigger lib.arm or lib.amortize
+    or numpy_financial imports.
+    """
+    import json
+    import subprocess
+    import sys
+
+    project_root = Path(__file__).resolve().parent.parent
+    inline = (
+        "import importlib.util, sys, json\n"
+        f"sys.path.insert(0, {str(project_root)!r})\n"
+        f"SCRIPT = {str(SCRIPT_PATH)!r}\n"
+        "spec = importlib.util.spec_from_file_location('scripts_arm_simulate', SCRIPT)\n"
+        "assert spec is not None and spec.loader is not None\n"
+        "module = importlib.util.module_from_spec(spec)\n"
+        "spec.loader.exec_module(module)\n"
+        "saved_argv = sys.argv\n"
+        "sys.argv = [SCRIPT, '--help']\n"
+        "exit_code = None\n"
+        "try:\n"
+        "    try:\n"
+        "        module.main()\n"
+        "    except SystemExit as exc:\n"
+        "        exit_code = exc.code\n"
+        "finally:\n"
+        "    sys.argv = saved_argv\n"
+        "result = {\n"
+        "    'help_exit_code': exit_code,\n"
+        "    'lib_arm_imported': 'lib.arm' in sys.modules,\n"
+        "    'lib_amortize_imported': 'lib.amortize' in sys.modules,\n"
+        "    'numpy_financial_imported': 'numpy_financial' in sys.modules,\n"
+        "}\n"
+        "print(json.dumps(result))\n"
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", inline],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    payload = json.loads(completed.stdout.strip().splitlines()[-1])
+    assert payload["help_exit_code"] == 0
+    assert payload["lib_arm_imported"] is False
+    assert payload["lib_amortize_imported"] is False
+    assert payload["numpy_financial_imported"] is False
 
 
-@pytest.mark.xfail(
-    strict=True, reason="Wave 0 stub — Plan 05-04 ships float-gate in scripts/arm_simulate.py"
-)
 def test_cli_rejects_float_principal(tmp_path: Path) -> None:
-    """ARM-08 + D-19/WR-02: CLI rejects JSON-float in loan.principal with 6-key envelope."""
-    pytest.fail("Wave 0 stub")
+    """ARM-08 + D-19/WR-02: JSON-float in loan.principal rejected with 6-key envelope."""
+    import json
+    import subprocess
+    import sys
+
+    bad = tmp_path / "float_principal.json"
+    bad.write_text(
+        '{"loan": {"principal": 400000.00, "annual_rate": "0.050000", '
+        '"term_months": 360, "origination_date": "2026-01-01", "loan_type": "arm"}, '
+        '"arm_terms": {"initial_period_months": 60, "reset_period_months": 12, '
+        '"initial_cap_bps": 500, "periodic_cap_bps": 200, "lifetime_cap_bps": 500, '
+        '"floor_rate": "0.030000", "margin_bps": 250, "index_series_id": "MORTGAGE30US"}, '
+        '"assumed_index_rate": "0.050000", "index_path": []}'
+    )
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), "--input", str(bad)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 2
+    errors = json.loads(result.stderr)
+    err = errors[0]
+    assert set(err.keys()) == {"type", "loc", "msg", "input", "url", "ctx"}
+    assert err["type"] == "decimal_type"
+    assert err["loc"] == ["loan", "principal"]
+    assert err["url"].startswith("https://errors.pydantic.dev/")
+    assert err["url"].endswith("/v/decimal_type")
+    assert err["ctx"]["class"] == "Decimal"
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 05-04 ships float-gate")
 def test_cli_rejects_float_assumed_index_rate(tmp_path: Path) -> None:
-    """ARM-08 + D-19: CLI rejects JSON-float in assumed_index_rate."""
-    pytest.fail("Wave 0 stub")
+    """ARM-08 + D-19: JSON-float in assumed_index_rate rejected with 6-key envelope."""
+    import json
+    import subprocess
+    import sys
+
+    bad = tmp_path / "float_index.json"
+    bad.write_text(
+        '{"loan": {"principal": "400000.00", "annual_rate": "0.050000", '
+        '"term_months": 360, "origination_date": "2026-01-01", "loan_type": "arm"}, '
+        '"arm_terms": {"initial_period_months": 60, "reset_period_months": 12, '
+        '"initial_cap_bps": 500, "periodic_cap_bps": 200, "lifetime_cap_bps": 500, '
+        '"floor_rate": "0.030000", "margin_bps": 250, "index_series_id": "MORTGAGE30US"}, '
+        '"assumed_index_rate": 0.050000, "index_path": []}'
+    )
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), "--input", str(bad)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 2
+    errors = json.loads(result.stderr)
+    err = errors[0]
+    assert err["loc"] == ["assumed_index_rate"]
+    assert err["type"] == "decimal_type"
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 05-04 ships float-gate (deep loc)")
 def test_cli_rejects_float_index_path_value(tmp_path: Path) -> None:
-    """ARM-08 + D-19: CLI rejects JSON-float in index_path[].value (deep loc through list)."""
-    pytest.fail("Wave 0 stub")
+    """ARM-08 + D-19: JSON-float deep in index_path[0].value rejected with correct loc."""
+    import json
+    import subprocess
+    import sys
+
+    bad = tmp_path / "float_index_path.json"
+    bad.write_text(
+        '{"loan": {"principal": "400000.00", "annual_rate": "0.050000", '
+        '"term_months": 360, "origination_date": "2026-01-01", "loan_type": "arm"}, '
+        '"arm_terms": {"initial_period_months": 60, "reset_period_months": 12, '
+        '"initial_cap_bps": 500, "periodic_cap_bps": 200, "lifetime_cap_bps": 500, '
+        '"floor_rate": "0.030000", "margin_bps": 250, "index_series_id": "MORTGAGE30US"}, '
+        '"assumed_index_rate": "0.050000", '
+        '"index_path": [{"period": 61, "value": 0.052500}]}'
+    )
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), "--input", str(bad)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 2
+    errors = json.loads(result.stderr)
+    err = errors[0]
+    assert err["loc"] == ["index_path", 0, "value"]
+    assert err["ctx"]["field_path"] == "index_path.0.value"
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 05-04 ships float-gate")
 def test_cli_rejects_float_floor_rate(tmp_path: Path) -> None:
-    """ARM-08 + D-19: CLI rejects JSON-float in arm_terms.floor_rate."""
-    pytest.fail("Wave 0 stub")
+    """ARM-08 + D-19: JSON-float in arm_terms.floor_rate rejected."""
+    import json
+    import subprocess
+    import sys
+
+    bad = tmp_path / "float_floor.json"
+    bad.write_text(
+        '{"loan": {"principal": "400000.00", "annual_rate": "0.050000", '
+        '"term_months": 360, "origination_date": "2026-01-01", "loan_type": "arm"}, '
+        '"arm_terms": {"initial_period_months": 60, "reset_period_months": 12, '
+        '"initial_cap_bps": 500, "periodic_cap_bps": 200, "lifetime_cap_bps": 500, '
+        '"floor_rate": 0.030000, "margin_bps": 250, "index_series_id": "MORTGAGE30US"}, '
+        '"assumed_index_rate": "0.050000", "index_path": []}'
+    )
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), "--input", str(bad)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 2
+    errors = json.loads(result.stderr)
+    err = errors[0]
+    assert err["loc"] == ["arm_terms", "floor_rate"]
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 05-04 ships uniform envelope")
 def test_cli_error_envelope_uniformity(tmp_path: Path) -> None:
-    """ARM-08 + D-19/WR-02: float-gate + Pydantic ValidationError emit identical 6-key shape."""
-    pytest.fail("Wave 0 stub")
+    """ARM-08 + D-19/WR-02: float-gate envelope + Pydantic ValidationError envelope
+    have IDENTICAL 6-key shape (mirror tests/test_amortize.py:996+).
+    """
+    import json
+    import subprocess
+    import sys
+
+    # Case 1: float-gate envelope (loan.principal as a JSON float)
+    bad_float = tmp_path / "float.json"
+    bad_float.write_text(
+        '{"loan": {"principal": 400000.00, "annual_rate": "0.050000", '
+        '"term_months": 360, "origination_date": "2026-01-01", "loan_type": "arm"}, '
+        '"arm_terms": {"initial_period_months": 60, "reset_period_months": 12, '
+        '"initial_cap_bps": 500, "periodic_cap_bps": 200, "lifetime_cap_bps": 500, '
+        '"floor_rate": "0.030000", "margin_bps": 250, "index_series_id": "MORTGAGE30US"}, '
+        '"assumed_index_rate": "0.050000", "index_path": []}'
+    )
+    res1 = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), "--input", str(bad_float)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    err1 = json.loads(res1.stderr)[0]
+
+    # Case 2: Pydantic ValidationError envelope (misaligned index_path period
+    # surfaces ARMRequest._index_path_periods_align_to_reset_triggers as
+    # value_error -> 6-key shape including ctx). Rule 1 deviation from plan
+    # text: plan-prescribed "missing floor_rate" surfaces a `missing`-type
+    # Pydantic error whose e.json() omits ctx (5 keys), failing the keyset-
+    # equality assertion. The misaligned-period validator emits all 6 keys
+    # uniformly, which is the contract this test exists to pin (mirrors
+    # tests/test_amortize.py:test_cli_error_envelope_uniformity which uses a
+    # cross-field model_validator surface for the same reason).
+    bad_pydantic = tmp_path / "misaligned.json"
+    bad_pydantic.write_text(
+        '{"loan": {"principal": "400000.00", "annual_rate": "0.050000", '
+        '"term_months": 360, "origination_date": "2026-01-01", "loan_type": "arm"}, '
+        '"arm_terms": {"initial_period_months": 60, "reset_period_months": 12, '
+        '"initial_cap_bps": 500, "periodic_cap_bps": 200, "lifetime_cap_bps": 500, '
+        '"floor_rate": "0.030000", "margin_bps": 250, "index_series_id": "MORTGAGE30US"}, '
+        '"assumed_index_rate": "0.050000", '
+        '"index_path": [{"period": 62, "value": "0.052500"}]}'
+    )
+    res2 = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), "--input", str(bad_pydantic)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    err2 = json.loads(res2.stderr)[0]
+
+    # Both must have the same 6 top-level keys
+    assert set(err1.keys()) == set(err2.keys())
+    assert {"type", "loc", "msg", "input", "url", "ctx"} <= set(err1.keys())
+    # Both URLs are Pydantic-format
+    assert err1["url"].startswith("https://errors.pydantic.dev/")
+    assert err2["url"].startswith("https://errors.pydantic.dev/")
+    # Same exit code
+    assert res1.returncode == 2
+    assert res2.returncode == 2
 
 
-@pytest.mark.xfail(
-    strict=True, reason="Wave 0 stub — Plan 05-02 ships ARMRequest cross-field validator"
-)
 def test_cli_misaligned_index_path_period_rejected(tmp_path: Path) -> None:
-    """ARM-08 + D-01: CLI surfaces ARMRequest._index_path_periods_align_to_reset_triggers as 6-key envelope."""
-    pytest.fail("Wave 0 stub")
+    """ARM-08 + D-01: misaligned index_path period surfaces ARMRequest model_validator
+    error as the 6-key Pydantic ValidationError envelope.
+    """
+    import json
+    import subprocess
+    import sys
+
+    bad = tmp_path / "misaligned.json"
+    bad.write_text(
+        '{"loan": {"principal": "400000.00", "annual_rate": "0.050000", '
+        '"term_months": 360, "origination_date": "2026-01-01", "loan_type": "arm"}, '
+        '"arm_terms": {"initial_period_months": 60, "reset_period_months": 12, '
+        '"initial_cap_bps": 500, "periodic_cap_bps": 200, "lifetime_cap_bps": 500, '
+        '"floor_rate": "0.030000", "margin_bps": 250, "index_series_id": "MORTGAGE30US"}, '
+        '"assumed_index_rate": "0.050000", '
+        '"index_path": [{"period": 62, "value": "0.052500"}]}'
+    )
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), "--input", str(bad)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 2
+    errors = json.loads(result.stderr)
+    # Pydantic surfaces the model_validator ValueError; one of the errors mentions period 62
+    assert any("62" in str(e.get("msg", "")) for e in errors)
+    # Each error has the 6-key shape
+    for e in errors:
+        assert {"type", "loc", "msg", "input", "url", "ctx"} <= set(e.keys())
 
 
 # =========================================================================
