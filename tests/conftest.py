@@ -68,3 +68,23 @@ def affordability_fixture() -> Callable[[str], dict[str, Any]]:
         return json.loads(path.read_text())  # type: ignore[no-any-return]
 
     return _load
+
+
+@pytest.fixture
+def arm_fixture() -> Callable[[str], dict[str, Any]]:
+    """Return a callable that loads a single ARM fixture by filename stem
+    from tests/fixtures/arm/. Mirrors `amortize_fixture` and
+    `affordability_fixture` — one-fixture-per-file shape; loader takes a
+    filename stem like "arm_5_1_payment_jump_at_61", not an id within an array.
+
+    Per Phase 5 CONTEXT.md D-09: every Phase 5 fixture lives under
+    tests/fixtures/arm/ as one .json per scenario. Oracle capture pairs
+    (Bankrate/Vertex42/AmericU per D-04) live under tests/fixtures/arm/oracle/;
+    callers pass "oracle/bankrate_5_1_capture_2026" as the stem to load those.
+    """
+
+    def _load(stem: str) -> dict[str, Any]:
+        path = FIXTURE_DIR / "arm" / f"{stem}.json"
+        return json.loads(path.read_text())  # type: ignore[no-any-return]
+
+    return _load
