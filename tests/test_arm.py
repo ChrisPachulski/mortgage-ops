@@ -855,22 +855,75 @@ def test_cli_misaligned_index_path_period_rejected(tmp_path: Path) -> None:
 # =========================================================================
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 05-05 ships references/arm-mechanics.md")
 def test_arm_mechanics_doc_sections_present() -> None:
-    """ARM-09 + D-08: references/arm-mechanics.md exists with all 6 D-08 sections."""
-    pytest.fail("Wave 0 stub")
+    """ARM-09 + D-08: references/arm-mechanics.md exists with all 7 D-08 sections."""
+    project_root = Path(__file__).resolve().parent.parent
+    doc_path = project_root / "references" / "arm-mechanics.md"
+    assert doc_path.is_file(), f"references/arm-mechanics.md missing at {doc_path}"
+    content = doc_path.read_text().lower()
+    # 7 D-08 [REVISED 2026-04-30] sections must all appear (case-insensitive token match):
+    required_section_tokens = [
+        "reset month convention",  # Section 1
+        "cap precedence",  # Section 2
+        "floor algebra",  # Section 3
+        "quantization",  # Section 4
+        "negative amortization",  # Section 5
+        "index_series_id",  # Section 6
+        "teaser",  # Section 7
+    ]
+    for token in required_section_tokens:
+        assert token in content, f"Section token '{token}' missing from references/arm-mechanics.md"
+    # Document must have at least 7 ## headings (the 7 sections; appendix may add another)
+    heading_count = sum(1 for line in content.splitlines() if line.startswith("## "))
+    assert heading_count >= 7, f"Expected at least 7 ## headings, got {heading_count}"
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 05-02 + 05-05 add docstring cite")
 def test_arm_terms_docstring_cites_arm_mechanics() -> None:
-    """ARM-09 + ROADMAP SC-5: ARMTerms docstring cites references/arm-mechanics.md."""
-    pytest.fail("Wave 0 stub")
+    """ARM-09 + ROADMAP SC-5: ARMTerms model docstring cites references/arm-mechanics.md."""
+    from lib.arm import ARMTerms
+
+    docstring = ARMTerms.__doc__ or ""
+    # Load-bearing citation token (see Wave 5 Plan 05-05 Task 2)
+    assert "references/arm-mechanics.md" in docstring, (
+        "ARMTerms.__doc__ must reference references/arm-mechanics.md per ROADMAP SC-5"
+    )
+    # Bonus: docstring should mention at least one regulatory citation
+    assert "B2-1.4-02" in docstring or "Fannie" in docstring or "Selling Guide" in docstring
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 05-05 ships corrected D-08 citations")
 def test_arm_mechanics_citations() -> None:
-    """ARM-09 + D-08 [REVISED]: cites B2-1.4-02 + Freddie 6302.7(b) + CFPB §1951 + AmericU 5/6 disclosure."""
-    pytest.fail("Wave 0 stub")
+    """ARM-09 + D-08 [REVISED 2026-04-30]: references/arm-mechanics.md cites the verified-correct
+    Selling Guide sections + CFPB + AmericU disclosure, AND does NOT carry forward the broken
+    legacy citations B5-3.5-01 / §4404.
+    """
+    project_root = Path(__file__).resolve().parent.parent
+    doc_path = project_root / "references" / "arm-mechanics.md"
+    content = doc_path.read_text()
+    # 4 required URL/section fragments:
+    required_fragments = [
+        "selling-guide.fanniemae.com/sel/b2-1.4-02",  # Fannie B2-1.4-02 verified
+        "sf.freddiemac.com/working-with-us/origination-underwriting/mortgage-products/sofr-indexed-arms",  # Freddie SOFR-Indexed
+        "consumerfinance.gov/ask-cfpb/what-are-rate-caps",  # CFPB §1951
+        "5_6-SOFR-ARM-Program-Disclosure",  # AmericU PDF
+    ]
+    for frag in required_fragments:
+        assert frag in content, (
+            f"Required citation fragment '{frag}' missing from references/arm-mechanics.md"
+        )
+
+    # 2 forbidden legacy fragments (must NOT appear — prevents D-08 regression):
+    forbidden_fragments = [
+        "B5-3.5-01",  # broken; returns 404 — RESEARCH §Q4 verified
+        "§4404",  # stale Freddie section — RESEARCH §Q4 verified
+    ]
+    for frag in forbidden_fragments:
+        assert frag not in content, (
+            f"Forbidden legacy citation '{frag}' found in references/arm-mechanics.md "
+            f"(D-08 [REVISED 2026-04-30] removed this; revert detected)"
+        )
+
+    # Section 6302.7(b) (Freddie modern equivalent of legacy section number) must appear
+    assert "6302.7(b)" in content, "Freddie 6302.7(b) section must be cited (D-08 [REVISED])"
 
 
 # =========================================================================
