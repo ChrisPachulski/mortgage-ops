@@ -67,62 +67,6 @@ from pathlib import Path
 from typing import Any
 
 
-def _find_json_float_loc(raw: str) -> tuple[list[str | int], str] | None:
-    """Walk parsed JSON and return (loc-path, decimal-string) of the first JSON float.
-
-    Pydantic v2 strict mode accepts JSON numbers for Decimal fields by design
-    (https://docs.pydantic.dev/2.13/concepts/json/#json-parsing) — JSON has no
-    distinct decimal type, so Pydantic permissively coerces JSON numbers. But
-    the project's money-discipline contract (CLAUDE.md FND-01) and D-19 require
-    money/rate fields be JSON STRINGS (e.g. "400000.00"). So we pre-parse with
-    `parse_float=Decimal` to mark JSON-numbers-with-decimal-points as Decimal
-    instances, then walk the parsed tree to find the first Decimal — its
-    loc-path identifies the offending field.
-
-    WR-02 closure: returns BOTH the loc-path AND the offending input value
-    (as a Decimal-string) so the boundary error envelope can populate the
-    Pydantic-shape `input` key without re-walking the JSON. Returns None
-    when no JSON floats are present.
-
-    Phase 4 schema has zero fields that legitimately accept JSON floats:
-      - loan_amount / property_value / down_payment / annual_rate /
-        max_dti / target_ltv_pct / monthly_pmi / apr / apor / junior_liens[*] /
-        gross_monthly_income / monthly_debts.* / escrow.{property_tax_monthly,
-        insurance_monthly, hoa_monthly} / va.actual_residual_income:
-          must be JSON strings (Money/Rate)
-      - term_months / family_size / credit_score / household.size: JSON ints
-      - mode / target_loan_type / location.* / va.region / applicant.name:
-        JSON strings
-    A blanket "reject any JSON float" check is therefore correct.
-    """
-    from decimal import Decimal as _Decimal  # local-import: keeps --help fast (D-18)
-
-    try:
-        parsed = json.loads(raw, parse_float=_Decimal)
-    except json.JSONDecodeError:
-        # Invalid JSON — let Pydantic's TypeAdapter.validate_json produce the canonical error.
-        return None
-
-    def _walk(node: Any, path: list[str | int]) -> tuple[list[str | int], str] | None:
-        if isinstance(node, _Decimal):
-            # str(Decimal) preserves the original lexical form (e.g. "400000.00"
-            # round-trips exactly when reconstructed via Decimal(str(...))).
-            return (path, str(node))
-        if isinstance(node, dict):
-            for k, v in node.items():
-                hit = _walk(v, [*path, k])
-                if hit is not None:
-                    return hit
-        elif isinstance(node, list):
-            for i, v in enumerate(node):
-                hit = _walk(v, [*path, i])
-                if hit is not None:
-                    return hit
-        return None
-
-    return _walk(parsed, [])
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(
         prog="affordability",
@@ -200,11 +144,7 @@ def main() -> int:
     # Lazy-import per D-18 / D-13: heavy deps (numpy_financial, lib.affordability)
     # are NOT loaded on the --help fast path. argparse has already parsed by here,
     # so any --help / --version invocation has SystemExit'd above this line.
-    from lib.affordability import (
-        AffordabilityRequest,
-        evaluate,
-    )
-
+    #
     # MissingCountyDataError is raised by lib.rules.loan_type.classify when the
     # household location county_fips is not present in data/reference/conforming-limits-2026.yml
     # AND the loan amount exceeds the baseline ceiling. This is NOT a Pydantic
@@ -212,8 +152,16 @@ def main() -> int:
     # / evaluate_reverse. We catch it explicitly to emit the Phase 3 D-19 6-key envelope
     # rather than letting Python emit a stack trace (BLOCKER fix; AFFD-08 contract;
     # T-04-02-03 mitigation).
+    #
+    # scripts._cli_helpers is the Phase 5 factor-extract: single source of truth
+    # for the JSON-float pre-validation gate + 6-key WR-02 envelope shape.
+    from lib.affordability import (
+        AffordabilityRequest,
+        evaluate,
+    )
     from lib.rules.loan_type import MissingCountyDataError
     from pydantic import TypeAdapter, ValidationError
+    from scripts._cli_helpers import find_json_float_loc, make_decimal_type_envelope
 
     # File error → simple {"error": ...} envelope (Phase 3 contract; intentionally
     # not the 6-key shape — file-not-found / OSError surfaces predate the envelope
@@ -243,33 +191,10 @@ def main() -> int:
     # ValidationError-class boundary failure modes (WR-02 closure). Phase 9
     # Node orchestration and Phase 10 SKILL.md narration parse stderr as a
     # single uniform contract.
-    float_hit = _find_json_float_loc(raw)
+    float_hit = find_json_float_loc(raw)
     if float_hit is not None:
-        float_loc, float_input = float_hit
-
-        # Lazy-imported pydantic.VERSION here (NOT at module top) to preserve
-        # D-18 fast --help. The version segment in the docs URL floats with
-        # the runtime Pydantic version so a 2.13 to 2.14 upgrade auto-aligns.
-        from pydantic import VERSION as _pydantic_version
-
-        _major_minor = ".".join(_pydantic_version.split(".")[:2])
-        envelope = [
-            {
-                "type": "decimal_type",
-                "loc": float_loc,
-                "msg": (
-                    "Input should be a valid decimal — JSON string required "
-                    "for money/rate fields per D-19 (JSON floats are rejected "
-                    "at the boundary)"
-                ),
-                "input": float_input,
-                "url": f"https://errors.pydantic.dev/{_major_minor}/v/decimal_type",
-                "ctx": {
-                    "class": "Decimal",
-                    "field_path": ".".join(str(p) for p in float_loc),
-                },
-            }
-        ]
+        loc, input_str = float_hit
+        envelope = make_decimal_type_envelope(loc, input_str)
         print(json.dumps(envelope), file=sys.stderr)
         return 2
 
