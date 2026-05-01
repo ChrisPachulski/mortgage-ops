@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from decimal import ROUND_HALF_UP, Decimal, getcontext
 
-from lib.money import CENT, MONEY_CONTEXT, quantize_cents, to_money
+from lib.money import CENT, MONEY_CONTEXT, quantize_cents, quantize_rate, to_money
 
 
 def test_to_money_from_string_round_trips() -> None:
@@ -67,3 +67,28 @@ def test_quantize_cents_does_not_mutate_global_context() -> None:
     _ = quantize_cents(Decimal("123.456"))
     assert getcontext().rounding == global_rounding_before
     assert getcontext().prec == global_prec_before
+
+
+def test_quantize_rate_round_half_up() -> None:
+    """quantize_rate quantizes to 6 decimal places using ROUND_HALF_UP.
+
+    Promoted from lib/affordability.py._quantize_rate (Phase 4 D-09) per
+    Phase 5 D-14. The half-up boundary case (0.0654995 -> 0.065500) is
+    the load-bearing pin: Python's default Decimal context is
+    ROUND_HALF_EVEN (banker's rounding) which would produce 0.065498 —
+    US consumer finance discipline (CLAUDE.md) requires HALF_UP.
+    """
+    # Typical Phase 4 affordability result; pads to 6 decimals.
+    assert quantize_rate(Decimal("0.065")) == Decimal("0.065000")
+    # Half-up boundary (exact halfway → rounds UP, not banker's even).
+    assert quantize_rate(Decimal("0.0654995")) == Decimal("0.065500")
+    # Just below half → rounds DOWN.
+    assert quantize_rate(Decimal("0.0654994")) == Decimal("0.065499")
+    # Above half → rounds UP.
+    assert quantize_rate(Decimal("0.0654996")) == Decimal("0.065500")
+    # Zero edge.
+    assert quantize_rate(Decimal("0.000000")) == Decimal("0.000000")
+    # Unit edge (max LTV scenario).
+    assert quantize_rate(Decimal("1.000000")) == Decimal("1.000000")
+    # 28-digit input (LTV math from affordability) clamps to 6 places.
+    assert quantize_rate(Decimal("0.123456789012345")) == Decimal("0.123457")
