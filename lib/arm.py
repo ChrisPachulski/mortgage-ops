@@ -27,12 +27,13 @@ from lib.money import quantize_cents, quantize_rate
 class ARMTerms(BaseModel):
     """ARM contractual terms (8 explicit fields per ARM-01 + optional note_rate per D-02).
 
+    See references/arm-mechanics.md for reset/cap/floor convention, including
+    Selling Guide citations (Fannie B2-1.4-02, Freddie 6302.7(b)), CFPB §1951,
+    and the AmericU 5/6 SOFR ARM disclosure (Phase 5 ARM-09 + ROADMAP SC-5).
+
     Field schema locked in CONTEXT.md D-06. Every field is REQUIRED except
     note_rate; floor_rate has NO default per D-02 (forces explicit caller
     choice; matches mortgage-ops 'fail loud, no inference' discipline).
-
-    Wave 5 (Plan 05-05) appends a docstring citation:
-        See references/arm-mechanics.md for reset/cap/floor convention.
     """
 
     model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
