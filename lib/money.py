@@ -44,3 +44,30 @@ def quantize_cents(value: Decimal) -> Decimal:
     """
     with localcontext(MONEY_CONTEXT):
         return value.quantize(CENT, rounding=ROUND_HALF_UP)
+
+
+_RATE_QUANTUM: Final[Decimal] = Decimal("0.000001")
+"""The quantum for end-of-period rate rounding (matches lib.models.Rate decimal_places=6).
+
+Companion to CENT (the quantum for quantize_cents at 2 decimal places).
+Phase 5 D-14 promotes this constant from lib/affordability.py:613 (Phase 4)
+to lib/money.py because Phase 5's ARM engine becomes the second consumer.
+"""
+
+
+def quantize_rate(rate: Decimal) -> Decimal:
+    """Quantize a fractional rate to 6 decimal places using ROUND_HALF_UP.
+
+    Companion to quantize_cents (2 decimal places for Money). Use for any
+    Rate-typed value at end-of-period; never quantize mid-calculation
+    (Phase 1 PITFALLS, Phase 3 D-04, Phase 4 D-09 inherited).
+
+    The 6-decimal quantum matches lib.models.Rate's
+    Annotated[Decimal, Field(max_digits=7, decimal_places=6)] constraint.
+
+    Promoted from lib/affordability.py._quantize_rate (Phase 4 D-09) to
+    lib/money.py per Phase 5 D-14 because Phase 5 lib/arm.py is the
+    second consumer.
+    """
+    with localcontext(MONEY_CONTEXT):
+        return rate.quantize(_RATE_QUANTUM, rounding=ROUND_HALF_UP)
