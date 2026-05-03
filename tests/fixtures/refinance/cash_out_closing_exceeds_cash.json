@@ -1,0 +1,25 @@
+{
+  "_meta": {
+    "oracle_source": "CR-01 fix (2026-05-02): pathological cash-out where closing_costs > cash_out_amount.",
+    "derivation": "Engine-derived 2026-05-02 via lib.refinance.evaluate AFTER the CR-01 fix that emits BOTH gross legs on the negative-net path. Pins (a) sum of t=0 cashflows == cash_out_amount - closing_costs, and (b) cash_proceeds=None per Rule-1 consumer-friendly surface. Audit-trail integrity contract: a consumer summing cashflows by period gets the same number the engine reports.",
+    "citation": "06-REVIEW.md CR-01; SC-3 (labeled top-level + audit-trail); D-12 (CFPB closing-disclosure netting); D-15 (closing costs at t=0)."
+  },
+  "request": {
+    "refi_kind": "cash_out",
+    "old_loan_balance": "200000.00",
+    "old_annual_rate": "0.060000",
+    "old_remaining_months": 240,
+    "new_annual_rate": "0.060000",
+    "new_term_months": 360,
+    "closing_costs": "8000.00",
+    "cash_out_amount": "5000.00",
+    "discount_rate_annual": "0.050000",
+    "analysis_horizon_months": 240
+  },
+  "expected": {
+    "refi_kind": "cash_out",
+    "cash_proceeds": null,
+    "t0_net_signed": "-3000.00",
+    "cashflows_kinds": ["closing_costs", "cash_proceeds", "monthly_payment_delta"]
+  }
+}

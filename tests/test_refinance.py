@@ -185,6 +185,56 @@ def test_refi_cash_out_new_monthly_pi(
     assert out["new_monthly_pi"] == expected["new_monthly_pi"]
 
 
+def test_refi_cash_out_closing_exceeds_cash_audit_trail(
+    refinance_fixture: Callable[[str], dict[str, Any]],
+) -> None:
+    """CR-01 (REVIEW.md fix): on the pathological cash-out path where
+    closing_costs >= cash_out_amount, the engine MUST emit BOTH gross t=0
+    legs (closing_costs outflow + cash_out_amount inflow) so the audit
+    trail and NPV math agree on what actually moved.
+
+    Pre-fix bug: the negative-net branch passed cash_proceeds_net=0 to
+    _build_refi_cashflows, which (per `if cash_proceeds_net > 0`) suppressed
+    the cash_proceeds emission entirely. The audit trail surfaced ONLY the
+    closing_costs outflow — the borrower's actual cash_out_amount inflow
+    disappeared, breaking SC-3's "labeled top-level + audit-trail" contract.
+
+    This fixture pins the post-fix invariant: sum(t=0 cashflows.amount) ==
+    cash_out_amount - closing_costs (signed). cash_proceeds remains None
+    per the D-12 / Rule-1 consumer-friendly surface (we don't report a
+    non-positive Money), but the audit trail loses no transactions.
+    """
+    fx = refinance_fixture("cash_out_closing_exceeds_cash")
+    req = CashOutRefiRequest.model_validate_json(json.dumps(fx["request"]))
+    from lib.refinance import evaluate
+
+    resp = evaluate(req)
+    expected = fx["expected"]
+
+    # Audit-trail integrity: both gross legs surfaced at t=0
+    t0_cashflows = [cf for cf in resp.cashflows if cf.period == 0]
+    kinds_at_t0 = {cf.kind for cf in t0_cashflows}
+    assert "closing_costs" in kinds_at_t0, (
+        f"CR-01 violated: closing_costs outflow missing from t=0 audit trail; "
+        f"got kinds={kinds_at_t0}"
+    )
+    assert "cash_proceeds" in kinds_at_t0, (
+        f"CR-01 violated: cash_proceeds inflow missing from t=0 audit trail "
+        f"(this WAS the bug: dropped on the negative-net path); got kinds={kinds_at_t0}"
+    )
+
+    # CR-01 invariant: sum of t=0 amounts == cash_out_amount - closing_costs
+    t0_sum = sum((cf.amount for cf in t0_cashflows), Decimal("0"))
+    assert t0_sum == Decimal(expected["t0_net_signed"]), (
+        f"CR-01 audit-trail vs. NPV math drift: sum(t=0 cashflows)={t0_sum}, "
+        f"expected={expected['t0_net_signed']} (= cash_out - closing)"
+    )
+
+    # D-12 / Rule-1 consumer-friendly surface preserved: cash_proceeds is None
+    # when net is non-positive (we do NOT surface a non-positive Money value).
+    assert resp.cash_proceeds is expected["cash_proceeds"]
+
+
 def test_refi_cash_out_total_interest_delta(
     refinance_fixture: Callable[[str], dict[str, Any]],
 ) -> None:

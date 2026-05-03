@@ -918,12 +918,15 @@ def evaluate_cash_out(req: CashOutRefiRequest) -> RefiResponse:
 
     New principal = old_balance + cash_out_amount (D-15: NO closing-costs
     financing in v1). Cash proceeds at t=0 = cash_out_amount - closing_costs
-    (NET; D-12 cash-out convention). When closing_costs > cash_out_amount the
-    net is negative; per Rule-1 deviation in PLAN 06-03 we surface
+    (NET; D-12 cash-out convention). When closing_costs >= cash_out_amount the
+    net is non-positive; per Rule-1 deviation in PLAN 06-03 we surface
     cash_proceeds=None (consumer-friendly: 'no positive proceeds') rather than
-    a negative Money value, AND we keep cash_proceeds out of the t=0 cashflow
-    inflow stream so NPV still uses signed cash flows correctly via the
-    closing_costs outflow path.
+    a non-positive Money value. CR-01 fix (2026-05-02): on the negative-net
+    path we now emit BOTH gross legs as separate t=0 cashflows
+    (cash_out_amount inflow + closing_costs outflow) so the audit trail and
+    NPV math agree on what actually moved. Previously the cash inflow was
+    silently dropped, breaking SC-3's "labeled top-level + audit-trail" contract
+    on the equality / closing-exceeds-cash boundary.
 
     Total interest delta = new_schedule.total_interest -
                            old_residual_schedule.total_interest (signed; positive
@@ -937,8 +940,9 @@ def evaluate_cash_out(req: CashOutRefiRequest) -> RefiResponse:
       4. Horizon (D-11 default = new_loan.term_months).
       5. Cashflows — closing costs NOT a separate t=0 outflow when cash proceeds
          positive (already netted into cash_proceeds_net per D-12). When net
-         goes negative, fall back to closing_costs outflow at t=0 + no t=0
-         inflow (consumer-friendly).
+         is non-positive, surface BOTH gross legs (closing_costs outflow at
+         t=0 + cash_out_amount inflow at t=0) so the audit trail reflects
+         every dollar that actually moved (CR-01 fix).
       6. After-tax overlay (D-09) when after_tax_mode=True.
       7. NPV (pre-tax).
       8. Breakeven (cash-out: simple is no_savings when payment grows;
@@ -981,8 +985,12 @@ def evaluate_cash_out(req: CashOutRefiRequest) -> RefiResponse:
     # 5: cashflows
     # When cash_proceeds_net > 0 (typical), closing costs are netted into cash
     # proceeds per D-12 — they do NOT also appear as a t=0 outflow.
-    # When cash_proceeds_net <= 0 (closing > cash out — pathological), surface
-    # closing costs as the t=0 outflow and DO NOT emit a negative inflow.
+    # When cash_proceeds_net <= 0 (closing >= cash_out — pathological), CR-01:
+    # surface BOTH gross legs (closing_costs outflow at t=0 + cash_out_amount
+    # inflow at t=0) so the audit trail and NPV math agree on what actually
+    # moved. Previously, this branch dropped the cash_out inflow entirely,
+    # breaking SC-3's "labeled top-level + audit-trail" contract on the
+    # equality / closing-exceeds-cash boundary.
     if cash_proceeds_net > Decimal("0.00"):
         cashflows = _build_refi_cashflows(
             closing_costs=Decimal("0.00"),  # netted into cash_proceeds_net
@@ -997,7 +1005,7 @@ def evaluate_cash_out(req: CashOutRefiRequest) -> RefiResponse:
             old_monthly_pi=old_monthly_pi,
             new_monthly_pi=new_monthly_pi,
             horizon_months=horizon,
-            cash_proceeds_net=Decimal("0.00"),
+            cash_proceeds_net=req.cash_out_amount,  # gross inflow, not net
         )
 
     # 6: after-tax overlay (D-09) — capture StaleReferenceWarning from IRS
@@ -1051,9 +1059,10 @@ def evaluate_cash_out(req: CashOutRefiRequest) -> RefiResponse:
         new_monthly_pi=new_monthly_pi,
         monthly_savings=quantize_cents(monthly_savings),
         # D-12 / Rule-1 carve-out: only surface cash_proceeds when it's positive;
-        # negative-net cases (closing > cash) report None to signal "no positive
-        # proceeds" (consumer-friendly; the closing_costs outflow + lifetime
-        # interest delta still flow through the cashflow stream and NPV).
+        # non-positive-net cases (closing >= cash_out) report None to signal "no
+        # positive proceeds" (consumer-friendly). Per CR-01 fix, the cashflow
+        # audit trail still emits BOTH gross t=0 legs (cash_out_amount inflow +
+        # closing_costs outflow) on this path so NPV math and audit trail agree.
         cash_proceeds=cash_proceeds_net if cash_proceeds_net > Decimal("0.00") else None,
         monthly_payment_delta=quantize_cents(monthly_payment_delta),
         total_interest_delta=total_interest_delta,
