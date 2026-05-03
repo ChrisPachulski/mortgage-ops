@@ -1,0 +1,43 @@
+{
+  "description": "30yr fixed, $600k @ 7.5%, $10k finance charges",
+  "request": {
+    "loan": {
+      "principal": "600000.00",
+      "annual_rate": "0.075000",
+      "term_months": 360,
+      "origination_date": "2026-01-01",
+      "loan_type": "fixed"
+    },
+    "finance_charges": "10000.00",
+    "advance_schedule": [
+      {
+        "unit_period_offset": 0,
+        "amount": "590000.00"
+      }
+    ],
+    "payment_schedule": [
+      {
+        "starting_unit_period": 1,
+        "periods": 360,
+        "amount": "4195.29"
+      }
+    ],
+    "day_count": "30/360",
+    "unit_periods_per_year": 12,
+    "odd_first_period_days": 0
+  },
+  "expected": {
+    "estimated_apr": "0.076725",
+    "iterations_max": 10,
+    "tolerance_used": "0.00001",
+    "iterations_observed_at_capture": 1,
+    "final_residual_at_capture": "0.00"
+  },
+  "oracle_provenance": {
+    "class": "engine-emitted",
+    "captured_at": "2026-05-03",
+    "captured_by": "scripts/_generate_apr_oracle_fixtures.py",
+    "engine_module": "lib.apr.solve_apr",
+    "notes": "Engine-emitted, NOT externally cross-validated. The expected APR is the value produced by lib.apr.solve_apr at fixture-write time (CAPTURED_AT). Any drift >Decimal('0.00001') from the pinned value indicates an engine regression vs the snapshot. The autonomous-execution override accepted by the project owner permits this provenance class for the Phase 7 oracle corpus closure (see .planning/phases/07-estimated-apr/07-07-ffiec-fixtures-SUMMARY.md \u00a7Partial Closure)."
+  }
+}

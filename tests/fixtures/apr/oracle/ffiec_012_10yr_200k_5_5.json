@@ -1,0 +1,44 @@
+{
+  "description": "10yr fixed, $200k @ 5.5%, no finance charges",
+  "request": {
+    "loan": {
+      "principal": "200000.00",
+      "annual_rate": "0.055000",
+      "term_months": 120,
+      "origination_date": "2026-01-01",
+      "loan_type": "fixed"
+    },
+    "finance_charges": "0.00",
+    "advance_schedule": [
+      {
+        "unit_period_offset": 0,
+        "amount": "200000.00"
+      }
+    ],
+    "payment_schedule": [
+      {
+        "starting_unit_period": 1,
+        "periods": 120,
+        "amount": "2170.53"
+      }
+    ],
+    "day_count": "30/360",
+    "unit_periods_per_year": 12,
+    "odd_first_period_days": 0
+  },
+  "expected": {
+    "estimated_apr": "0.055000",
+    "iterations_max": 10,
+    "tolerance_used": "0.00001",
+    "iterations_observed_at_capture": 1,
+    "final_residual_at_capture": "0.00"
+  },
+  "oracle_provenance": {
+    "class": "engine-emitted, cross-validated against Wikipedia worked example",
+    "captured_at": "2026-05-03",
+    "captured_by": "scripts/_generate_apr_oracle_fixtures.py",
+    "engine_module": "lib.apr.solve_apr",
+    "notes": "Engine-emitted, cross-validated against the Phase 1 Wikipedia oracle anchor ($200k @ 6.5%/30yr \u2192 $1,264.14 monthly; APR == nominal rate exactly for regular-monthly mortgages with no finance charges). Engine emits 0.065000 = nominal in 1 iteration; matches the regular-case collapse of the unit-period equation to the standard PV form.",
+    "cross_validated_against": "wikipedia-mortgage-loan-pv-formula-collapse (regular monthly, no finance charges)"
+  }
+}
