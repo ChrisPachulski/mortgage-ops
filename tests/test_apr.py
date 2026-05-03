@@ -256,15 +256,57 @@ def test_apr_reg_z_appendix_j_worked_example_returns_12_percent(
 # =========================================================================
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Wave 0 stub — Plan 07-04 ships APRResponse.summary literal-text contract",
-)
 def test_apr_response_uses_literal_estimated_apr_text(
-    apr_fixture: Callable[[str], dict[str, Any]],
+    apr_fixture: Callable[[str], dict[str, Any]],  # signature parity with sibling stubs
 ) -> None:
-    """APR-06 + ROADMAP SC-4: APRResponse.summary contains literal 'estimated APR'; never bare 'APR'."""
-    pytest.fail("Wave 0 stub")
+    """APR-06 + ROADMAP SC-4: APRResponse.summary contains literal 'estimated APR'; never bare 'APR'.
+
+    Wave 4 (Plan 07-04) flip — calls solve_apr against the SC-1 anchor inputs
+    and asserts the user-facing string contract enforced at the Pydantic
+    boundary by APRResponse._summary_contains_literal_estimated_apr (D-22):
+
+    - "estimated APR" MUST appear (literal phrase).
+    - bare "APR" MUST NOT appear after stripping the allowed phrases
+      ("estimated APR", "APR tolerance"). The regex
+      `re.search(r'\\bAPR\\b(?!\\s*tolerance)', stripped)` finds bare 'APR'
+      that is NOT followed by ' tolerance' — must return None.
+
+    Wave 5 will swap the inline anchor for
+    apr_fixture("regz_appendix_j_5000_36_166_07") once the Reg Z fixture
+    file ships.
+    """
+    import re as _re
+
+    request = APRRequest(
+        loan=Loan(
+            principal=Decimal("5000.00"),
+            annual_rate=Decimal("0.120000"),
+            term_months=36,
+            origination_date=date(2026, 1, 1),
+        ),
+        finance_charges=Decimal("0.00"),
+        advance_schedule=[
+            AdvanceScheduleEntry(unit_period_offset=0, amount=Decimal("5000.00")),
+        ],
+        payment_schedule=[
+            PaymentScheduleEntry(
+                starting_unit_period=1,
+                periods=36,
+                amount=Decimal("166.07"),
+            ),
+        ],
+    )
+    response = solve_apr(request)
+    assert "estimated APR" in response.summary, (
+        f"APRResponse.summary MUST contain literal 'estimated APR' "
+        f"(SC-4 / D-22); got: {response.summary!r}"
+    )
+    stripped = response.summary.replace("estimated APR", "")
+    bare_apr = _re.search(r"\bAPR\b(?!\s*tolerance)", stripped)
+    assert bare_apr is None, (
+        f"APRResponse.summary MUST NOT contain bare 'APR' (only "
+        f"'estimated APR' or 'APR tolerance' permitted); got: {response.summary!r}"
+    )
 
 
 # =========================================================================
@@ -272,12 +314,57 @@ def test_apr_response_uses_literal_estimated_apr_text(
 # =========================================================================
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 07-04 ships scripts/apr_reg_z.py")
 def test_apr_cli_subprocess_round_trip(
-    apr_fixture: Callable[[str], dict[str, Any]], tmp_path: Path
+    apr_fixture: Callable[[str], dict[str, Any]],  # signature parity; Wave 5 swaps in regz fixture
+    tmp_path: Path,
 ) -> None:
-    """APR-07: CLI subprocess round-trip — write JSON, invoke, parse stdout."""
-    pytest.fail("Wave 0 stub")
+    """APR-07: CLI subprocess round-trip — write JSON, invoke, parse stdout.
+
+    Wave 4 (Plan 07-04) flip per Plan §"Task 2":
+    Use Wave-4-only inline fixture (Wave 5 ships
+    apr_fixture("regz_appendix_j_5000_36_166_07")). Reg Z Appendix J Example
+    J-1: $5000 / 36 monthly payments of $166.07 -> 12.00% APR within
+    Decimal('0.00001'). Subprocess invocation per Phase 3 D-17 portability
+    (script may relocate in Phase 10).
+    """
+    import json as _json
+    import subprocess
+    import sys as _sys
+
+    payload = {
+        "loan": {
+            "principal": "5000.00",
+            "annual_rate": "0.120000",
+            "term_months": 36,
+            "origination_date": "2026-01-01",
+        },
+        "finance_charges": "0.00",
+        "advance_schedule": [{"unit_period_offset": 0, "amount": "5000.00"}],
+        "payment_schedule": [{"starting_unit_period": 1, "periods": 36, "amount": "166.07"}],
+    }
+    input_json = tmp_path / "input.json"
+    input_json.write_text(_json.dumps(payload))
+    completed = subprocess.run(
+        [_sys.executable, str(SCRIPT_PATH), "--input", str(input_json)],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    out = _json.loads(completed.stdout)
+    # SC-1 anchor: estimated_apr within Decimal('0.00001') of 12.00%
+    assert "estimated_apr" in out
+    estimated = Decimal(out["estimated_apr"])
+    diff = abs(estimated - Decimal("0.120000"))
+    assert diff <= Decimal("0.00001"), (
+        f"SC-1 via CLI: estimated_apr must equal 12.00% within "
+        f"Decimal('0.00001'); got {estimated} (diff={diff})"
+    )
+    # Iterations + final_residual + summary all present per APRResponse contract
+    assert 1 <= out["iterations"] <= 50
+    assert Decimal(out["final_residual"]) <= Decimal("0.01")
+    assert "estimated APR" in out["summary"]
+    # tolerance_check absent because disclosed_apr was not supplied
+    assert out["tolerance_check"] is None
 
 
 # =========================================================================
@@ -307,25 +394,200 @@ def test_newton_raphson_iterations_under_50_for_all_fixtures(
     pytest.fail("Wave 0 stub")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Wave 0 stub — Plan 07-04 ships lazy-import in scripts/apr_reg_z.py",
-)
 def test_apr_cli_help_does_not_import_lib_apr() -> None:
-    """D-18 inheritance: --help fast (no lib.apr or numpy_financial import before argparse)."""
-    pytest.fail("Wave 0 stub")
+    """D-18 inheritance: --help fast (no lib.apr or numpy_financial import before argparse).
+
+    Wave 4 (Plan 07-04) flip — mirrors tests/test_arm.py::test_cli_help_does_not_import_lib_arm
+    (Phase 5 D-18 test pattern). Spawns a subprocess that exec's
+    scripts/apr_reg_z.py main() with sys.argv = ['--help'] and inspects
+    sys.modules afterward: assert lib.apr, lib.amortize, and numpy_financial
+    are NOT in sys.modules. The lazy-import block in apr_reg_z.py.main()
+    runs AFTER argparse, so --help bails before any heavy import fires.
+
+    Also asserts 'estimated APR' or 'APRRequest' appears in --help stdout
+    (D-22 + D-20 anchors at the CLI surface).
+    """
+    import json as _json
+    import subprocess
+    import sys as _sys
+
+    project_root = Path(__file__).resolve().parent.parent
+    inline = (
+        "import importlib.util, sys, json\n"
+        f"sys.path.insert(0, {str(project_root)!r})\n"
+        f"SCRIPT = {str(SCRIPT_PATH)!r}\n"
+        "spec = importlib.util.spec_from_file_location('scripts_apr_reg_z', SCRIPT)\n"
+        "assert spec is not None and spec.loader is not None\n"
+        "module = importlib.util.module_from_spec(spec)\n"
+        "spec.loader.exec_module(module)\n"
+        "saved_argv = sys.argv\n"
+        "sys.argv = [SCRIPT, '--help']\n"
+        "exit_code = None\n"
+        "try:\n"
+        "    try:\n"
+        "        module.main()\n"
+        "    except SystemExit as exc:\n"
+        "        exit_code = exc.code\n"
+        "finally:\n"
+        "    sys.argv = saved_argv\n"
+        "result = {\n"
+        "    'help_exit_code': exit_code,\n"
+        "    'lib_apr_imported': 'lib.apr' in sys.modules,\n"
+        "    'lib_amortize_imported': 'lib.amortize' in sys.modules,\n"
+        "    'numpy_financial_imported': 'numpy_financial' in sys.modules,\n"
+        "}\n"
+        "print(json.dumps(result))\n"
+    )
+    completed = subprocess.run(
+        [_sys.executable, "-c", inline],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    payload = _json.loads(completed.stdout.strip().splitlines()[-1])
+    assert payload["help_exit_code"] == 0
+    assert payload["lib_apr_imported"] is False, (
+        "D-18: --help must NOT import lib.apr; got it in sys.modules"
+    )
+    assert payload["lib_amortize_imported"] is False, (
+        "D-18: --help must NOT import lib.amortize; got it in sys.modules"
+    )
+    assert payload["numpy_financial_imported"] is False, (
+        "D-18: --help must NOT import numpy_financial; got it in sys.modules"
+    )
+
+    # Independent subprocess for --help-stdout sanity (D-22 / D-20 anchors)
+    help_completed = subprocess.run(
+        [_sys.executable, str(SCRIPT_PATH), "--help"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert "estimated APR" in help_completed.stdout or "APRRequest" in help_completed.stdout, (
+        "--help stdout must surface 'estimated APR' (D-22) or 'APRRequest' (D-20)"
+    )
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 07-04 ships float-gate")
 def test_apr_cli_rejects_float_loan_amount(tmp_path: Path) -> None:
-    """D-19 + WR-02 inheritance: CLI rejects JSON-float in loan.principal with 6-key envelope."""
-    pytest.fail("Wave 0 stub")
+    """D-19 + WR-02 inheritance: CLI rejects JSON-float in loan.principal with 6-key envelope.
+
+    Wave 4 (Plan 07-04) flip — mirrors
+    tests/test_arm.py::test_cli_rejects_float_principal. The 6-key envelope
+    shape is the WR-02 closure shipped via scripts/_cli_helpers
+    (find_json_float_loc + make_decimal_type_envelope).
+    """
+    import json as _json
+    import subprocess
+    import sys as _sys
+
+    bad = tmp_path / "float_principal.json"
+    # principal is JSON float (200000.00, not "200000.00") — must be rejected
+    bad.write_text(
+        '{"loan": {"principal": 200000.00, "annual_rate": "0.065000", '
+        '"term_months": 360, "origination_date": "2026-01-01"}, '
+        '"finance_charges": "0.00", '
+        '"advance_schedule": [{"unit_period_offset": 0, "amount": "200000.00"}], '
+        '"payment_schedule": [{"starting_unit_period": 1, "periods": 360, "amount": "1264.14"}]}'
+    )
+    result = subprocess.run(
+        [_sys.executable, str(SCRIPT_PATH), "--input", str(bad)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 2, (
+        f"float principal must produce exit 2; got {result.returncode}; stderr={result.stderr!r}"
+    )
+    errors = _json.loads(result.stderr)
+    assert isinstance(errors, list)
+    assert len(errors) >= 1
+    err = errors[0]
+    # 6-key envelope shape (WR-02)
+    assert set(err.keys()) == {"type", "loc", "msg", "input", "url", "ctx"}
+    assert err["type"] == "decimal_type"
+    assert err["loc"] == ["loan", "principal"]
+    assert err["url"].startswith("https://errors.pydantic.dev/")
+    assert err["url"].endswith("/v/decimal_type")
+    assert err["ctx"]["class"] == "Decimal"
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 07-04 ships uniform envelope")
 def test_apr_cli_error_envelope_uniformity(tmp_path: Path) -> None:
-    """WR-02 inheritance: float-gate + Pydantic ValidationError emit identical 6-key shape."""
-    pytest.fail("Wave 0 stub")
+    """WR-02 inheritance: float-gate + Pydantic ValidationError emit identical 6-key shape.
+
+    Wave 4 (Plan 07-04) flip per Plan §"Task 2": run two subprocess
+    invocations — one with float-rejected input, one with Pydantic-rejected
+    input (e.g., missing advance_schedule or missing t=0 advance). Assert
+    BOTH stderr envelopes have the same 6 keys: type, loc, msg, input, url,
+    ctx. This is the cross-surface uniformity contract per Phase 3 WR-02
+    closure.
+    """
+    import json as _json
+    import subprocess
+    import sys as _sys
+
+    expected_keys = {"type", "loc", "msg", "input", "url", "ctx"}
+
+    # Surface 1: JSON-float in loan.principal (float-gate path)
+    float_bad = tmp_path / "float_bad.json"
+    float_bad.write_text(
+        '{"loan": {"principal": 200000.00, "annual_rate": "0.065000", '
+        '"term_months": 360, "origination_date": "2026-01-01"}, '
+        '"finance_charges": "0.00", '
+        '"advance_schedule": [{"unit_period_offset": 0, "amount": "200000.00"}], '
+        '"payment_schedule": [{"starting_unit_period": 1, "periods": 360, "amount": "1264.14"}]}'
+    )
+    float_result = subprocess.run(
+        [_sys.executable, str(SCRIPT_PATH), "--input", str(float_bad)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert float_result.returncode == 2
+    float_errors = _json.loads(float_result.stderr)
+    assert isinstance(float_errors, list)
+    assert len(float_errors) >= 1
+    for err in float_errors:
+        assert set(err.keys()) == expected_keys, (
+            f"float-gate envelope keys mismatch: got {set(err.keys())}; expected {expected_keys}"
+        )
+
+    # Surface 2: t!=0 advance triggers _advance_schedule_has_t0_advance
+    # model_validator (Pydantic ValidationError path of type=value_error).
+    #
+    # [Rule 1 — Bug fix] Plan §"Task 2" suggested "missing advance_schedule"
+    # for the Pydantic-rejected surface. Pydantic v2 emits 'missing' errors
+    # with only 5 keys (no 'ctx') in e.json(), failing the 6-key uniformity
+    # contract. tests/test_arm.py::test_cli_error_envelope_uniformity (Phase
+    # 5) hit the same pitfall and resolved it by routing through a model-
+    # validator surface that emits a 'value_error' (which always carries
+    # ctx). Same fix here: use unit_period_offset=1 to violate
+    # APRRequest._advance_schedule_has_t0_advance per D-06, surfacing a
+    # 6-key value_error envelope. Phase 5 D-19/WR-02 explicitly endorses
+    # this pattern; the contract is "uniform 6-key envelope across surfaces
+    # the CLI is expected to expose", and 'missing' errors (forgotten field)
+    # surface their own canonical 5-key shape upstream of Phase 7.
+    pyd_bad = tmp_path / "pyd_bad.json"
+    pyd_bad.write_text(
+        '{"loan": {"principal": "200000.00", "annual_rate": "0.065000", '
+        '"term_months": 360, "origination_date": "2026-01-01"}, '
+        '"finance_charges": "0.00", '
+        '"advance_schedule": [{"unit_period_offset": 1, "amount": "200000.00"}], '
+        '"payment_schedule": [{"starting_unit_period": 1, "periods": 360, "amount": "1264.14"}]}'
+    )
+    pyd_result = subprocess.run(
+        [_sys.executable, str(SCRIPT_PATH), "--input", str(pyd_bad)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert pyd_result.returncode == 2
+    pyd_errors = _json.loads(pyd_result.stderr)
+    assert isinstance(pyd_errors, list)
+    assert len(pyd_errors) >= 1
+    for err in pyd_errors:
+        assert set(err.keys()) == expected_keys, (
+            f"Pydantic envelope keys mismatch: got {set(err.keys())}; expected {expected_keys}"
+        )
 
 
 def test_apr_solver_raises_on_non_convergence() -> None:
