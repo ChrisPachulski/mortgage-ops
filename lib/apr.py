@@ -345,3 +345,35 @@ class APRResponse(BaseModel):
                 f"'estimated APR' or 'APR tolerance' permitted); got: {self.summary!r}"
             )
         return self
+
+
+def solve_apr(request: APRRequest) -> APRResponse:
+    """Solve for the estimated APR via Newton-Raphson (Wave 2 implements body).
+
+    See references/apr-reg-z.md §5 for the algorithm: seed from
+    `numpy_financial.rate(...)` (regular-transaction approximation), then
+    iterate `i_{n+1} = i_n - f(i_n) / f'(i_n)` against the Reg Z Appendix
+    J unit-period equation in pure Decimal arithmetic until BOTH
+    `abs(i_{n+1} - i_n) <= Decimal("0.00001")` AND
+    `abs(f(i_{n+1})) <= Decimal("0.01")` (D-06 dual criterion). Cap at
+    50 iterations (ROADMAP SC-3) — raise APRConvergenceError before
+    constructing APRResponse if cap exceeded (D-07 defense in depth).
+
+    Args:
+        request: The APRRequest boundary model. Pre-validated by Pydantic
+                 (strict + frozen + extra=forbid + cross-field invariants
+                 D-06 + non-empty payment schedule).
+
+    Returns:
+        APRResponse with estimated_apr quantized to 6 decimal places,
+        iterations count, final_residual, summary string containing the
+        literal 'estimated APR' (SC-4), and optional tolerance_check
+        when request.disclosed_apr was supplied.
+
+    Raises:
+        NotImplementedError: Wave 2 (Plan 07-02) ships the implementation.
+    """
+    raise NotImplementedError(
+        "Wave 2 (Plan 07-02) implements the Newton-Raphson body; "
+        "Wave 1 (Plan 07-01) ships only the boundary models."
+    )
