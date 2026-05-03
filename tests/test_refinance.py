@@ -36,11 +36,13 @@ import json  # noqa: F401  (reserved for Wave 4+ CLI tests + Wave 5 fixtures)
 import re  # noqa: F401  (reserved for Wave 6 doc-section regex assertions)
 import subprocess  # noqa: F401  (reserved for Wave 4 CLI subprocess tests)
 import sys  # noqa: F401  (reserved for Wave 4 sys.executable in subprocess invocations)
-from decimal import Decimal  # noqa: F401  (reserved for Wave 1 sign-validator + Wave 5 NPV asserts)
+from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING, Any  # noqa: F401  (Any reserved for fixture loaders in flips)
 
 import pytest
+from lib.refinance import RefiCashflow
+from pydantic import ValidationError
 
 if TYPE_CHECKING:
     from collections.abc import (
@@ -230,13 +232,34 @@ def test_refi_npv_doc_sign_convention_phrase() -> None:
     pytest.fail("Wave 0 stub")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Wave 0 stub — Plan 06-01 lib/refinance.py module docstring cites references/refi-npv.md (D-16)",
-)
 def test_lib_refinance_module_docstring_cites() -> None:
-    """D-16: lib/refinance.py module docstring cites references/refi-npv.md (belt-and-suspenders sign-convention surface)."""
-    pytest.fail("Wave 0 stub")
+    """D-16: lib/refinance.py module docstring cites references/refi-npv.md.
+
+    Belt-and-suspenders sign-convention surface (D-16):
+      (1) RefiCashflow validator messages cite the doc
+      (2) lib/refinance.py module docstring cites the doc (THIS test)
+      (3) references/refi-npv.md headlines the phrase verbatim per SC-5 (Plan 06-06)
+      (4) scripts/refi_npv.py --help epilog includes the doc cite per SC-5 (Plan 06-04)
+
+    REFI-09 anchor + SC-5 verbatim phrase ("outflows negative, savings positive")
+    must also appear in the module docstring so the contract is documented
+    immediately at the import boundary, not only at the doc layer.
+    """
+    # Read the module file directly (not via __doc__) so we exercise the
+    # on-disk artifact that future readers see and that grep gates target.
+    source = REFINANCE_MODULE_PATH.read_text()
+    assert REFINANCE_MODULE_PATH.exists(), (
+        f"lib/refinance.py must exist at {REFINANCE_MODULE_PATH} (D-16 anchor)"
+    )
+    # D-16 belt-and-suspenders surface (2): module docstring cites the doc.
+    assert "references/refi-npv.md" in source, (
+        "lib/refinance.py module docstring must cite references/refi-npv.md (D-16)"
+    )
+    # SC-5 verbatim sign-convention phrase must surface in the module too.
+    assert "outflows negative, savings positive" in source, (
+        "lib/refinance.py module docstring must contain SC-5 verbatim phrase "
+        "'outflows negative, savings positive' (D-04 + D-16)"
+    )
 
 
 # =========================================================================
@@ -244,39 +267,93 @@ def test_lib_refinance_module_docstring_cites() -> None:
 # =========================================================================
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Wave 0 stub — Plan 06-01 RefiCashflow rejects outflow with positive amount (SC-4)",
-)
 def test_refi_cashflow_outflow_positive_rejected() -> None:
-    """SC-4 verbatim: RefiCashflow(direction='outflow', amount=positive) raises ValidationError."""
-    pytest.fail("Wave 0 stub")
+    """SC-4 verbatim: RefiCashflow(direction='outflow', amount=positive) raises ValidationError.
+
+    Per D-04 borrower-perspective sign convention (outflows negative, savings
+    positive), constructing an outflow with a positive amount is an immediate
+    sign-direction violation that the @model_validator _direction_sign_consistency
+    rejects at construction time. Match the predicate's error-message substring
+    cited in 06-RESEARCH §"Oracle 4" to defend against silent message drift.
+    """
+    with pytest.raises(ValidationError, match="outflow cashflow must have non-positive amount"):
+        RefiCashflow(
+            period=0,
+            direction="outflow",
+            amount=Decimal("2000.00"),
+            kind="closing_costs",
+        )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Wave 0 stub — Plan 06-01 RefiCashflow rejects inflow with negative amount (SC-4)",
-)
 def test_refi_cashflow_inflow_negative_rejected() -> None:
-    """SC-4 verbatim: RefiCashflow(direction='inflow', amount=negative) raises ValidationError."""
-    pytest.fail("Wave 0 stub")
+    """SC-4 verbatim: RefiCashflow(direction='inflow', amount=negative) raises ValidationError.
+
+    Mirror sign-direction violation: an inflow with a negative amount is the
+    opposite-side construction error and is rejected by the same validator
+    (D-04 + 06-RESEARCH §"Oracle 4").
+    """
+    with pytest.raises(ValidationError, match="inflow cashflow must have non-negative amount"):
+        RefiCashflow(
+            period=1,
+            direction="inflow",
+            amount=Decimal("-100.00"),
+            kind="monthly_savings",
+        )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Wave 0 stub — Plan 06-01 RefiCashflow accepts amount=0 in either direction (D-14)",
-)
 def test_refi_cashflow_zero_accepted_either_dir() -> None:
-    """D-14: RefiCashflow(direction='outflow' or 'inflow', amount=Decimal('0.00')) is valid (no sign hazard)."""
-    pytest.fail("Wave 0 stub")
+    """D-14: RefiCashflow with amount=Decimal('0.00') in either direction is valid.
+
+    Zero cashflows have no sign hazard (the validator fires only on strict-sign
+    mismatch: outflow with amount > 0 OR inflow with amount < 0). This test
+    pins the explicit D-14 carve-out so a future "tighten the validator" PR
+    cannot silently start rejecting zero amounts.
+    """
+    # Both should construct without raising — Pydantic returns the validated instance.
+    outflow_zero = RefiCashflow(
+        period=0,
+        direction="outflow",
+        amount=Decimal("0.00"),
+        kind="closing_costs",
+    )
+    inflow_zero = RefiCashflow(
+        period=0,
+        direction="inflow",
+        amount=Decimal("0.00"),
+        kind="cash_proceeds",
+    )
+    assert outflow_zero.amount == Decimal("0.00")
+    assert inflow_zero.amount == Decimal("0.00")
+    assert outflow_zero.direction == "outflow"
+    assert inflow_zero.direction == "inflow"
 
 
-@pytest.mark.xfail(
-    strict=True, reason="Wave 0 stub — Plan 06-01 RefiCashflow accepts correctly-signed cashflows"
-)
 def test_refi_cashflow_correctly_signed_passes() -> None:
-    """SC-4 happy path: outflow + negative amount + inflow + positive amount construct cleanly."""
-    pytest.fail("Wave 0 stub")
+    """SC-4 happy path: outflow with negative amount + inflow with positive amount construct cleanly.
+
+    Verifies the full SC-4 contract is symmetric: rejecting wrong-sign
+    constructions does not also reject right-sign constructions. Pins the
+    happy-path so the validator's logic remains a strict matched-pair check
+    (not an over-broad reject).
+    """
+    closing_costs = RefiCashflow(
+        period=0,
+        direction="outflow",
+        amount=Decimal("-2000.00"),
+        kind="closing_costs",
+    )
+    monthly_savings = RefiCashflow(
+        period=1,
+        direction="inflow",
+        amount=Decimal("366.57"),
+        kind="monthly_savings",
+    )
+    assert closing_costs.amount == Decimal("-2000.00")
+    assert closing_costs.direction == "outflow"
+    assert closing_costs.kind == "closing_costs"
+    assert monthly_savings.amount == Decimal("366.57")
+    assert monthly_savings.direction == "inflow"
+    assert monthly_savings.kind == "monthly_savings"
 
 
 # =========================================================================
