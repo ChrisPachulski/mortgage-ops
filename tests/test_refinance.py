@@ -45,9 +45,7 @@ from lib.refinance import CashOutRefiRequest, RateAndTermRefiRequest, RefiCashfl
 from pydantic import ValidationError
 
 if TYPE_CHECKING:
-    from collections.abc import (
-        Callable,  # noqa: F401  (reserved for refinance_fixture type hints in flips)
-    )
+    from collections.abc import Callable
 
 SCRIPT_PATH: Path = Path(__file__).resolve().parent.parent / "scripts" / "refi_npv.py"
 """Phase 6 CLI lives at project-root scripts/. Phase 10 will relocate to
@@ -65,29 +63,85 @@ REFI_NPV_DOC_PATH: Path = Path(__file__).resolve().parent.parent / "references" 
 # =========================================================================
 
 
-@pytest.mark.xfail(
-    strict=True, reason="Wave 0 stub — Plan 06-05 rate-and-term positive-NPV fixture (SC-1)"
-)
-def test_refi_rate_and_term_positive_npv() -> None:
-    """SC-1 anchor: rate-and-term refi at 200bps drop + $2k closing → NPV > 0 (Oracle 1)."""
-    pytest.fail("Wave 0 stub")
+def test_refi_rate_and_term_positive_npv(
+    refinance_fixture: Callable[[str], dict[str, Any]],
+) -> None:
+    """SC-1 anchor: rate-and-term refi at 200bps drop + $2k closing → NPV > 0 (Oracle 1).
+
+    Loads tests/fixtures/refinance/positive_npv_200bps_drop_2k_costs.json,
+    runs evaluate(req), asserts engine_output Decimal-equals expected.npv per
+    Phase 5 D-04 [REVISED] hand_calc_check witness pattern.
+    """
+    fx = refinance_fixture("positive_npv_200bps_drop_2k_costs")
+    req = RateAndTermRefiRequest.model_validate_json(json.dumps(fx["request"]))
+    from lib.refinance import evaluate
+
+    resp = evaluate(req)
+    expected = fx["expected"]
+    # SC-1 anchor: NPV strictly positive
+    assert Decimal(resp.npv) > Decimal("0"), (
+        f"SC-1 violated: positive-NPV fixture must yield npv > 0; got {resp.npv}"
+    )
+    # Phase 5 D-04 [REVISED]: strict Decimal equality vs engine-derived pin
+    assert Decimal(resp.npv) == Decimal(expected["npv"]), (
+        f"engine drift: npv={resp.npv} != expected={expected['npv']}"
+    )
+    # Sanity surface fields
+    assert str(resp.old_monthly_pi) == expected["old_monthly_pi"]
+    assert str(resp.new_monthly_pi) == expected["new_monthly_pi"]
+    assert str(resp.monthly_savings) == expected["monthly_savings"]
+    assert resp.refi_kind == expected["refi_kind"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Wave 0 stub — Plan 06-05 rate-and-term negative-NPV fixture (SC-1, D-13 horizon=12)",
-)
-def test_refi_rate_and_term_negative_npv() -> None:
-    """SC-1 anchor: same rate drop + $5k closing + analysis_horizon_months=12 → NPV < 0 (Oracle 2)."""
-    pytest.fail("Wave 0 stub")
+def test_refi_rate_and_term_negative_npv(
+    refinance_fixture: Callable[[str], dict[str, Any]],
+) -> None:
+    """SC-1 anchor: same rate drop + $5k closing + analysis_horizon_months=12 → NPV < 0 (Oracle 2).
+
+    D-13 horizon-truncation: full-horizon NPV at 200bps drop + $5k closing is
+    still positive (~$60k savings); horizon=12 simulates short borrower tenure
+    (FHFA median ~13y) and yields the negative-NPV anchor for SC-1.
+    """
+    fx = refinance_fixture("negative_npv_short_horizon")
+    req = RateAndTermRefiRequest.model_validate_json(json.dumps(fx["request"]))
+    from lib.refinance import evaluate
+
+    resp = evaluate(req)
+    expected = fx["expected"]
+    # SC-1 anchor: NPV strictly negative
+    assert Decimal(resp.npv) < Decimal("0"), (
+        f"SC-1 violated: negative-NPV fixture must yield npv < 0; got {resp.npv}"
+    )
+    # Phase 5 D-04 [REVISED]: strict Decimal equality vs engine-derived pin
+    assert Decimal(resp.npv) == Decimal(expected["npv"]), (
+        f"engine drift: npv={resp.npv} != expected={expected['npv']}"
+    )
+    assert resp.analysis_horizon_months_used == 12  # D-13
 
 
-@pytest.mark.xfail(
-    strict=True, reason="Wave 0 stub — Plan 06-05 Decimal exact NPV equality (D-04 sign rigor)"
-)
-def test_refi_npv_decimal_exact() -> None:
-    """D-04: NPV asserted with strict Decimal equality (no assertAlmostEqual; CLAUDE.md money discipline)."""
-    pytest.fail("Wave 0 stub")
+def test_refi_npv_decimal_exact(
+    refinance_fixture: Callable[[str], dict[str, Any]],
+) -> None:
+    """D-04: NPV asserted with strict Decimal equality (no assertAlmostEqual; CLAUDE.md money discipline).
+
+    Exercises the Decimal-equals discipline via the positive-NPV fixture: every
+    money/rate field on the response equals the fixture's pinned Decimal-string
+    via Decimal(==), never pytest.approx.
+    """
+    fx = refinance_fixture("positive_npv_200bps_drop_2k_costs")
+    req = RateAndTermRefiRequest.model_validate_json(json.dumps(fx["request"]))
+    from lib.refinance import evaluate
+
+    resp = evaluate(req)
+    expected = fx["expected"]
+    # Strict Decimal equality discipline (Phase 4 D-18 idiom, Phase 5 D-04 [REVISED])
+    assert Decimal(resp.npv) == Decimal(expected["npv"])
+    assert Decimal(resp.old_monthly_pi) == Decimal(expected["old_monthly_pi"])
+    assert Decimal(resp.new_monthly_pi) == Decimal(expected["new_monthly_pi"])
+    assert Decimal(resp.monthly_savings) == Decimal(expected["monthly_savings"])
+    assert Decimal(resp.discount_rate_annual_used) == Decimal(expected["discount_rate_annual_used"])
+    # CLAUDE.md money discipline: never use approx for money
+    # (this test would fail if any quantize_cents drift snuck in)
 
 
 # =========================================================================
@@ -95,28 +149,64 @@ def test_refi_npv_decimal_exact() -> None:
 # =========================================================================
 
 
-@pytest.mark.xfail(
-    strict=True, reason="Wave 0 stub — Plan 06-05 cash-out cash_proceeds field (SC-3)"
-)
-def test_refi_cash_out_proceeds() -> None:
+def test_refi_cash_out_proceeds(
+    refinance_fixture: Callable[[str], dict[str, Any]],
+) -> None:
     """SC-3 anchor: cash_proceeds surfaced as labeled top-level JSON field (Oracle 3)."""
-    pytest.fail("Wave 0 stub")
+    fx = refinance_fixture("cash_out_proceeds_50k")
+    req = CashOutRefiRequest.model_validate_json(json.dumps(fx["request"]))
+    from lib.refinance import evaluate
+
+    resp = evaluate(req)
+    expected = fx["expected"]
+    # SC-3: cash_proceeds is a labeled top-level field on the response
+    assert resp.cash_proceeds is not None, "SC-3 violated: cash_proceeds must be populated"
+    assert Decimal(resp.cash_proceeds) == Decimal(expected["cash_proceeds"])
+    # Surface the labeled key in serialized JSON (downstream contract)
+    out = json.loads(resp.model_dump_json())
+    assert "cash_proceeds" in out
+    assert out["cash_proceeds"] == expected["cash_proceeds"]
 
 
-@pytest.mark.xfail(
-    strict=True, reason="Wave 0 stub — Plan 06-05 cash-out new_monthly_pi field (SC-3)"
-)
-def test_refi_cash_out_new_monthly_pi() -> None:
+def test_refi_cash_out_new_monthly_pi(
+    refinance_fixture: Callable[[str], dict[str, Any]],
+) -> None:
     """SC-3 anchor: new_monthly_pi surfaced as labeled top-level JSON field (Oracle 3)."""
-    pytest.fail("Wave 0 stub")
+    fx = refinance_fixture("cash_out_proceeds_50k")
+    req = CashOutRefiRequest.model_validate_json(json.dumps(fx["request"]))
+    from lib.refinance import evaluate
+
+    resp = evaluate(req)
+    expected = fx["expected"]
+    # SC-3: new_monthly_pi is a labeled top-level field
+    assert Decimal(resp.new_monthly_pi) == Decimal(expected["new_monthly_pi"])
+    out = json.loads(resp.model_dump_json())
+    assert "new_monthly_pi" in out
+    assert out["new_monthly_pi"] == expected["new_monthly_pi"]
 
 
-@pytest.mark.xfail(
-    strict=True, reason="Wave 0 stub — Plan 06-05 cash-out total_interest_delta field (SC-3)"
-)
-def test_refi_cash_out_total_interest_delta() -> None:
+def test_refi_cash_out_total_interest_delta(
+    refinance_fixture: Callable[[str], dict[str, Any]],
+) -> None:
     """SC-3 anchor: total_interest_delta surfaced as labeled top-level JSON field (Oracle 3)."""
-    pytest.fail("Wave 0 stub")
+    fx = refinance_fixture("cash_out_proceeds_50k")
+    req = CashOutRefiRequest.model_validate_json(json.dumps(fx["request"]))
+    from lib.refinance import evaluate
+
+    resp = evaluate(req)
+    expected = fx["expected"]
+    assert resp.total_interest_delta is not None, (
+        "SC-3 violated: total_interest_delta must be populated for cash-out"
+    )
+    assert Decimal(resp.total_interest_delta) == Decimal(expected["total_interest_delta"])
+    # SC-3 sign rigor: cash-out + extension causes MORE lifetime interest, so signed positive
+    assert Decimal(resp.total_interest_delta) > Decimal("0"), (
+        f"SC-3: cash-out total_interest_delta should be positive (more interest); "
+        f"got {resp.total_interest_delta}"
+    )
+    out = json.loads(resp.model_dump_json())
+    assert "total_interest_delta" in out
+    assert out["total_interest_delta"] == expected["total_interest_delta"]
 
 
 # =========================================================================
@@ -124,25 +214,64 @@ def test_refi_cash_out_total_interest_delta() -> None:
 # =========================================================================
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 06-05 simple_breakeven labeled (SC-2)")
-def test_refi_breakeven_simple_labeled() -> None:
-    """SC-2 anchor: simple_breakeven_months + simple_breakeven_status labeled in output JSON."""
-    pytest.fail("Wave 0 stub")
+def test_refi_breakeven_simple_labeled(
+    refinance_fixture: Callable[[str], dict[str, Any]],
+) -> None:
+    """SC-2 anchor: simple_months + simple_status labeled in output JSON."""
+    fx = refinance_fixture("positive_npv_200bps_drop_2k_costs")
+    req = RateAndTermRefiRequest.model_validate_json(json.dumps(fx["request"]))
+    from lib.refinance import evaluate
+
+    resp = evaluate(req)
+    expected = fx["expected"]["breakeven"]
+    out = json.loads(resp.model_dump_json())
+    # SC-2 surface: breakeven sub-object labeled at top-level with both forms
+    assert "breakeven" in out
+    assert "simple_months" in out["breakeven"]
+    assert "simple_status" in out["breakeven"]
+    assert out["breakeven"]["simple_months"] == expected["simple_months"]
+    assert out["breakeven"]["simple_status"] == expected["simple_status"]
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 06-05 npv_breakeven labeled (SC-2)")
-def test_refi_breakeven_npv_labeled() -> None:
-    """SC-2 anchor: npv_breakeven_months + npv_breakeven_status labeled in output JSON (D-06 cumulative scan)."""
-    pytest.fail("Wave 0 stub")
+def test_refi_breakeven_npv_labeled(
+    refinance_fixture: Callable[[str], dict[str, Any]],
+) -> None:
+    """SC-2 anchor: npv_months + npv_status labeled in output JSON (D-06 cumulative scan)."""
+    fx = refinance_fixture("positive_npv_200bps_drop_2k_costs")
+    req = RateAndTermRefiRequest.model_validate_json(json.dumps(fx["request"]))
+    from lib.refinance import evaluate
+
+    resp = evaluate(req)
+    expected = fx["expected"]["breakeven"]
+    out = json.loads(resp.model_dump_json())
+    # SC-2 surface: NPV-based breakeven labeled at top-level (D-06 cumulative scan)
+    assert "breakeven" in out
+    assert "npv_months" in out["breakeven"]
+    assert "npv_status" in out["breakeven"]
+    assert out["breakeven"]["npv_months"] == expected["npv_months"]
+    assert out["breakeven"]["npv_status"] == expected["npv_status"]
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Wave 0 stub — Plan 06-05 breakeven divergence fixture (SC-2 divergence ≥1 month)",
-)
-def test_refi_breakeven_divergence_documented() -> None:
+def test_refi_breakeven_divergence_documented(
+    refinance_fixture: Callable[[str], dict[str, Any]],
+) -> None:
     """SC-2 anchor: breakeven_divergence.json exercises high-discount-rate divergence (simple ≠ NPV by ≥1 month)."""
-    pytest.fail("Wave 0 stub")
+    fx = refinance_fixture("breakeven_divergence")
+    req = RateAndTermRefiRequest.model_validate_json(json.dumps(fx["request"]))
+    from lib.refinance import evaluate
+
+    resp = evaluate(req)
+    expected = fx["expected"]["breakeven"]
+    # SC-2 divergence anchor: simple ≠ NPV by ≥ 1 month at 8% discount
+    assert resp.breakeven.simple_months is not None
+    assert resp.breakeven.npv_months is not None
+    assert resp.breakeven.simple_months == expected["simple_months"]
+    assert resp.breakeven.npv_months == expected["npv_months"]
+    divergence = abs(resp.breakeven.npv_months - resp.breakeven.simple_months)
+    assert divergence >= 1, (
+        f"SC-2 divergence anchor: simple ({resp.breakeven.simple_months}) and "
+        f"npv ({resp.breakeven.npv_months}) must differ by ≥ 1 month"
+    )
 
 
 # =========================================================================
@@ -150,12 +279,21 @@ def test_refi_breakeven_divergence_documented() -> None:
 # =========================================================================
 
 
-@pytest.mark.xfail(
-    strict=True, reason="Wave 0 stub — Plan 06-05 pyxirr deferred to Phase 11 SUBA-02 (D-07)"
-)
 def test_pyxirr_deferred_to_phase11_documented() -> None:
-    """D-07: lib/refinance.py docstring cites Phase 11 + pyxirr deferral (REFI-04 OPTIONAL closure)."""
-    pytest.fail("Wave 0 stub")
+    """D-07: lib/refinance.py docstring cites Phase 11 + pyxirr deferral (REFI-04 OPTIONAL closure).
+
+    Per Plan 06-05 Task 7 spec: assert lib/refinance.py docstring contains
+    "Phase 11" AND "pyxirr" — explicit deferral documentation, not silent
+    omission. Pinned by reading the on-disk artifact (not __doc__) so future
+    PRs that rip the docstring out fail this test even if behavior is unchanged.
+    """
+    source = REFINANCE_MODULE_PATH.read_text()
+    assert "Phase 11" in source, (
+        "D-07 violated: lib/refinance.py must cite 'Phase 11' for pyxirr deferral"
+    )
+    assert "pyxirr" in source, (
+        "D-07 violated: lib/refinance.py must mention 'pyxirr' (REFI-04 OPTIONAL deferral)"
+    )
 
 
 # =========================================================================
@@ -672,12 +810,39 @@ def test_refi_cashflow_correctly_signed_passes() -> None:
 # =========================================================================
 
 
-@pytest.mark.xfail(
-    strict=True, reason="Wave 0 stub — Plan 06-05 RefiCashflow kind Literal coverage (D-03)"
-)
 def test_refi_cashflow_kind_citation_coverage() -> None:
-    """D-03: every value of RefiCashflow.kind Literal appears in ≥1 committed fixture (mirrors Phase 5 applied_cap)."""
-    pytest.fail("Wave 0 stub")
+    """D-03: every value of RefiCashflow.kind Literal appears in ≥1 committed fixture (mirrors Phase 5 applied_cap).
+
+    Per Plan 06-05 Task 7 spec: iterate fixtures in tests/fixtures/refinance/,
+    collect every RefiCashflow.kind Literal value across all expected.cashflows_kinds
+    lists, assert each of {closing_costs, cash_proceeds, monthly_savings,
+    monthly_payment_delta, tax_shield} appears in ≥1 fixture. Mirrors Phase 5's
+    applied_cap Literal coverage convention.
+    """
+    fixture_dir = Path(__file__).resolve().parent / "fixtures" / "refinance"
+    required_kinds = {
+        "closing_costs",
+        "cash_proceeds",
+        "monthly_savings",
+        "monthly_payment_delta",
+        "tax_shield",
+    }
+    seen: set[str] = set()
+    fixtures_scanned = 0
+    for fpath in sorted(fixture_dir.glob("*.json")):
+        fx = json.loads(fpath.read_text())
+        kinds = fx.get("expected", {}).get("cashflows_kinds", [])
+        seen.update(kinds)
+        fixtures_scanned += 1
+    assert fixtures_scanned >= 6, (
+        f"D-03: at least 6 refinance fixtures expected; found {fixtures_scanned}"
+    )
+    missing = required_kinds - seen
+    assert not missing, (
+        f"D-03 citation coverage violated: kinds {missing} missing from any "
+        f"fixture's expected.cashflows_kinds. Seen: {sorted(seen)}; "
+        f"required: {sorted(required_kinds)}"
+    )
 
 
 def test_after_tax_mode_validator_requires_all() -> None:
