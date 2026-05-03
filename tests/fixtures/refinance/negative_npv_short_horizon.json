@@ -1,0 +1,37 @@
+{
+  "_meta": {
+    "oracle_source": "06-RESEARCH.md §'Pinned Oracles' Oracle 2 (SC-1 negative-NPV; D-13 horizon-truncation)",
+    "derivation": "engine-derived 2026-05-02 via lib.refinance.evaluate (Phase 5 D-04 [REVISED] hand_calc_check witness pattern); pinned for SC-1 sign-rigor. Cross-checked against Plan 06-02 docstring-pinned NPV='-718.01'.",
+    "citation": "ROADMAP Phase 6 SC-1 (negative-NPV with $5k closing costs at 12-month horizon); REFI-06 fixture anchor. Per D-13: SC-1 'same rate $5k closing' over full 25y is still positive (~$60k savings); horizon=12 simulates short borrower tenure (FHFA median ~13y) and yields the negative-NPV anchor. Documented in references/refi-npv.md §5 carve-out (Wave 6)."
+  },
+  "request": {
+    "refi_kind": "rate_and_term",
+    "old_loan_balance": "300000.00",
+    "old_annual_rate": "0.070000",
+    "old_remaining_months": 300,
+    "new_annual_rate": "0.050000",
+    "new_term_months": 300,
+    "closing_costs": "5000.00",
+    "discount_rate_annual": "0.050000",
+    "analysis_horizon_months": 12
+  },
+  "expected": {
+    "refi_kind": "rate_and_term",
+    "npv": "-718.01",
+    "old_monthly_pi": "2120.34",
+    "new_monthly_pi": "1753.77",
+    "monthly_savings": "366.57",
+    "breakeven": {
+      "simple_months": 14,
+      "simple_status": "ok",
+      "npv_months": null,
+      "npv_status": "never_breaks_even"
+    },
+    "cash_proceeds": null,
+    "monthly_payment_delta": null,
+    "total_interest_delta": null,
+    "after_tax_npv": null,
+    "discount_rate_annual_used": "0.050000",
+    "analysis_horizon_months_used": 12
+  }
+}
