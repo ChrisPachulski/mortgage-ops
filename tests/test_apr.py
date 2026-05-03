@@ -35,13 +35,33 @@ APR_MODULE_PATH: Path = Path(__file__).resolve().parent.parent / "lib" / "apr.py
 # =========================================================================
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Wave 0 stub — Plan 07-01 ships APRRequest; Plan 07-02 ships solve_apr",
-)
 def test_apr_solver_module_exists_with_newton_raphson_signature() -> None:
-    """APR-01: lib/apr.py exposes solve_apr(APRRequest) -> APRResponse using Newton-Raphson."""
-    pytest.fail("Wave 0 stub")
+    """APR-01: lib/apr.py exposes solve_apr(APRRequest) -> APRResponse using Newton-Raphson.
+
+    Wave 1 (Plan 07-01) ships the boundary models + a NotImplementedError
+    stub for solve_apr; Wave 2 (Plan 07-02) fills the body. This test
+    asserts the contract that Wave 2 will satisfy: the function name +
+    parameter name + return annotation. The body raising
+    NotImplementedError is fine for Wave 1 — only the signature is checked.
+    """
+    import inspect
+
+    from lib.apr import APRRequest, APRResponse, solve_apr
+
+    # APRRequest + APRResponse must be importable as classes
+    assert APRRequest is not None
+    assert APRResponse is not None
+
+    sig = inspect.signature(solve_apr)
+    assert "request" in sig.parameters, (
+        f"solve_apr must accept a 'request' parameter; got {list(sig.parameters)}"
+    )
+    # Under `from __future__ import annotations` the return annotation is the
+    # string 'APRResponse' at runtime; under eager evaluation it is the class.
+    # Accept either to keep the contract resilient to import-time changes.
+    assert sig.return_annotation is APRResponse or sig.return_annotation == "APRResponse", (
+        f"solve_apr must return APRResponse; got {sig.return_annotation!r}"
+    )
 
 
 # =========================================================================
