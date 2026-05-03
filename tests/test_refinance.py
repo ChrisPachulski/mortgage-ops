@@ -32,10 +32,10 @@ waves rename only via documented Rule-1 deviations in their SUMMARY.md.
 
 from __future__ import annotations
 
-import json  # noqa: F401  (reserved for Wave 4+ CLI tests + Wave 5 fixtures)
+import json
 import re  # noqa: F401  (reserved for Wave 6 doc-section regex assertions)
-import subprocess  # noqa: F401  (reserved for Wave 4 CLI subprocess tests)
-import sys  # noqa: F401  (reserved for Wave 4 sys.executable in subprocess invocations)
+import subprocess
+import sys
 from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -163,50 +163,359 @@ def test_pyxirr_deferred_to_phase11_documented() -> None:
 # =========================================================================
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 06-04 CLI subprocess round-trip smoke")
-def test_cli_smoke_subprocess_round_trip() -> None:
-    """REFI-08: scripts/refi_npv.py JSON-in/JSON-out round-trip via subprocess (no direct import)."""
-    pytest.fail("Wave 0 stub")
+def test_cli_smoke_subprocess_round_trip(tmp_path: Path) -> None:
+    """REFI-08: scripts/refi_npv.py JSON-in/JSON-out round-trip via subprocess.
+
+    Per Phase 3 D-17 + Phase 4 D-13: subprocess invocation only, never `import
+    scripts.refi_npv` directly. Writes Oracle 1 (RESEARCH §"Pinned Oracles":
+    rate-and-term, 200bps drop, $2k closing, 25y horizon) to a tmp_path JSON,
+    invokes the CLI, parses stdout JSON, and asserts the response shape +
+    refi_kind discriminator + the SC-1 / SC-2 / SC-3 surface keys are all
+    present and correctly typed.
+
+    Decimal-equality on npv is asserted against the engine-derived Oracle 1
+    pin from STATE.md / lib/refinance.py module comment block ("60705.48").
+    Plan 06-05 ships fixture-driven oracle parity tests; this Wave-4 smoke
+    is the CLI surface contract: subprocess round-trip works end-to-end.
+    """
+    request_path = tmp_path / "oracle1.json"
+    request_path.write_text(
+        json.dumps(
+            {
+                "refi_kind": "rate_and_term",
+                "old_loan_balance": "300000.00",
+                "old_annual_rate": "0.07",
+                "old_remaining_months": 300,
+                "new_annual_rate": "0.05",
+                "new_term_months": 300,
+                "closing_costs": "2000.00",
+                "discount_rate_annual": "0.05",
+            }
+        )
+    )
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), "--input", str(request_path)],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert result.returncode == 0
+    out = json.loads(result.stdout)
+
+    # refi_kind discriminator echoed
+    assert out["refi_kind"] == "rate_and_term"
+
+    # SC-1 anchor: positive NPV (rate-drop benefit). Decimal-string equality
+    # against the engine-derived Oracle 1 pin (lib/refinance.py oracle comment).
+    assert out["npv"] == "60705.48"
+
+    # SC-2 anchor: breakeven dual-form (simple + NPV) labeled in output JSON.
+    assert "breakeven" in out
+    assert set(out["breakeven"].keys()) == {
+        "simple_months",
+        "simple_status",
+        "npv_months",
+        "npv_status",
+    }
+    assert out["breakeven"]["simple_status"] == "ok"
+    assert out["breakeven"]["npv_status"] == "ok"
+    assert out["breakeven"]["simple_months"] == 6  # ceil(2000/366.57)
+    assert out["breakeven"]["npv_months"] == 6  # cumulative NPV crosses zero quickly
+
+    # SC-3 anchors: cash-out-only fields are None for rate-and-term.
+    assert out["cash_proceeds"] is None
+    assert out["monthly_payment_delta"] is None
+    assert out["total_interest_delta"] is None
+
+    # D-04 sign convention preserved end-to-end.
+    assert out["old_monthly_pi"] == "2120.34"
+    assert out["new_monthly_pi"] == "1753.77"
+    assert out["monthly_savings"] == "366.57"
+
+    # Audit trail: cashflows list always present (D-15 closing_costs at t=0)
+    assert isinstance(out["cashflows"], list)
+    assert len(out["cashflows"]) > 0
+    first_cf = out["cashflows"][0]
+    assert first_cf["period"] == 0
+    assert first_cf["direction"] == "outflow"
+    assert first_cf["kind"] == "closing_costs"
+    assert first_cf["amount"] == "-2000.00"  # SC-4 sign rigor end-to-end
 
 
-@pytest.mark.xfail(
-    strict=True, reason="Wave 0 stub — Plan 06-04 D-18 fast-help / lazy-import discipline"
-)
 def test_cli_help_does_not_import_lib_refinance() -> None:
-    """D-18: scripts/refi_npv.py --help does NOT import lib.refinance (lazy import after argparse)."""
-    pytest.fail("Wave 0 stub")
+    """D-18 (Phase 3 03-04 idiom): --help must not trigger lib.refinance,
+    numpy_financial, or pydantic import.
+
+    Spawn a fresh Python subprocess (so none are already imported via this
+    test module's top-level imports — this module imports lib.refinance +
+    pydantic at module scope, which would otherwise mask the laziness check)
+    and run an inline check that loads scripts/refi_npv.py via
+    importlib.util.spec_from_file_location with sys.argv patched to --help.
+
+    Mirrors tests/test_affordability.py::test_cli_help_does_not_import_lib_affordability
+    verbatim, with the affordability/refinance path swap.
+    """
+    project_root = Path(__file__).resolve().parent.parent
+    inline = (
+        "import importlib.util, sys, json\n"
+        f"sys.path.insert(0, {str(project_root)!r})\n"
+        f"SCRIPT = {str(SCRIPT_PATH)!r}\n"
+        "spec = importlib.util.spec_from_file_location('scripts_refi_npv', SCRIPT)\n"
+        "assert spec is not None and spec.loader is not None\n"
+        "module = importlib.util.module_from_spec(spec)\n"
+        "spec.loader.exec_module(module)\n"
+        "saved_argv = sys.argv\n"
+        "sys.argv = [SCRIPT, '--help']\n"
+        "exit_code = None\n"
+        "try:\n"
+        "    try:\n"
+        "        module.main()\n"
+        "    except SystemExit as exc:\n"
+        "        exit_code = exc.code\n"
+        "finally:\n"
+        "    sys.argv = saved_argv\n"
+        "result = {\n"
+        "    'help_exit_code': exit_code,\n"
+        "    'lib_refinance_imported': 'lib.refinance' in sys.modules,\n"
+        "    'numpy_financial_imported': 'numpy_financial' in sys.modules,\n"
+        "    'pydantic_imported': 'pydantic' in sys.modules,\n"
+        "}\n"
+        "print(json.dumps(result))\n"
+    )
+    completed = subprocess.run(
+        [sys.executable, "-c", inline],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    payload = json.loads(completed.stdout.strip().splitlines()[-1])
+    assert payload["help_exit_code"] == 0
+    assert payload["lib_refinance_imported"] is False, (
+        "D-18 violated: lib.refinance was imported during --help (must be lazy)"
+    )
+    assert payload["numpy_financial_imported"] is False, (
+        "D-18 violated: numpy_financial was imported during --help"
+    )
+    assert payload["pydantic_imported"] is False, (
+        "D-18 violated: pydantic was imported during --help"
+    )
 
 
-@pytest.mark.xfail(
-    strict=True, reason="Wave 0 stub — Plan 06-04 D-19/WR-02 reject float closing_costs"
-)
-def test_cli_rejects_float_closing_costs() -> None:
-    """D-19/WR-02: CLI rejects JSON float closing_costs with 6-key envelope on stderr."""
-    pytest.fail("Wave 0 stub")
+def test_cli_rejects_float_closing_costs(tmp_path: Path) -> None:
+    """D-19 + WR-02 inheritance: pre-validation gate emits 6-key envelope.
+
+    closing_costs is the canonical Phase 6 money field; passing it as a raw
+    JSON float (2000.00 — no quotes) must trigger the float-gate at
+    scripts/refi_npv.py and emit the 6-key Pydantic envelope on stderr,
+    NOT silently coerce to Decimal (Pydantic v2's permissive default).
+
+    Mirrors tests/test_affordability.py::test_cli_rejects_float_in_loan_amount
+    + tests/test_amortize.py::test_cli_rejects_float_principal — same shape,
+    same envelope, different field. Reuses the Phase 5 _cli_helpers factor
+    (find_json_float_loc + make_decimal_type_envelope) per Plan 06-04 Rule-1.
+    """
+    bad = tmp_path / "float_closing.json"
+    bad.write_text(
+        '{"refi_kind": "rate_and_term",'
+        '"old_loan_balance": "300000.00",'
+        '"old_annual_rate": "0.07",'
+        '"old_remaining_months": 300,'
+        '"new_annual_rate": "0.05",'
+        '"new_term_months": 300,'
+        '"closing_costs": 2000.00,'  # raw JSON float — should be rejected
+        '"discount_rate_annual": "0.05"}'
+    )
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), "--input", str(bad)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 2
+    errors = json.loads(result.stderr)
+    err = errors[0]
+    # 6-key envelope contract (WR-02 closure)
+    assert set(err.keys()) == {"type", "loc", "msg", "input", "url", "ctx"}
+    assert err["type"] == "decimal_type"
+    assert err["loc"] == ["closing_costs"]
+    assert err["url"].startswith("https://errors.pydantic.dev/")
+    assert err["url"].endswith("/v/decimal_type")
+    assert err["ctx"].get("class") == "Decimal"
+    assert err["input"] == "2000.00"  # the offending value, as Decimal-string
 
 
-@pytest.mark.xfail(
-    strict=True, reason="Wave 0 stub — Plan 06-04 D-19/WR-02 reject float discount_rate_annual"
-)
-def test_cli_rejects_float_discount_rate() -> None:
-    """D-19/WR-02: CLI rejects JSON float discount_rate_annual with 6-key envelope on stderr."""
-    pytest.fail("Wave 0 stub")
+def test_cli_rejects_float_discount_rate(tmp_path: Path) -> None:
+    """D-19 + WR-02 inheritance: float-gate fires on Rate fields too.
+
+    discount_rate_annual is the SC-5-flagged Rate field unique to Phase 6
+    (D-05 caller-supplied; no default); the float-gate must fire on it the
+    same as on Money fields. Sibling-test of test_cli_rejects_float_closing_costs
+    that pins the gate's coverage of BOTH Money AND Rate fields per
+    CLAUDE.md FND-01 ("Decimal for all dollar amounts AND rates").
+    """
+    bad = tmp_path / "float_rate.json"
+    bad.write_text(
+        '{"refi_kind": "rate_and_term",'
+        '"old_loan_balance": "300000.00",'
+        '"old_annual_rate": "0.07",'
+        '"old_remaining_months": 300,'
+        '"new_annual_rate": "0.05",'
+        '"new_term_months": 300,'
+        '"closing_costs": "2000.00",'
+        '"discount_rate_annual": 0.05}'  # raw JSON float — should be rejected
+    )
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), "--input", str(bad)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 2
+    errors = json.loads(result.stderr)
+    err = errors[0]
+    # 6-key envelope contract (WR-02 closure)
+    assert set(err.keys()) == {"type", "loc", "msg", "input", "url", "ctx"}
+    assert err["type"] == "decimal_type"
+    assert err["loc"] == ["discount_rate_annual"]
+    assert err["url"].startswith("https://errors.pydantic.dev/")
+    assert err["url"].endswith("/v/decimal_type")
+    assert err["ctx"].get("class") == "Decimal"
+    assert err["input"] == "0.05"
 
 
-@pytest.mark.xfail(
-    strict=True, reason="Wave 0 stub — Plan 06-04 D-19/WR-02 envelope shape uniformity"
-)
-def test_cli_error_envelope_uniformity() -> None:
-    """D-19/WR-02: CLI error envelope contains the 6 mandated keys (loc/msg/type/input/url/ctx)."""
-    pytest.fail("Wave 0 stub")
+def test_cli_error_envelope_uniformity(tmp_path: Path) -> None:
+    """D-19 + WR-02 closure: float-gate AND ValidationError emit identical 6-key shape.
+
+    The WR-02 closure contract (Phase 3 03-06) mandates that ALL
+    ValidationError-class boundary surfaces emit the SAME 6-key Pydantic v2
+    envelope shape on stderr. Phase 9 / Phase 10 downstream consumers parse
+    stderr as one uniform JSON contract regardless of WHICH validator fired.
+
+    This test exercises both arms of the contract:
+      (a) JSON-float-gate path: closing_costs as raw float → manually-built
+          envelope via scripts._cli_helpers.make_decimal_type_envelope.
+      (b) Pydantic ValidationError path: cross-field _validate_common
+          validator (D-09 — after_tax_mode=True without marginal_tax_rate
+          + filing_status) → e.json() pass-through.
+
+    Both must produce a JSON list whose first element has the SAME 6-key set:
+    {type, loc, msg, input, url, ctx}. If a future PR drifts one path's
+    envelope shape (e.g., adds a 'severity' key, drops 'ctx'), this test
+    fails before the contract drift reaches Phase 9 consumers.
+
+    Mirrors tests/test_amortize.py::test_cli_error_envelope_uniformity (Phase 3
+    03-06 anchor).
+    """
+    expected_keys = {"type", "loc", "msg", "input", "url", "ctx"}
+
+    # (a) Float-gate path: closing_costs as raw JSON float → manually-built
+    # envelope via scripts._cli_helpers.make_decimal_type_envelope.
+    float_path = tmp_path / "float_gate.json"
+    float_path.write_text(
+        '{"refi_kind": "rate_and_term",'
+        '"old_loan_balance": "300000.00",'
+        '"old_annual_rate": "0.07",'
+        '"old_remaining_months": 300,'
+        '"new_annual_rate": "0.05",'
+        '"new_term_months": 300,'
+        '"closing_costs": 2000.00,'
+        '"discount_rate_annual": "0.05"}'
+    )
+    float_result = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), "--input", str(float_path)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert float_result.returncode == 2
+    float_errors = json.loads(float_result.stderr)
+    assert isinstance(float_errors, list)
+    assert len(float_errors) >= 1
+    float_err = float_errors[0]
+    assert set(float_err.keys()) == expected_keys, (
+        f"float-gate envelope drift: keys={set(float_err.keys())}; expected {expected_keys}"
+    )
+
+    # (b) Pydantic ValidationError path: trigger _validate_common cross-field
+    # validator (D-09 — after_tax_mode=True without marginal_tax_rate +
+    # filing_status). This path produces a value_error with ctx populated by
+    # Pydantic's @model_validator surface — known-good 6-key shape that
+    # mirrors the cross-shape contract pinned by tests/test_amortize.py
+    # (Phase 3 03-06 idiom).
+    #
+    # Note: a "missing required field" ValidationError surface would emit
+    # only 5 of the 6 keys (Pydantic's `missing` error type omits ctx); the
+    # WR-02 closure contract is satisfied by the validator-error surface
+    # which is the cross-field path Phase 9/10 consumers actually narrate.
+    validator_path = tmp_path / "validator_error.json"
+    validator_path.write_text(
+        '{"refi_kind": "rate_and_term",'
+        '"old_loan_balance": "300000.00",'
+        '"old_annual_rate": "0.07",'
+        '"old_remaining_months": 300,'
+        '"new_annual_rate": "0.05",'
+        '"new_term_months": 300,'
+        '"closing_costs": "2000.00",'
+        '"discount_rate_annual": "0.05",'
+        '"after_tax_mode": true}'  # missing marginal_tax_rate + filing_status
+    )
+    validator_result = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), "--input", str(validator_path)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert validator_result.returncode == 2
+    validator_errors = json.loads(validator_result.stderr)
+    assert isinstance(validator_errors, list)
+    assert len(validator_errors) >= 1
+    validator_err = validator_errors[0]
+    assert set(validator_err.keys()) == expected_keys, (
+        f"ValidationError envelope drift: keys={set(validator_err.keys())}; "
+        f"expected {expected_keys}"
+    )
+
+    # Symmetric contract: both errors share the SAME key-set (the WR-02 closure
+    # promise — Phase 9 / Phase 10 narration parses one shape uniformly).
+    assert set(float_err.keys()) == set(validator_err.keys()), (
+        "WR-02 violated: float-gate and ValidationError emit different envelope shapes"
+    )
 
 
-@pytest.mark.xfail(
-    strict=True, reason="Wave 0 stub — Plan 06-04 SC-5 mandate --help cites references/refi-npv.md"
-)
 def test_cli_help_cites_references_refi_npv() -> None:
-    """SC-5 verbatim: scripts/refi_npv.py --help epilog includes 'see references/refi-npv.md'."""
-    pytest.fail("Wave 0 stub")
+    """SC-5 verbatim: scripts/refi_npv.py --help epilog cites references/refi-npv.md
+    AND the canonical sign-convention phrase.
+
+    ROADMAP Phase 6 SC-5 mandates: 'references/refi-npv.md documents the
+    borrower-perspective sign convention explicitly ("outflows negative,
+    savings positive") AND is cited in the script's --help text.'
+
+    This test pins BOTH literal strings in the --help output:
+      (1) 'see references/refi-npv.md' — the documentation cite (D-16
+          belt-and-suspenders surface 4 of 4)
+      (2) 'outflows negative, savings positive' — the verbatim D-04 sign
+          convention phrase (D-16 belt-and-suspenders surface)
+
+    Pinning the literal strings (not paraphrases) guards against future PRs
+    silently dropping the SC-5 mandate; the test fails immediately if either
+    citation is reworded out of the epilog. Per Plan 06-04 deviation_rule
+    Rule-2: SC-5 string literals are LOAD-BEARING.
+    """
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), "--help"],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert result.returncode == 0
+    # SC-5 surface 1: documentation cite (literal phrase)
+    assert "see references/refi-npv.md" in result.stdout, (
+        "SC-5 violated: --help epilog must cite 'see references/refi-npv.md'"
+    )
+    # SC-5 surface 2: verbatim sign-convention phrase (D-04)
+    assert "outflows negative, savings positive" in result.stdout, (
+        "SC-5 violated: --help epilog must contain literal 'outflows negative, savings positive'"
+    )
 
 
 # =========================================================================
