@@ -1,0 +1,38 @@
+{
+  "_meta": {
+    "oracle_source": "06-RESEARCH.md §'Pinned Oracles' Oracle 3 (SC-3 cash-out)",
+    "derivation": "engine-derived 2026-05-02 via lib.refinance.evaluate (Phase 5 D-04 [REVISED] hand_calc_check witness pattern); pinned for SC-3 cash-out surface coverage. Cross-checked against Plan 06-03 docstring-pinned cash_proceeds='47000.00' + npv='36996.30'.",
+    "citation": "ROADMAP Phase 6 SC-3 (cash-out reports cash_proceeds + new_monthly_pi + total_interest_delta); REFI-07 fixture anchor; Oracle 3 setup: $200k @ 6%/20y residual → $250k @ 6%/30y, $50k cash extracted, $3k closing, 5% discount, 240mo horizon"
+  },
+  "request": {
+    "refi_kind": "cash_out",
+    "old_loan_balance": "200000.00",
+    "old_annual_rate": "0.060000",
+    "old_remaining_months": 240,
+    "new_annual_rate": "0.060000",
+    "new_term_months": 360,
+    "closing_costs": "3000.00",
+    "cash_out_amount": "50000.00",
+    "discount_rate_annual": "0.050000",
+    "analysis_horizon_months": 240
+  },
+  "expected": {
+    "refi_kind": "cash_out",
+    "npv": "36996.30",
+    "old_monthly_pi": "1432.86",
+    "new_monthly_pi": "1498.88",
+    "monthly_savings": "-66.02",
+    "breakeven": {
+      "simple_months": null,
+      "simple_status": "no_savings",
+      "npv_months": 0,
+      "npv_status": "ok"
+    },
+    "cash_proceeds": "47000.00",
+    "monthly_payment_delta": "66.02",
+    "total_interest_delta": "145706.07",
+    "after_tax_npv": null,
+    "discount_rate_annual_used": "0.050000",
+    "analysis_horizon_months_used": 240
+  }
+}
