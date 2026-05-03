@@ -86,6 +86,57 @@ LOCKED DECISIONS (carried from .planning/phases/07-estimated-apr/07-CONTEXT.md):
         field in the APRResponse.tolerance_check docstring; Wave 4 (CLI)
         documents the canonical shape in scripts/apr_reg_z.py --help.
 
+- D-15: _compute_odd_first_period_fraction(origination, first_payment,
+        day_count) accepts the same Literal as APRRequest.day_count
+        ({"30/360", "actual/365", "actual/actual"}) and returns Decimal in
+        [-1, 1) per Reg Z §1026.17(c)(4). Plan 07-03 (Wave 3).
+
+- D-16: Short first periods (negative f) are mathematically valid per Reg Z
+        and engine accepts them; v1 cross-validates only long cases (f in
+        [0, 1)). f >= 1 raises ValueError — caller should insert an extra
+        t=1 advance instead. Plan 07-03 (Wave 3).
+
+- D-17: APRRequest.odd_first_period_days is the user-friendly INTEGER
+        shortcut consumed in Wave 3 — solve_apr internally rewrites the
+        first PaymentScheduleEntry.unit_period_fraction. Advanced callers
+        bypass by setting unit_period_fraction directly on the
+        PaymentScheduleEntry and leaving odd_first_period_days=0 (e.g.,
+        Phase 8 stress callers using _compute_odd_first_period_fraction
+        with explicit dates). Plan 07-03 (Wave 3).
+
+- D-18: "Small differences" (< 7 days for monthly) per §1026.17(c)(4) are
+        NOT auto-zeroed by the engine — the engine reports the exact
+        fraction. Caller (or future Phase 8 stress wrapper) may zero them.
+        Documented in references/apr-reg-z.md §3 (Wave 6).
+
+Day-count conventions (Wave 3 / Plan 07-03; D-15..D-18):
+
+  The Reg Z Appendix J §(b)(5)(iii) odd-first-period fraction f depends on
+  the day-count convention the creditor used to compute the finance charge
+  (12 CFR §1026.17(c)(4)). _compute_odd_first_period_fraction(origination,
+  first_payment, day_count) implements the three v1-supported conventions:
+
+  - "30/360" (US default; FFIEC tool default per RESEARCH §Q(b)):
+        f = (days - 30) / 30
+    Every month is 30 days, year is 360. Standard for closed-end mortgages.
+
+  - "actual/365":
+        f = (days - 365/12) / (365/12)              # 365/12 ~= 30.4167
+    Actual day counts, year is 365. Used by some adjustable-rate products.
+
+  - "actual/actual":
+        f = (days - actual_unit_days) / actual_unit_days
+    Where actual_unit_days = (origination + relativedelta(months=1) -
+    origination).days. Real day counts, real month length (handles month-
+    end edges per the project-wide python-dateutil idiom). Used by
+    treasuries; rare for mortgages.
+
+  The helper is exported (underscore-prefixed but importable) for advanced
+  callers who need to compute fractions from explicit dates rather than
+  the APRRequest.odd_first_period_days integer shortcut. Phase 8 stress
+  wrappers (parameter sweeps over rate paths x loan amounts x points) use
+  this directly when an origination date varies across grid cells.
+
 References (canonical URLs verified 2026-05-02 in 07-RESEARCH.md):
 - 12 CFR Part 1026 Appendix J (Reg Z APR computation):
   https://www.ecfr.gov/current/title-12/chapter-X/subchapter-C/part-1026/appendix-J-to-part-1026
