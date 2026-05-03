@@ -91,6 +91,87 @@ def _make_5_1_arm_request(
     )
 
 
+def _request_from_fixture(fx: dict[str, Any]) -> ARMRequest:
+    """Reconstruct an ARMRequest from a Plan 05-06 fixture dict (D-09 pattern).
+
+    Handles arbitrary fixture shapes — Loan, ARMTerms, IndexPathEntry, ARMRequest
+    rebuilt from JSON-string Decimals. Used by all fixture-based stub flips in
+    Plan 05-06 Task 4 (I-010 deduplication).
+    """
+    from datetime import date
+    from decimal import Decimal
+
+    from lib.arm import ARMRequest, ARMTerms, IndexPathEntry
+    from lib.models import Loan
+
+    req_dict = fx["request"]
+    loan_dict = req_dict["loan"]
+    terms_dict = req_dict["arm_terms"]
+    loan = Loan(
+        principal=Decimal(loan_dict["principal"]),
+        annual_rate=Decimal(loan_dict["annual_rate"]),
+        term_months=loan_dict["term_months"],
+        origination_date=date.fromisoformat(loan_dict["origination_date"]),
+        loan_type=loan_dict["loan_type"],
+    )
+    terms_kwargs: dict[str, Any] = {
+        "initial_period_months": terms_dict["initial_period_months"],
+        "reset_period_months": terms_dict["reset_period_months"],
+        "initial_cap_bps": terms_dict["initial_cap_bps"],
+        "periodic_cap_bps": terms_dict["periodic_cap_bps"],
+        "lifetime_cap_bps": terms_dict["lifetime_cap_bps"],
+        "floor_rate": Decimal(terms_dict["floor_rate"]),
+        "margin_bps": terms_dict["margin_bps"],
+        "index_series_id": terms_dict["index_series_id"],
+    }
+    if terms_dict.get("note_rate") is not None:
+        terms_kwargs["note_rate"] = Decimal(terms_dict["note_rate"])
+    terms = ARMTerms(**terms_kwargs)
+    index_path = [
+        IndexPathEntry(period=e["period"], value=Decimal(e["value"]))
+        for e in req_dict.get("index_path", [])
+    ]
+    return ARMRequest(
+        loan=loan,
+        arm_terms=terms,
+        assumed_index_rate=Decimal(req_dict["assumed_index_rate"]),
+        index_path=index_path,
+    )
+
+
+def _assert_engine_matches_fixture_at_period(
+    schedule_payment: Any, expected_payment: dict[str, Any]
+) -> None:
+    """Exact-Decimal-equality assertion for one (engine, fixture) payment row pair."""
+    from decimal import Decimal
+
+    assert schedule_payment.payment == Decimal(expected_payment["payment"])
+    assert schedule_payment.rate_in_effect == Decimal(expected_payment["rate_in_effect"])
+    assert schedule_payment.balance == Decimal(expected_payment["balance"])
+    assert schedule_payment.principal == Decimal(expected_payment["principal"])
+    assert schedule_payment.interest == Decimal(expected_payment["interest"])
+
+
+def _assert_hand_calc_check(reset_event: Any, expected_reset: dict[str, Any]) -> None:
+    """I-004: cap-bound fixtures carry a Decimal hand-calc witness; assert engine matches.
+
+    No-op when the fixture has no hand_calc_check (non-cap-bound fixtures use external
+    oracle witnesses instead).
+    """
+    from decimal import Decimal
+
+    if "hand_calc_check" not in expected_reset:
+        return
+    hcc = expected_reset["hand_calc_check"]
+    assert reset_event.new_rate == Decimal(hcc["new_rate_expected"]), (
+        f"engine new_rate {reset_event.new_rate} != hand-calc {hcc['new_rate_expected']} "
+        f"(Fannie B2-1.4-02 + D-02 formula)"
+    )
+    assert reset_event.applied_cap == hcc["applied_cap_expected"], (
+        f"engine applied_cap {reset_event.applied_cap} != hand-calc {hcc['applied_cap_expected']}"
+    )
+
+
 # =========================================================================
 # ARM-01 (3 stubs) — flipped in Wave 2 (Plan 05-02)
 # =========================================================================
@@ -211,36 +292,107 @@ def test_note_rate_defaults_to_loan_annual_rate() -> None:
 # =========================================================================
 
 
-@pytest.mark.xfail(
-    strict=True, reason="Wave 0 stub — Plan 05-06 ships arm_5_1_payment_jump_at_61.json"
-)
 def test_arm_5_1_payment_jump_at_61(arm_fixture: Callable[[str], dict[str, Any]]) -> None:
     """ARM-02 + ROADMAP SC-2: 5/1 ARM produces payment-jump at month 61 (not 60, not 62)."""
-    pytest.fail("Wave 0 stub")
+    from decimal import Decimal
+
+    from lib.arm import build_arm_schedule
+
+    fx = arm_fixture("arm_5_1_payment_jump_at_61")
+    request = _request_from_fixture(fx)
+    schedule = build_arm_schedule(request)
+
+    expected = fx["expected"]
+    assert len(schedule.payments) == len(expected["payments"])
+    # Last fixed-period payment (period 60): still old rate
+    _assert_engine_matches_fixture_at_period(schedule.payments[59], expected["payments"][59])
+    # First post-reset payment (period 61): new rate, new payment
+    _assert_engine_matches_fixture_at_period(schedule.payments[60], expected["payments"][60])
+    # Payment jump assertion (the load-bearing SC-2 assertion)
+    assert schedule.payments[60].payment != schedule.payments[59].payment
+    # Reset event at period 61
+    assert schedule.reset_events[0].period == 61
+    assert schedule.reset_events[0].old_rate == Decimal(expected["payments"][59]["rate_in_effect"])
+    assert schedule.reset_events[0].new_rate == Decimal(expected["payments"][60]["rate_in_effect"])
+    assert schedule.reset_events[0].applied_cap == expected["reset_events"][0]["applied_cap"]
+    _assert_hand_calc_check(schedule.reset_events[0], expected["reset_events"][0])
 
 
-@pytest.mark.xfail(
-    strict=True, reason="Wave 0 stub — Plan 05-06 ships arm_7_1_payment_jump_at_85.json"
-)
 def test_arm_7_1_payment_jump_at_85(arm_fixture: Callable[[str], dict[str, Any]]) -> None:
-    """ARM-02: 7/1 ARM (initial=84, reset=12)."""
-    pytest.fail("Wave 0 stub")
+    """ARM-02: 7/1 ARM (initial=84, reset=12) — payment jump at month 85."""
+    from decimal import Decimal
+
+    from lib.arm import build_arm_schedule
+
+    fx = arm_fixture("arm_7_1_payment_jump_at_85")
+    request = _request_from_fixture(fx)
+    schedule = build_arm_schedule(request)
+
+    expected = fx["expected"]
+    assert len(schedule.payments) == len(expected["payments"])
+    # Period 84 (last fixed) still uses initial rate
+    _assert_engine_matches_fixture_at_period(schedule.payments[83], expected["payments"][83])
+    # Period 85 (first post-reset) uses new rate
+    _assert_engine_matches_fixture_at_period(schedule.payments[84], expected["payments"][84])
+    assert schedule.payments[84].payment != schedule.payments[83].payment
+    assert schedule.reset_events[0].period == 85
+    assert schedule.reset_events[0].new_rate == Decimal(expected["payments"][84]["rate_in_effect"])
+    assert schedule.reset_events[0].applied_cap == expected["reset_events"][0]["applied_cap"]
+    _assert_hand_calc_check(schedule.reset_events[0], expected["reset_events"][0])
 
 
-@pytest.mark.xfail(
-    strict=True, reason="Wave 0 stub — Plan 05-06 ships arm_10_1_payment_jump_at_121.json"
-)
 def test_arm_10_1_payment_jump_at_121(arm_fixture: Callable[[str], dict[str, Any]]) -> None:
-    """ARM-02: 10/1 ARM (initial=120, reset=12)."""
-    pytest.fail("Wave 0 stub")
+    """ARM-02: 10/1 ARM (initial=120, reset=12) — payment jump at month 121."""
+    from decimal import Decimal
+
+    from lib.arm import build_arm_schedule
+
+    fx = arm_fixture("arm_10_1_payment_jump_at_121")
+    request = _request_from_fixture(fx)
+    schedule = build_arm_schedule(request)
+
+    expected = fx["expected"]
+    assert len(schedule.payments) == len(expected["payments"])
+    # Period 120 (last fixed) still uses initial rate
+    _assert_engine_matches_fixture_at_period(schedule.payments[119], expected["payments"][119])
+    # Period 121 (first post-reset) uses new rate
+    _assert_engine_matches_fixture_at_period(schedule.payments[120], expected["payments"][120])
+    assert schedule.payments[120].payment != schedule.payments[119].payment
+    assert schedule.reset_events[0].period == 121
+    assert schedule.reset_events[0].new_rate == Decimal(expected["payments"][120]["rate_in_effect"])
+    assert schedule.reset_events[0].applied_cap == expected["reset_events"][0]["applied_cap"]
+    _assert_hand_calc_check(schedule.reset_events[0], expected["reset_events"][0])
 
 
-@pytest.mark.xfail(
-    strict=True, reason="Wave 0 stub — Plan 05-06 ships arm_5_6_payment_jump_at_61_and_67.json"
-)
 def test_arm_5_6_payment_jump_at_61_and_67(arm_fixture: Callable[[str], dict[str, Any]]) -> None:
     """ARM-02 + D-15: 5/6 ARM (initial=60, reset=6) — first reset 61, second 67."""
-    pytest.fail("Wave 0 stub")
+    from decimal import Decimal
+
+    from lib.arm import build_arm_schedule
+
+    fx = arm_fixture("arm_5_6_payment_jump_at_61_and_67")
+    request = _request_from_fixture(fx)
+    schedule = build_arm_schedule(request)
+
+    expected = fx["expected"]
+    assert len(schedule.payments) == len(expected["payments"])
+    # First reset boundary: period 60 still old, period 61 new
+    _assert_engine_matches_fixture_at_period(schedule.payments[59], expected["payments"][59])
+    _assert_engine_matches_fixture_at_period(schedule.payments[60], expected["payments"][60])
+    assert schedule.payments[60].payment != schedule.payments[59].payment
+    # Second reset boundary: period 66 same as 61 (within first reset epoch),
+    # period 67 new payment
+    _assert_engine_matches_fixture_at_period(schedule.payments[65], expected["payments"][65])
+    _assert_engine_matches_fixture_at_period(schedule.payments[66], expected["payments"][66])
+    assert schedule.payments[66].payment != schedule.payments[65].payment
+    # Reset events at period 61 and 67
+    assert schedule.reset_events[0].period == 61
+    assert schedule.reset_events[1].period == 67
+    assert schedule.reset_events[0].new_rate == Decimal(expected["payments"][60]["rate_in_effect"])
+    assert schedule.reset_events[1].new_rate == Decimal(expected["payments"][66]["rate_in_effect"])
+    assert schedule.reset_events[0].applied_cap == expected["reset_events"][0]["applied_cap"]
+    assert schedule.reset_events[1].applied_cap == expected["reset_events"][1]["applied_cap"]
+    _assert_hand_calc_check(schedule.reset_events[0], expected["reset_events"][0])
 
 
 # =========================================================================
@@ -311,18 +463,49 @@ def test_reset_formula_locked() -> None:
     assert applied_cap == "floor"
 
 
-@pytest.mark.xfail(
-    strict=True, reason="Wave 0 stub — Plan 05-06 ships arm_initial_cap_at_first_reset.json"
-)
 def test_arm_initial_cap_at_first_reset(arm_fixture: Callable[[str], dict[str, Any]]) -> None:
     """ARM-03 + D-02: First-reset uses initial_cap; subsequent uses periodic_cap."""
-    pytest.fail("Wave 0 stub")
+    from decimal import Decimal
+
+    from lib.arm import build_arm_schedule
+
+    fx = arm_fixture("arm_initial_cap_at_first_reset")
+    request = _request_from_fixture(fx)
+    schedule = build_arm_schedule(request)
+
+    expected = fx["expected"]
+    # First reset (period 61): applied_cap == 'initial'
+    assert schedule.reset_events[0].period == 61
+    assert schedule.reset_events[0].applied_cap == "initial"
+    assert schedule.reset_events[0].applied_cap == expected["reset_events"][0]["applied_cap"]
+    assert schedule.reset_events[0].new_rate == Decimal(expected["reset_events"][0]["new_rate"])
+    _assert_hand_calc_check(schedule.reset_events[0], expected["reset_events"][0])
+    # Second reset (period 73): applied_cap == 'periodic'
+    assert schedule.reset_events[1].period == 73
+    assert schedule.reset_events[1].applied_cap == "periodic"
+    assert schedule.reset_events[1].applied_cap == expected["reset_events"][1]["applied_cap"]
+    assert schedule.reset_events[1].new_rate == Decimal(expected["reset_events"][1]["new_rate"])
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 05-06 ships arm_lifetime_cap_binds.json")
 def test_arm_lifetime_cap_binds(arm_fixture: Callable[[str], dict[str, Any]]) -> None:
     """ARM-03: Lifetime cap binds when fully-indexed > note_rate + lifetime_cap."""
-    pytest.fail("Wave 0 stub")
+    from decimal import Decimal
+
+    from lib.arm import build_arm_schedule
+
+    fx = arm_fixture("arm_lifetime_cap_binds")
+    request = _request_from_fixture(fx)
+    schedule = build_arm_schedule(request)
+
+    expected = fx["expected"]
+    # First reset binds at lifetime ceiling
+    assert schedule.reset_events[0].period == 61
+    assert schedule.reset_events[0].applied_cap == "lifetime"
+    assert schedule.reset_events[0].applied_cap == expected["reset_events"][0]["applied_cap"]
+    assert schedule.reset_events[0].new_rate == Decimal(expected["reset_events"][0]["new_rate"])
+    _assert_hand_calc_check(schedule.reset_events[0], expected["reset_events"][0])
+    # Per-payment dollar-anchored equality at the reset boundary
+    _assert_engine_matches_fixture_at_period(schedule.payments[60], expected["payments"][60])
 
 
 # =========================================================================
@@ -330,12 +513,27 @@ def test_arm_lifetime_cap_binds(arm_fixture: Callable[[str], dict[str, Any]]) ->
 # =========================================================================
 
 
-@pytest.mark.xfail(
-    strict=True, reason="Wave 0 stub — Plan 05-06 ships arm_floor_below_margin_blocked.json"
-)
 def test_arm_floor_below_margin_blocked(arm_fixture: Callable[[str], dict[str, Any]]) -> None:
     """ARM-04 + ROADMAP SC-4: Floor enforcement: new_rate >= max(margin, floor_rate)."""
-    pytest.fail("Wave 0 stub")
+    from decimal import Decimal
+
+    from lib.arm import build_arm_schedule
+
+    fx = arm_fixture("arm_floor_below_margin_blocked")
+    request = _request_from_fixture(fx)
+    schedule = build_arm_schedule(request)
+
+    expected = fx["expected"]
+    # First reset binds at floor (huge index drop forced new_rate UP to floor_rate)
+    assert schedule.reset_events[0].period == 61
+    assert schedule.reset_events[0].applied_cap == "floor"
+    assert schedule.reset_events[0].applied_cap == expected["reset_events"][0]["applied_cap"]
+    assert schedule.reset_events[0].new_rate == Decimal(expected["reset_events"][0]["new_rate"])
+    # Engine new_rate must be >= max(margin, floor_rate) per ARM-04 invariant
+    margin = Decimal(request.arm_terms.margin_bps) / Decimal("10000")
+    effective_floor = max(margin, request.arm_terms.floor_rate)
+    assert schedule.reset_events[0].new_rate >= effective_floor
+    _assert_hand_calc_check(schedule.reset_events[0], expected["reset_events"][0])
 
 
 # =========================================================================
@@ -510,19 +708,130 @@ def test_initial_fixed_period_matches_phase1_oracle(
 
 
 @pytest.mark.xfail(
-    strict=True, reason="Wave 0 stub — Plan 05-06 ships bankrate + vertex42 5/1 captures"
+    strict=True,
+    reason=(
+        "Phase 8+: deferred — Bankrate ARM Calculator (5/1, 7/1, 10/1) and Vertex42 "
+        "Excel template are JS/spreadsheet-driven and require human-only browser/Excel "
+        "interaction; this session cannot perform the captures. Per Plan 05-06 Rule-4 "
+        "deviation against threat T-05-34 (oracle URL/automation gaps), the cross-source "
+        "agreement test is queued for Phase 8+ after a human capture session."
+    ),
 )
 def test_oracle_cross_validation_5_1(arm_fixture: Callable[[str], dict[str, Any]]) -> None:
     """ARM-06 + D-04 [REVISED]: Hand-calc + Bankrate + Vertex42 captures AGREE EXACTLY (5/1)."""
-    pytest.fail("Wave 0 stub")
+    pytest.fail(
+        "Bankrate + Vertex42 5/1 captures not yet committed (Phase 8+ deferred per Plan 05-06)"
+    )
 
 
-@pytest.mark.xfail(
-    strict=True, reason="Wave 0 stub — Plan 05-06 ships AmericU 5/6 disclosure capture"
-)
 def test_oracle_cross_validation_5_6(arm_fixture: Callable[[str], dict[str, Any]]) -> None:
-    """ARM-06 + D-04 [REVISED]: 5/6 ARM oracle — AmericU disclosure cross-validation."""
-    pytest.fail("Wave 0 stub")
+    """ARM-06 + D-04 [REVISED]: 5/6 ARM oracle — ABT Bank disclosure cross-validation.
+
+    Plan 05-06 Rule-4 deviation: original AmericU URL 404'd; substituted ABT Bank's
+    functionally equivalent "5/6, 7/6 & 10/6 SOFR ARM Disclosure" (same SOFR index,
+    same 2/1/5 cap structure, same first-change-date and reset cadence). The
+    disclosure publishes only Initial-Rate and Maximum-Rate rows, so this test
+    asserts the engine's RATE PATH (scale-invariant) under the worst-case
+    cap-binding trajectory matches the disclosure's two anchor rows.
+    """
+    from decimal import Decimal
+
+    abt = arm_fixture("oracle/abt_bank_5_6_sofr_disclosure_2022")
+    rows = abt["expected_per_period"]
+    initial_row = next(r for r in rows if r["period"] == 1)
+    max_row = next(r for r in rows if r["period"] != 1)
+
+    # Anchor 1: ABT Initial Interest Rate row matches our 5/6 fixture's initial period rate.
+    # The 5/6 fixture (arm_5_6_payment_jump_at_61_and_67) uses different scenario inputs
+    # (higher initial rate to exercise our cap-coverage matrix), so we cannot scale dollars
+    # directly. Rates are independent of loan size, so the disclosure's CAP-PATH invariant
+    # is the load-bearing oracle property: max_rate == initial_rate + lifetime_cap.
+    abt_initial_rate = Decimal(initial_row["rate"])
+    abt_max_rate = Decimal(max_row["rate"])
+    abt_lifetime_cap = abt_max_rate - abt_initial_rate
+    assert abt_lifetime_cap == Decimal("0.050000"), (
+        f"ABT disclosure lifetime cap should be 5pp; got {abt_lifetime_cap}"
+    )
+
+    # Anchor 2: build a synthetic 5/6 ARM with ABT's exact scenario inputs ($10k loan,
+    # 5.375% initial, 1.287% index, 3.000% margin, 2/1/5 caps, 30yr term) and verify the
+    # engine produces (a) initial payment $56.00 ± exact-decimal match, (b) the worst-case
+    # rate path reaches lifetime cap by month 79 (= 4th change date).
+    from datetime import date
+
+    from lib.arm import ARMRequest, ARMTerms, build_arm_schedule
+    from lib.models import Loan
+
+    loan = Loan(
+        principal=Decimal("10000.00"),
+        annual_rate=Decimal("0.053750"),
+        term_months=360,
+        origination_date=date(2026, 1, 1),
+        loan_type="arm",
+    )
+    # ABT 5/6: initial_cap=2pp, periodic_cap=1pp, lifetime_cap=5pp, no floor below margin
+    terms = ARMTerms(
+        initial_period_months=60,
+        reset_period_months=6,
+        initial_cap_bps=200,
+        periodic_cap_bps=100,
+        lifetime_cap_bps=500,
+        floor_rate=Decimal("0.030000"),
+        margin_bps=300,
+        index_series_id="SOFR30A",
+    )
+    # Use a huge index to drive the engine into the worst-case cap-binding path
+    # (every reset binds at its applicable cap — the path the disclosure documents).
+    req = ARMRequest(
+        loan=loan,
+        arm_terms=terms,
+        assumed_index_rate=Decimal("0.500000"),
+        index_path=[],
+    )
+    schedule = build_arm_schedule(req)
+
+    # Engine's initial payment (period 1) must equal ABT's $56.00 disclosed value.
+    assert schedule.payments[0].rate_in_effect == abt_initial_rate
+    assert schedule.payments[0].payment == Decimal(initial_row["payment"]), (
+        f"engine initial payment {schedule.payments[0].payment} != ABT {initial_row['payment']}"
+    )
+
+    # Worst-case rate path: 5.375% -> 7.375% (m61, +2pp) -> 8.375% (m67, +1pp)
+    # -> 9.375% (m73, +1pp) -> 10.375% (m79, +1pp = lifetime ceiling).
+    # The fourth reset event at period 79 must hit the disclosed maximum rate.
+    rates_by_period = {p.period: p.rate_in_effect for p in schedule.payments}
+    assert rates_by_period[60] == Decimal("0.053750")
+    assert rates_by_period[61] == Decimal("0.073750")
+    assert rates_by_period[67] == Decimal("0.083750")
+    assert rates_by_period[73] == Decimal("0.093750")
+    assert rates_by_period[79] == abt_max_rate
+    assert schedule.payments[78].rate_in_effect == abt_max_rate
+
+    # Disclosure-convention cross-check: ABT's "Maximum Monthly Payment" of $90.54 is
+    # computed as the payment for a fresh $10,000 loan amortized over the FULL 360-month
+    # term at the lifetime-cap rate (10.375%) — it's a regulatory worst-case disclosure
+    # rather than the actual cash-flow path. Our engine instead re-amortizes the
+    # then-current balance over the remaining term per Phase 5 D-05 (full-remaining-term
+    # re-amortization), so the actual payment at month 79 is lower than the disclosure
+    # figure (the loan has paid down by then). To verify cross-source agreement under the
+    # disclosure's convention, build a fresh fixed-rate $10k / 10.375% / 360-month loan
+    # and assert its initial payment matches the disclosure's max.
+    from lib.amortize import build_schedule
+
+    cap_rate_loan = Loan(
+        principal=Decimal("10000.00"),
+        annual_rate=abt_max_rate,
+        term_months=360,
+        origination_date=date(2026, 1, 1),
+        loan_type="fixed",
+    )
+    cap_rate_schedule = build_schedule(
+        cap_rate_loan, frequency="monthly", biweekly_mode=None, extra_principal=()
+    )
+    assert cap_rate_schedule.payments[0].payment == Decimal(max_row["payment"]), (
+        f"engine at lifetime-cap rate over 360mo = {cap_rate_schedule.payments[0].payment}, "
+        f"!= ABT disclosed max {max_row['payment']}"
+    )
 
 
 # =========================================================================
@@ -530,12 +839,39 @@ def test_oracle_cross_validation_5_6(arm_fixture: Callable[[str], dict[str, Any]
 # =========================================================================
 
 
-@pytest.mark.xfail(
-    strict=True, reason="Wave 0 stub — Plan 05-06 ships arm_5_1_off_by_one_negative.json"
-)
 def test_arm_5_1_off_by_one_negative(arm_fixture: Callable[[str], dict[str, Any]]) -> None:
-    """ARM-07 + ROADMAP SC-3: month 59 still old AND month 61 already new."""
-    pytest.fail("Wave 0 stub")
+    """ARM-07 + ROADMAP SC-3: month 59 still old AND month 61 already new.
+
+    Pins BOTH sides of the off-by-one: the last initial-period payment (month 59)
+    still uses the initial rate, AND the first post-reset payment (month 61) is
+    already at the new rate. Catches any boundary off-by-one in the engine's
+    epoch slicing.
+    """
+    from decimal import Decimal
+
+    from lib.arm import build_arm_schedule
+
+    fx = arm_fixture("arm_5_1_off_by_one_negative")
+    request = _request_from_fixture(fx)
+    schedule = build_arm_schedule(request)
+
+    expected = fx["expected"]
+    initial_rate = Decimal(expected["payments"][0]["rate_in_effect"])
+    new_rate = Decimal(expected["payments"][60]["rate_in_effect"])
+    assert initial_rate != new_rate, "fixture inputs must produce a real reset"
+
+    # Negative direction 1: month 59 (= payments[58]) still uses initial rate
+    assert schedule.payments[58].rate_in_effect == initial_rate
+    assert schedule.payments[58].payment == Decimal(expected["payments"][58]["payment"])
+
+    # Negative direction 2: month 61 (= payments[60]) already uses new rate
+    assert schedule.payments[60].rate_in_effect == new_rate
+    assert schedule.payments[60].payment == Decimal(expected["payments"][60]["payment"])
+    assert schedule.payments[60].payment != schedule.payments[58].payment
+
+    # Positive boundary: month 60 still uses initial rate (off-by-one at the boundary)
+    assert schedule.payments[59].rate_in_effect == initial_rate
+    assert schedule.payments[59].payment == Decimal(expected["payments"][59]["payment"])
 
 
 # =========================================================================
@@ -933,12 +1269,22 @@ def test_arm_mechanics_citations() -> None:
 # =========================================================================
 
 
-@pytest.mark.xfail(
-    strict=True, reason="Wave 0 stub — Plan 05-06 ships fixtures covering all 5 Literal values"
-)
 def test_applied_cap_citation_coverage() -> None:
-    """D-10: every applied_cap Literal value (initial/periodic/lifetime/floor/none) exercised by ≥1 fixture."""
-    pytest.fail("Wave 0 stub")
+    """D-10: every applied_cap Literal value (initial/periodic/lifetime/floor/none) exercised by >=1 fixture."""
+    import json
+
+    fixtures_dir = Path(__file__).resolve().parent / "fixtures" / "arm"
+    seen: set[str] = set()
+    for fp in sorted(fixtures_dir.glob("*.json")):
+        data = json.loads(fp.read_text())
+        for re_event in data.get("expected", {}).get("reset_events", []):
+            seen.add(re_event["applied_cap"])
+    required = {"initial", "periodic", "lifetime", "floor", "none"}
+    missing = required - seen
+    assert not missing, (
+        f"applied_cap coverage missing: {missing}. Seen: {seen}. "
+        f"D-10 requires every Literal value to be exercised by at least one fixture."
+    )
 
 
 def test_arm_teaser_rate() -> None:
