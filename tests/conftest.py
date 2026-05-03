@@ -88,3 +88,21 @@ def arm_fixture() -> Callable[[str], dict[str, Any]]:
         return json.loads(path.read_text())  # type: ignore[no-any-return]
 
     return _load
+
+
+@pytest.fixture
+def refinance_fixture() -> Callable[[str], dict[str, Any]]:
+    """Return a callable that loads a single refi fixture by filename stem
+    from tests/fixtures/refinance/. Mirrors arm_fixture / affordability_fixture
+    / amortize_fixture — one-fixture-per-file shape; loader takes a filename
+    stem like "positive_npv_200bps_drop_2k_costs", not an id within an array.
+
+    Per Phase 6 D-15: every Phase 6 fixture lives under tests/fixtures/refinance/
+    as one .json per scenario.
+    """
+
+    def _load(stem: str) -> dict[str, Any]:
+        path = FIXTURE_DIR / "refinance" / f"{stem}.json"
+        return json.loads(path.read_text())  # type: ignore[no-any-return]
+
+    return _load
