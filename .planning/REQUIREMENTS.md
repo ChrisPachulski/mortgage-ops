@@ -97,9 +97,9 @@ User selected "all" scope; everything below is in v1.
 
 ### Estimated APR (Reg Z Appendix J)
 
-- [ ] **APR-01**: `lib/apr.py` Newton-Raphson solver against Reg Z Appendix J unit-period equation
-- [ ] **APR-02**: Newton-Raphson seeded from `npf.rate(...)` (regular-transaction approximation)
-- [ ] **APR-03**: Tolerance Decimal("0.00001") (10x tighter than Reg Z's ±0.005% requirement)
+- [x] **APR-01**: `lib/apr.py` Newton-Raphson solver against Reg Z Appendix J unit-period equation
+- [x] **APR-02**: Newton-Raphson seeded from `npf.rate(...)` (regular-transaction approximation)
+- [x] **APR-03**: Tolerance Decimal("0.00001") (10x tighter than Reg Z's ±0.005% requirement)
 - [ ] **APR-04**: 20+ FFIEC APR Tool capture-as-fixture tests (varying loans, terms, advances)
 - [ ] **APR-05**: Reg Z commentary worked example as fixture: $5,000 / 36 × $166.07 → 12.00% APR
 - [ ] **APR-06**: User-facing output labeled "estimated APR" (not "APR")
@@ -278,9 +278,9 @@ Mapped 2026-04-26 by gsd-roadmapper. Every v1 requirement is assigned to exactly
 | REFI-07 | Phase 6 | Implemented (Plan 06-03 + 06-05 — Oracle 3 cash-out engine-derived values pinned end-to-end + tests/fixtures/refinance/cash_out_proceeds_50k.json shipped with cash_proceeds=47000.00, npv=36996.30, total_interest_delta=145706.07 pinned via Decimal equality; 3 SC-3 surface tests PASS) |
 | REFI-08 | Phase 6 | Implemented (Plan 06-04 + 06-05 — scripts/refi_npv.py CLI shipped 253 lines + sign_validator_outflow_positive.json fixture exercises CLI round-trip rejection via discount_rate_annual='1.5' above Pydantic Rate le=1 → exit 2 + 6-key WR-02 envelope; 6 Wave-4 CLI stub flips + 1 Wave-5 fixture-side coverage PASS) |
 | REFI-09 | Phase 6 | Implemented (Plan 06-06 — references/refi-npv.md 630-line sign-convention doc shipped at project root with SC-5 verbatim phrase 'outflows negative, savings positive' surfaced 3× in §1 headline section + 8 numbered H2 sections [Sign Convention + Borrower NPV Formula + Discount-Rate Selection + Cashflow Inventory + Simple vs NPV Breakeven + After-Tax Mode + v1 Carve-Outs + Citations] + appendix Citation Index; cites Investopedia + Federal Reserve + CFPB + IRS Pub 936 + numpy-financial v1.0.0 + numpy-financial bug #131 + FHFA 2023; D-13 horizon-truncation rationale + D-08 PMI/MIP carve-out + D-07 pyxirr Phase 11 deferral all documented; D-01..D-16 cross-reference table; mirrors references/arm-mechanics.md template; D-16 belt-and-suspenders surface 3 closed; 2 Wave-0 doc stub flips PASS; closes SC-5 + REFI-09; PHASE 6 CLOSES CLEAN) |
-| APR-01 | Phase 7 | Pending |
-| APR-02 | Phase 7 | Pending |
-| APR-03 | Phase 7 | Pending |
+| APR-01 | Phase 7 | Done (07-01 + 07-02 — Pydantic v2 boundary models in Plan 07-01 + Newton-Raphson body in Plan 07-02 against Reg Z Appendix J unit-period equation) |
+| APR-02 | Phase 7 | Done (07-02 — _seed_apr via npf.rate with NaN/inf/range fallback to nominal-rate-of-return then 0.005 last-resort per D-11) |
+| APR-03 | Phase 7 | Done (07-02 — TOLERANCE = Decimal("0.00001") + DOLLAR_RESIDUAL = Decimal("0.01") D-10 dual-criterion convergence; 125x tighter than Reg Z's regular-transaction ±1/8 pp = Decimal("0.00125")) |
 | APR-04 | Phase 7 | Pending |
 | APR-05 | Phase 7 | Pending |
 | APR-06 | Phase 7 | Pending |
