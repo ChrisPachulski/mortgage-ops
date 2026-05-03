@@ -194,15 +194,21 @@ def main() -> int:
     # contract and are scoped out of WR-02 closure).
     try:
         raw = args.input.read_text()
-    except FileNotFoundError as e:
+    except FileNotFoundError:
+        # WR-03: echo args.input (the user's actual argument; what they typed
+        # and what's broken from their POV). Previously dereferenced
+        # FileNotFoundError.filename, which is None on some pathlib code
+        # paths and produces "input file not found: None" as broken UX.
         print(
-            json.dumps({"error": f"input file not found: {e.filename}"}),
+            json.dumps({"error": f"input file not found: {args.input}"}),
             file=sys.stderr,
         )
         return 2
     except OSError as e:
+        # Same WR-03 echo discipline: surface the user's path alongside the
+        # OS error string for diagnostics on EACCES, symlink-chain breaks, etc.
         print(
-            json.dumps({"error": f"could not read input file: {e}"}),
+            json.dumps({"error": f"could not read input file {args.input}: {e}"}),
             file=sys.stderr,
         )
         return 2
