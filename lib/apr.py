@@ -1,11 +1,13 @@
 """Phase 7 Estimated APR — Reg Z Appendix J Newton-Raphson solver (Pydantic boundary).
 
 Phase 7 builds an "estimated APR" engine on top of Phase 3 amortization. Wave 1
-(this plan) ships ONLY the Pydantic v2 boundary models (APRRequest,
-AdvanceScheduleEntry, PaymentScheduleEntry, APRResponse) plus a `solve_apr`
-stub that raises NotImplementedError. Wave 2 (Plan 07-02) fills the
-Newton-Raphson body. Wave 4 (Plan 07-04) ships the JSON-in / JSON-out CLI
-at scripts/apr_reg_z.py.
+(Plan 07-01) shipped the Pydantic v2 boundary models (APRRequest,
+AdvanceScheduleEntry, PaymentScheduleEntry, APRResponse). Wave 2 (Plan 07-02 —
+this commit set) ships the Newton-Raphson body: ``_decimal_pow``,
+``_unit_period_equation`` (f(i)), ``_derivative`` (f'(i)), ``_seed_apr``
+(npf.rate-with-fallback), the ``APRConvergenceError`` exception class, and
+the full ``solve_apr`` Decimal-arithmetic iteration. Wave 4 (Plan 07-04)
+ships the JSON-in / JSON-out CLI at scripts/apr_reg_z.py.
 
 Phase-7 consumer note: lib/rules/reg_z.py:43-47 already references this
 module — `within_apr_tolerance(disclosed, actual, is_irregular)` is the
@@ -14,11 +16,13 @@ APRResponse.tolerance_check). Phase 7 keeps the "estimated APR" label
 because mortgage-ops does not make commercial Reg Z disclosures (ROADMAP
 SC-4); the solver is a calc, not a disclosure.
 
-Requirements covered (Plan 07-01 partial; full closure across Waves 2-7):
+Requirements covered (Plans 07-01 + 07-02; remaining closure across Waves 4-7):
   APR-01: lib/apr.py Newton-Raphson solver against Reg Z Appendix J
-          unit-period equation (this plan: model surface + stub; Wave 2 body).
-  APR-02: Newton-Raphson seeded from npf.rate (Wave 2).
-  APR-03: Convergence tolerance Decimal("0.00001") (Wave 2).
+          unit-period equation (Plans 07-01 + 07-02 together: model
+          surface + body + convergence + helpers).
+  APR-02: Newton-Raphson seeded from npf.rate (Plan 07-02 _seed_apr).
+  APR-03: Convergence tolerance Decimal("0.00001") (Plan 07-02 TOLERANCE
+          + DOLLAR_RESIDUAL dual criterion D-10).
   APR-04: 20+ HMDA Platform capture-as-fixture cross-validation (Wave 7).
   APR-05: Reg Z Appendix J Example J-1 worked example fixture (Wave 5).
   APR-06: User-facing output uses literal "estimated APR" (this plan
@@ -96,6 +100,7 @@ from __future__ import annotations
 
 import math
 import re
+import warnings
 from decimal import Decimal, localcontext
 from typing import Any, Literal
 
@@ -103,7 +108,7 @@ import numpy_financial as npf
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from lib.models import Loan, Money  # noqa: TC001  # Pydantic resolves field annotations at runtime
-from lib.money import MONEY_CONTEXT
+from lib.money import MONEY_CONTEXT, quantize_cents, quantize_rate
 
 
 def _decimal_pow(base: Decimal, exponent: Decimal) -> Decimal:
@@ -503,17 +508,44 @@ class APRResponse(BaseModel):
         return self
 
 
-def solve_apr(request: APRRequest) -> APRResponse:
-    """Solve for the estimated APR via Newton-Raphson (Wave 2 implements body).
+TOLERANCE: Decimal = Decimal("0.00001")
+"""D-09/D-10 (locked): convergence tolerance on the rate step.
 
-    See references/apr-reg-z.md §5 for the algorithm: seed from
-    `numpy_financial.rate(...)` (regular-transaction approximation), then
-    iterate `i_{n+1} = i_n - f(i_n) / f'(i_n)` against the Reg Z Appendix
-    J unit-period equation in pure Decimal arithmetic until BOTH
-    `abs(i_{n+1} - i_n) <= Decimal("0.00001")` AND
-    `abs(f(i_{n+1})) <= Decimal("0.01")` (D-06 dual criterion). Cap at
-    50 iterations (ROADMAP SC-3) — raise APRConvergenceError before
-    constructing APRResponse if cap exceeded (D-07 defense in depth).
+125x tighter than Reg Z regular-transaction tolerance (Decimal("0.00125") =
+1/8 pp) per RESEARCH §Finding 1; satisfies the ROADMAP "10x tighter than
+Reg Z" goal trivially.
+"""
+
+DOLLAR_RESIDUAL: Decimal = Decimal("0.01")
+"""D-10 (locked): dollar-residual sanity check (one cent).
+
+Defense-in-depth alongside the rate tolerance: f(i) at convergence must be
+within one cent of zero, otherwise we treat the rate as "stalled, residual
+huge" and continue iterating.
+"""
+
+MAX_ITER: int = 50
+"""D-12 (locked): hard cap on Newton iterations per ROADMAP SC-3.
+
+Breach raises APRConvergenceError; caller never sees an APRResponse with
+iterations > 50 (D-07 defense in depth at the model boundary).
+"""
+
+
+def solve_apr(request: APRRequest) -> APRResponse:
+    """Solve for the estimated APR via Newton-Raphson per Reg Z Appendix J.
+
+    See references/apr-reg-z.md §5 for the algorithm:
+
+      1. Seed via _seed_apr (npf.rate of regular-transaction approximation).
+      2. Newton iteration in MONEY_CONTEXT (prec=28 Decimal):
+            i_{n+1} = i_n - f(i_n)/f'(i_n)
+      3. Convergence: abs(i_{n+1} - i_n) <= TOLERANCE
+                  AND abs(f(i_{n+1})) <= DOLLAR_RESIDUAL  (D-10 dual criterion).
+      4. Hard cap MAX_ITER iterations; APRConvergenceError if exceeded
+         (D-12) or if f'(i) hits zero (avoids divide-by-zero).
+      5. APR = quantize_rate(i_final * unit_periods_per_year)  (D-14).
+      6. tolerance_check populated when request.disclosed_apr is supplied.
 
     Args:
         request: The APRRequest boundary model. Pre-validated by Pydantic
@@ -522,14 +554,89 @@ def solve_apr(request: APRRequest) -> APRResponse:
 
     Returns:
         APRResponse with estimated_apr quantized to 6 decimal places,
-        iterations count, final_residual, summary string containing the
-        literal 'estimated APR' (SC-4), and optional tolerance_check
-        when request.disclosed_apr was supplied.
+        iterations count, final_residual (in dollars), summary string
+        containing the literal 'estimated APR' (SC-4), and optional
+        tolerance_check when request.disclosed_apr was supplied.
 
     Raises:
-        NotImplementedError: Wave 2 (Plan 07-02) ships the implementation.
+        APRConvergenceError: when Newton-Raphson exceeds MAX_ITER iterations
+                             or when f'(i) hits exactly zero. ValueError
+                             subclass; surfaced by scripts/apr_reg_z.py
+                             via the Phase 4 D-13 6-key envelope.
     """
-    raise NotImplementedError(
-        "Wave 2 (Plan 07-02) implements the Newton-Raphson body; "
-        "Wave 1 (Plan 07-01) ships only the boundary models."
+    # warnings.catch_warnings is the Phase 4 evaluate_reverse idiom (lib/affordability.py:1033);
+    # Phase 7 currently emits no custom warnings, but capturing keeps the surface ready
+    # for downstream phases to add warning-bearing branches without an API bump.
+    f_val = Decimal("0")
+    iterations = 0
+    with warnings.catch_warnings():
+        warnings.simplefilter("always")
+        with localcontext(MONEY_CONTEXT):
+            i = _seed_apr(request.advance_schedule, request.payment_schedule)
+            # Guard against a degenerate seed that already places (1+i) <= 0 (would
+            # blow up the very first _decimal_pow call). Treat as immediate
+            # non-convergence rather than letting ValueError propagate raw.
+            if i <= Decimal("-1"):
+                raise APRConvergenceError(iterations=0, last_residual=Decimal("0"), last_i=i)
+            for n in range(1, MAX_ITER + 1):
+                iterations = n
+                try:
+                    f_val = _unit_period_equation(
+                        request.advance_schedule, request.payment_schedule, i
+                    )
+                    fprime = _derivative(request.advance_schedule, request.payment_schedule, i)
+                except ValueError as exc:
+                    # _decimal_pow rejected a non-positive (1+i) base; the
+                    # iterate has wandered out of the equation's domain — this
+                    # is a non-convergence signal, not a programmer bug.
+                    raise APRConvergenceError(
+                        iterations=n, last_residual=abs(f_val), last_i=i
+                    ) from exc
+                if fprime == Decimal("0"):
+                    raise APRConvergenceError(iterations=n, last_residual=abs(f_val), last_i=i)
+                i_next = i - f_val / fprime
+                if abs(i_next - i) <= TOLERANCE and abs(f_val) <= DOLLAR_RESIDUAL:
+                    i = i_next
+                    break
+                # If the next iterate would put (1+i) at or below zero, the
+                # subsequent _decimal_pow would raise; bail with APRConvergenceError
+                # so callers get a clean signal rather than a raw ValueError.
+                if i_next <= Decimal("-1"):
+                    raise APRConvergenceError(iterations=n, last_residual=abs(f_val), last_i=i)
+                i = i_next
+            else:
+                raise APRConvergenceError(iterations=MAX_ITER, last_residual=abs(f_val), last_i=i)
+
+            estimated_apr = quantize_rate(i * Decimal(request.unit_periods_per_year))
+            final_residual_quantized = quantize_cents(abs(f_val))
+
+    apr_pct_str = f"{estimated_apr * Decimal('100'):.4f}"
+    summary = (
+        f"estimated APR: {apr_pct_str}% "
+        f"(converged in {iterations} iterations, residual ${final_residual_quantized})"
+    )
+
+    tolerance_check: dict[str, Any] | None = None
+    if request.disclosed_apr is not None:
+        from lib.rules.reg_z import TOLERANCE_REGULAR, within_apr_tolerance
+
+        is_within = within_apr_tolerance(
+            disclosed_apr=request.disclosed_apr,
+            actual_apr=estimated_apr,
+            is_irregular_transaction=False,
+        )
+        tolerance_check = {
+            "disclosed_apr": str(request.disclosed_apr),
+            "estimated_apr": str(estimated_apr),
+            "within_tolerance": is_within,
+            "tolerance_used": str(TOLERANCE_REGULAR),
+            "regulation": "12 CFR §1026.22(a)(2)",
+        }
+
+    return APRResponse(
+        estimated_apr=estimated_apr,
+        iterations=iterations,
+        final_residual=final_residual_quantized,
+        summary=summary,
+        tolerance_check=tolerance_check,
     )
