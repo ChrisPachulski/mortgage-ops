@@ -1,7 +1,7 @@
 {
   "_meta": {
     "oracle_source": "06-RESEARCH.md §'Pinned Oracles' Oracle 2 (SC-1 negative-NPV; D-13 horizon-truncation)",
-    "derivation": "engine-derived 2026-05-02 via lib.refinance.evaluate (Phase 5 D-04 [REVISED] hand_calc_check witness pattern); pinned for SC-1 sign-rigor. Cross-checked against Plan 06-02 docstring-pinned NPV='-718.01'.",
+    "derivation": "engine-derived 2026-05-02 via lib.refinance.evaluate (Phase 5 D-04 [REVISED] hand_calc_check witness pattern); pinned for SC-1 sign-rigor. Cross-checked against Plan 06-02 docstring-pinned NPV='-718.01'. WR-04 fix (2026-05-02): breakeven.simple_months/simple_status now report null/'never_breaks_even' under horizon=12 (was 14/'ok' pre-fix); _compute_breakeven_simple honors horizon to keep semantics consistent with NPV-based breakeven.",
     "citation": "ROADMAP Phase 6 SC-1 (negative-NPV with $5k closing costs at 12-month horizon); REFI-06 fixture anchor. Per D-13: SC-1 'same rate $5k closing' over full 25y is still positive (~$60k savings); horizon=12 simulates short borrower tenure (FHFA median ~13y) and yields the negative-NPV anchor. Documented in references/refi-npv.md §5 carve-out (Wave 6)."
   },
   "request": {
@@ -22,8 +22,8 @@
     "new_monthly_pi": "1753.77",
     "monthly_savings": "366.57",
     "breakeven": {
-      "simple_months": 14,
-      "simple_status": "ok",
+      "simple_months": null,
+      "simple_status": "never_breaks_even",
       "npv_months": null,
       "npv_status": "never_breaks_even"
     },

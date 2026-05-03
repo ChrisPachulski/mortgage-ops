@@ -261,7 +261,13 @@ class RefiBreakeven(BaseModel):
     paired *_status Literal distinguishes the failure mode.
 
     simple = ceil(closing_costs / monthly_savings); fails when monthly_savings
-    <= 0 ("no_savings") or when closing_costs == 0 ("zero_costs").
+    <= 0 ("no_savings"), when closing_costs == 0 ("zero_costs"), or when the
+    computed months exceed the analysis horizon ("never_breaks_even"). The
+    last status was added per WR-04 so simple and NPV breakeven yield
+    consistent semantics under horizon truncation (a borrower asking
+    "model my decision over 12 months" should not get back "you'll break
+    even at month 14" — that answer lies outside the analysis window they
+    explicitly requested).
 
     npv = first n in 1..N where cumulative NPV ≥ 0 (D-06 cumulative scan, NOT
     npf.irr); fails ("never_breaks_even") when no n satisfies the condition.
@@ -269,7 +275,7 @@ class RefiBreakeven(BaseModel):
 
     model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
     simple_months: int | None
-    simple_status: Literal["ok", "no_savings", "zero_costs"]
+    simple_status: Literal["ok", "no_savings", "zero_costs", "never_breaks_even"]
     npv_months: int | None
     npv_status: Literal["ok", "never_breaks_even"]
 
@@ -672,13 +678,21 @@ def _compute_npv(
 def _compute_breakeven_simple(
     closing_costs: Decimal,
     monthly_savings: Decimal,
-) -> tuple[int | None, Literal["ok", "no_savings", "zero_costs"]]:
+    horizon_months: int,
+) -> tuple[int | None, Literal["ok", "no_savings", "zero_costs", "never_breaks_even"]]:
     """REFI-03 first formula: ceil(closing_costs / monthly_savings).
 
     Edge cases per RESEARCH §"(d) Divergence":
-      monthly_savings <= 0 → (None, 'no_savings')
-      closing_costs == 0  → (0, 'zero_costs')
-      else → (ceil(closing/savings), 'ok')
+      monthly_savings <= 0    → (None, 'no_savings')
+      closing_costs == 0      → (0, 'zero_costs')
+      months > horizon_months → (None, 'never_breaks_even')   (WR-04)
+      else                    → (ceil(closing/savings), 'ok')
+
+    WR-04 fix: honor analysis_horizon_months. Pre-fix, this helper returned
+    months > horizon (e.g., 14 with horizon=12) and status='ok' — a
+    contradiction with the consumer's explicit horizon request and with the
+    NPV-based breakeven (which correctly returns 'never_breaks_even' when
+    the cumulative scan never crosses zero within the truncated stream).
     """
     if closing_costs == Decimal("0"):
         return 0, "zero_costs"
@@ -686,7 +700,10 @@ def _compute_breakeven_simple(
         return None, "no_savings"
     # Ceiling divide via Decimal
     months_d = (closing_costs / monthly_savings).quantize(Decimal("1"), rounding=ROUND_CEILING)
-    return int(months_d), "ok"
+    months = int(months_d)
+    if months > horizon_months:
+        return None, "never_breaks_even"
+    return months, "ok"
 
 
 def _compute_breakeven_npv(
@@ -860,7 +877,9 @@ def evaluate_rate_and_term(req: RateAndTermRefiRequest) -> RefiResponse:
     npv = _compute_npv(discount_rate, cashflows, horizon)
 
     # 8: breakeven
-    simple_months, simple_status = _compute_breakeven_simple(req.closing_costs, monthly_savings)
+    simple_months, simple_status = _compute_breakeven_simple(
+        req.closing_costs, monthly_savings, horizon
+    )
     npv_months, npv_status = _compute_breakeven_npv(discount_rate, cashflows, horizon)
 
     # 9: after-tax overlay (D-09) — capture StaleReferenceWarning from IRS predicate
@@ -1052,7 +1071,9 @@ def evaluate_cash_out(req: CashOutRefiRequest) -> RefiResponse:
     # cash-out: simple is "no_savings" when monthly_savings <= 0 (typical for
     # cash-out where new_pi > old_pi); NPV-breakeven is 0 when cash proceeds at
     # t=0 already make cumulative NPV non-negative (RESEARCH §"(d) Divergence" 3).
-    simple_months, simple_status = _compute_breakeven_simple(req.closing_costs, monthly_savings)
+    simple_months, simple_status = _compute_breakeven_simple(
+        req.closing_costs, monthly_savings, horizon
+    )
     npv_months, npv_status = _compute_breakeven_npv(discount_rate, cashflows, horizon)
 
     # 9: response

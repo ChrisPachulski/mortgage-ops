@@ -324,6 +324,42 @@ def test_refi_breakeven_divergence_documented(
     )
 
 
+def test_refi_breakeven_simple_honors_horizon(
+    refinance_fixture: Callable[[str], dict[str, Any]],
+) -> None:
+    """WR-04 (REVIEW.md fix): _compute_breakeven_simple must honor
+    analysis_horizon_months and never report months > horizon as 'ok'.
+
+    Pre-fix: with horizon=12, monthly_savings=$366.57, closing_costs=$5000,
+    the helper returned (14, 'ok') — a contradiction with the consumer's
+    explicit horizon request and with the NPV-based breakeven (which
+    correctly returns (None, 'never_breaks_even') because the truncated
+    cumulative scan never crosses zero). The two breakeven values silently
+    disagreed in a way the consumer could not diagnose.
+
+    Post-fix: simple breakeven returns (None, 'never_breaks_even') when the
+    computed months exceed the horizon, matching NPV semantics.
+    """
+    fx = refinance_fixture("negative_npv_short_horizon")
+    req = RateAndTermRefiRequest.model_validate_json(json.dumps(fx["request"]))
+    from lib.refinance import evaluate
+
+    resp = evaluate(req)
+
+    # WR-04 invariant: when simple breakeven would fall outside the horizon,
+    # report 'never_breaks_even' (mirrors NPV semantics under truncation).
+    assert resp.breakeven.simple_months is None, (
+        f"WR-04 violated: simple_months should be None when computed months "
+        f"exceed horizon; got {resp.breakeven.simple_months}"
+    )
+    assert resp.breakeven.simple_status == "never_breaks_even", (
+        f"WR-04 violated: simple_status should be 'never_breaks_even' under "
+        f"horizon truncation; got {resp.breakeven.simple_status!r}"
+    )
+    # And it should agree with NPV-based status (both 'never_breaks_even')
+    assert resp.breakeven.npv_status == "never_breaks_even"
+
+
 # =========================================================================
 # REFI-04 (pyxirr deferral) — 1 stub, flipped Wave 6 (Plan 06-05/06-06 docstring assertion)
 # =========================================================================
