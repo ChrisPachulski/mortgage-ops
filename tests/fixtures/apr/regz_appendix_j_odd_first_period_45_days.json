@@ -1,0 +1,28 @@
+{
+  "description": "45-day odd first period on Wikipedia $200k/30yr/6.5% — NEGATIVE-PATH fixture: f = 45/30 = 1.5 violates D-16 (f must be < 1 unit period); engine raises ValueError.",
+  "citation": "12 CFR §1026.17(c)(4) + Appendix J §(b)(5)(iii) + Phase 7 D-16 (long odd first period >= 1 unit period rejected)",
+  "request": {
+    "loan": {
+      "principal": "200000.00",
+      "annual_rate": "0.065000",
+      "term_months": 360,
+      "origination_date": "2026-01-01",
+      "loan_type": "fixed"
+    },
+    "finance_charges": "0.00",
+    "advance_schedule": [
+      {"unit_period_offset": 0, "amount": "200000.00"}
+    ],
+    "payment_schedule": [
+      {"starting_unit_period": 1, "periods": 360, "amount": "1264.14"}
+    ],
+    "day_count": "30/360",
+    "unit_periods_per_year": 12,
+    "odd_first_period_days": 45
+  },
+  "expected": {
+    "raises": "ValueError",
+    "message_substring": "odd_first_period_days (45) >= 1 unit period",
+    "note": "D-26 LOCKED: long odd first period (>= 1 unit period) is a NEGATIVE-path test asserting ValueError; do NOT attempt to compute APR for this fixture. Per Plan 07-03 D-16: helper returns f in [-1, 1); long cases >= 1 unit period rejected (caller should insert an extra t=1 advance to model the long delay). This fixture documents the boundary; sibling test_odd_first_period_too_long_raises asserts the engine raises with the documented message substring."
+  }
+}
