@@ -1,0 +1,37 @@
+{
+  "_meta": {
+    "oracle_source": "06-RESEARCH.md §'Pinned Oracles' Oracle 1 (SC-1 positive-NPV)",
+    "derivation": "engine-derived 2026-05-02 via lib.refinance.evaluate (Phase 5 D-04 [REVISED] hand_calc_check witness pattern); pinned for SC-1 sign-rigor. Cross-checked against Plan 06-02 docstring-pinned NPV='60705.48'.",
+    "citation": "ROADMAP Phase 6 SC-1 (positive-NPV with $2k closing costs); REFI-05 fixture anchor; Oracle 1 setup: $300k @ 7%/25y residual → $300k @ 5%/25y, $2000 closing, 5% discount, full 300mo horizon"
+  },
+  "request": {
+    "refi_kind": "rate_and_term",
+    "old_loan_balance": "300000.00",
+    "old_annual_rate": "0.070000",
+    "old_remaining_months": 300,
+    "new_annual_rate": "0.050000",
+    "new_term_months": 300,
+    "closing_costs": "2000.00",
+    "discount_rate_annual": "0.050000",
+    "analysis_horizon_months": null
+  },
+  "expected": {
+    "refi_kind": "rate_and_term",
+    "npv": "60705.48",
+    "old_monthly_pi": "2120.34",
+    "new_monthly_pi": "1753.77",
+    "monthly_savings": "366.57",
+    "breakeven": {
+      "simple_months": 6,
+      "simple_status": "ok",
+      "npv_months": 6,
+      "npv_status": "ok"
+    },
+    "cash_proceeds": null,
+    "monthly_payment_delta": null,
+    "total_interest_delta": null,
+    "after_tax_npv": null,
+    "discount_rate_annual_used": "0.050000",
+    "analysis_horizon_months_used": 300
+  }
+}
