@@ -74,6 +74,24 @@ class TestFindJsonFloatLoc:
     def test_empty_array_returns_none(self) -> None:
         assert find_json_float_loc("[]") is None
 
+    def test_deeply_nested_does_not_recurse(self) -> None:
+        """WR-05: pathological deep-JSON input must not raise RecursionError.
+
+        Python's default sys.getrecursionlimit() is ~1000; the previous recursive
+        walker overflowed and crashed the CLI with an opaque traceback instead of
+        the documented {"error": ...} envelope. The iterative LIFO walker handles
+        any nesting depth bounded only by available memory.
+        """
+        depth = 5000  # well past Python's default recursion limit
+        raw = ("[" * depth) + "1.5" + ("]" * depth)
+        hit = find_json_float_loc(raw)
+        assert hit is not None
+        loc, val = hit
+        assert val == "1.5"
+        # loc is the chain of zero indices: [0, 0, 0, ..., 0]
+        assert len(loc) == depth
+        assert all(i == 0 for i in loc)
+
 
 # =========================================================================
 # make_decimal_type_envelope
