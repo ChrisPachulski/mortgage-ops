@@ -101,10 +101,12 @@ from __future__ import annotations
 import math
 import re
 import warnings
+from datetime import date  # noqa: TC003  # used at runtime by _compute_odd_first_period_fraction
 from decimal import Decimal, localcontext
 from typing import Any, Literal
 
 import numpy_financial as npf
+from dateutil.relativedelta import relativedelta
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from lib.models import Loan, Money  # noqa: TC001  # Pydantic resolves field annotations at runtime
@@ -126,6 +128,83 @@ def _decimal_pow(base: Decimal, exponent: Decimal) -> Decimal:
         raise ValueError(f"_decimal_pow requires positive base; got {base}")
     with localcontext(MONEY_CONTEXT):
         return (base.ln() * exponent).exp()
+
+
+def _compute_odd_first_period_fraction(
+    origination: date,
+    first_payment: date,
+    day_count: Literal["30/360", "actual/365", "actual/actual"],
+) -> Decimal:
+    """Return f per Reg Z §1026.17(c)(4) + Appendix J §(b)(5)(iii).
+
+    For a "long" first period (first_payment more than one unit period after
+    origination), the fractional component is the days-beyond-standard
+    expressed as a fraction of one unit period in the chosen day-count.
+
+    Day-count formulas (RESEARCH §Q(e)):
+      - "30/360":         f = (days - 30) / 30
+      - "actual/365":     f = (days - 365/12) / (365/12)        # ~30.4167-day month
+      - "actual/actual":  f = (days - actual_unit_days) / actual_unit_days
+                          where actual_unit_days = days from origination to
+                          origination + relativedelta(months=1) (handles
+                          month-end edges per project-wide D-07 dateutil idiom).
+
+    Returns:
+      Decimal in [-1, 1):
+        - f = 0 when first_payment is exactly one unit period after origination
+        - f > 0 (long first period) is the LONG case — the only one
+          cross-validated in v1
+        - f < 0 (short first period) is mathematically valid (Reg Z math
+          supports it via the (1 + f*i) factor) but NOT cross-validated
+          in v1 — engine accepts; caller is responsible for understanding
+
+    Raises:
+      ValueError: if first_payment < origination (negative odd period —
+                  RESEARCH OPEN Q1 deferred to v2 per Phase 7 scope)
+      ValueError: if f >= 1 (the odd period is one full unit period or
+                  longer — caller should insert an extra t=1 advance
+                  instead of stretching the first period into the
+                  fractional-period model)
+      ValueError: if day_count is not one of the three supported values
+
+    D-15 (locked): Literal accepts {"30/360", "actual/365", "actual/actual"}
+    matching APRRequest.day_count.
+    D-16 (locked): return value in [-1, 1); short cases (negative f) accepted
+    by the engine but not cross-validated in v1.
+    D-18 (locked): "small differences" (< 7 days for monthly) per
+    §1026.17(c)(4) are NOT auto-zeroed by the engine — the engine reports
+    the exact fraction and lets the U-equation use it.
+    """
+    if first_payment < origination:
+        raise ValueError(
+            f"first_payment ({first_payment}) must be >= origination ({origination}); "
+            f"negative odd first period not supported in Phase 7"
+        )
+    days = (first_payment - origination).days
+    with localcontext(MONEY_CONTEXT):
+        if day_count == "30/360":
+            unit_days = Decimal("30")
+            f = (Decimal(days) - unit_days) / unit_days
+        elif day_count == "actual/365":
+            unit_days = Decimal("365") / Decimal("12")  # ~30.4167-day month
+            f = (Decimal(days) - unit_days) / unit_days
+        elif day_count == "actual/actual":
+            # Use python-dateutil relativedelta(months=1) to compute the actual
+            # number of days in the unit period anchored at origination
+            # (handles month-end edges per project-wide D-07 dateutil idiom).
+            actual_unit_end = origination + relativedelta(months=1)
+            actual_unit_days = Decimal((actual_unit_end - origination).days)
+            f = (Decimal(days) - actual_unit_days) / actual_unit_days
+        else:
+            raise ValueError(f"unsupported day_count: {day_count!r}")
+
+        if f >= Decimal("1"):
+            raise ValueError(
+                f"odd first period >= 1 unit period (days={days}, day_count={day_count!r}); "
+                f"caller should insert an extra t=1 advance instead of stretching the "
+                f"first period into the fractional-period model"
+            )
+        return f
 
 
 def _unit_period_equation(
