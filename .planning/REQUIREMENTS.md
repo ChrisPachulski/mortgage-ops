@@ -93,7 +93,7 @@ User selected "all" scope; everything below is in v1.
 - [x] **REFI-06**: Tests with negative-NPV fixture (same rate, high closing costs)
 - [x] **REFI-07**: Tests with cash-out fixture (proceeds, new balance, total interest comparison)
 - [x] **REFI-08**: `scripts/refi_npv.py` provides JSON-in / JSON-out CLI
-- [ ] **REFI-09**: `references/refi-npv.md` documents sign convention explicitly
+- [x] **REFI-09**: `references/refi-npv.md` documents sign convention explicitly
 
 ### Estimated APR (Reg Z Appendix J)
 
@@ -277,7 +277,7 @@ Mapped 2026-04-26 by gsd-roadmapper. Every v1 requirement is assigned to exactly
 | REFI-06 | Phase 6 | Implemented (Plan 06-05 — tests/fixtures/refinance/negative_npv_short_horizon.json shipped with engine-derived expected values pinned via Decimal equality; Oracle 2 NPV=-718.01 via D-13 horizon=12 truncation; test_refi_rate_and_term_negative_npv PASS) |
 | REFI-07 | Phase 6 | Implemented (Plan 06-03 + 06-05 — Oracle 3 cash-out engine-derived values pinned end-to-end + tests/fixtures/refinance/cash_out_proceeds_50k.json shipped with cash_proceeds=47000.00, npv=36996.30, total_interest_delta=145706.07 pinned via Decimal equality; 3 SC-3 surface tests PASS) |
 | REFI-08 | Phase 6 | Implemented (Plan 06-04 + 06-05 — scripts/refi_npv.py CLI shipped 253 lines + sign_validator_outflow_positive.json fixture exercises CLI round-trip rejection via discount_rate_annual='1.5' above Pydantic Rate le=1 → exit 2 + 6-key WR-02 envelope; 6 Wave-4 CLI stub flips + 1 Wave-5 fixture-side coverage PASS) |
-| REFI-09 | Phase 6 | Pending |
+| REFI-09 | Phase 6 | Implemented (Plan 06-06 — references/refi-npv.md 630-line sign-convention doc shipped at project root with SC-5 verbatim phrase 'outflows negative, savings positive' surfaced 3× in §1 headline section + 8 numbered H2 sections [Sign Convention + Borrower NPV Formula + Discount-Rate Selection + Cashflow Inventory + Simple vs NPV Breakeven + After-Tax Mode + v1 Carve-Outs + Citations] + appendix Citation Index; cites Investopedia + Federal Reserve + CFPB + IRS Pub 936 + numpy-financial v1.0.0 + numpy-financial bug #131 + FHFA 2023; D-13 horizon-truncation rationale + D-08 PMI/MIP carve-out + D-07 pyxirr Phase 11 deferral all documented; D-01..D-16 cross-reference table; mirrors references/arm-mechanics.md template; D-16 belt-and-suspenders surface 3 closed; 2 Wave-0 doc stub flips PASS; closes SC-5 + REFI-09; PHASE 6 CLOSES CLEAN) |
 | APR-01 | Phase 7 | Pending |
 | APR-02 | Phase 7 | Pending |
 | APR-03 | Phase 7 | Pending |
