@@ -123,6 +123,7 @@ class ARMRequest(BaseModel):
         while period <= term:
             triggers.add(period)
             period += cadence
+        seen_periods: set[int] = set()
         for entry in self.index_path:
             if entry.period not in triggers:
                 sample = sorted(triggers)[:5]
@@ -132,6 +133,15 @@ class ARMRequest(BaseModel):
                     f"reset trigger period (D-01). Valid triggers for this product: "
                     f"{sample}{suffix}"
                 )
+            # WR-02: reject duplicates so override-wins semantics are deterministic;
+            # silent first-wins violates the project's "fail loud, no inference" doctrine
+            # (CLAUDE.md money discipline + CONTEXT.md D-01).
+            if entry.period in seen_periods:
+                raise ValueError(
+                    f"index_path contains duplicate entries for period {entry.period} "
+                    f"(D-01: each reset trigger may appear at most once)"
+                )
+            seen_periods.add(entry.period)
         return self
 
 

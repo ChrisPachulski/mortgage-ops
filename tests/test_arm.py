@@ -1375,6 +1375,55 @@ def test_arm_request_misaligned_index_path_raises() -> None:
     assert len(period_errors) >= 1, f"Expected period-62 misalignment error, got: {errors}"
 
 
+def test_arm_request_duplicate_index_path_period_raises() -> None:
+    """ARM-01 + D-01 + WR-02 (model-layer): ARMRequest._index_path_periods_align_to_reset_triggers
+    rejects duplicate index_path entries for the same period.
+
+    A request with two entries at period 61 (both aligned, but the second silently
+    overrode by first-wins iteration order in _compute_new_rate) violates the
+    "fail loud, no inference" doctrine. Construction MUST raise so a user who
+    accidentally double-specifies a reset value sees the error immediately
+    instead of getting a different rate path with no warning.
+    """
+    from datetime import date
+    from decimal import Decimal
+
+    from lib.arm import ARMRequest, ARMTerms, IndexPathEntry
+    from lib.models import Loan
+    from pydantic import ValidationError
+
+    loan = Loan(
+        principal=Decimal("400000.00"),
+        annual_rate=Decimal("0.050000"),
+        term_months=360,
+        origination_date=date(2026, 1, 1),
+        loan_type="arm",
+    )
+    terms = ARMTerms(
+        initial_period_months=60,
+        reset_period_months=12,
+        initial_cap_bps=500,
+        periodic_cap_bps=200,
+        lifetime_cap_bps=500,
+        floor_rate=Decimal("0.030000"),
+        margin_bps=250,
+        index_series_id="MORTGAGE30US",
+    )
+    with pytest.raises(ValidationError) as exc:
+        ARMRequest(
+            loan=loan,
+            arm_terms=terms,
+            assumed_index_rate=Decimal("0.050000"),
+            index_path=[
+                IndexPathEntry(period=61, value=Decimal("0.050000")),
+                IndexPathEntry(period=61, value=Decimal("0.100000")),
+            ],
+        )
+    errors = exc.value.errors()
+    duplicate_errors = [e for e in errors if "duplicate" in str(e.get("msg", ""))]
+    assert len(duplicate_errors) >= 1, f"Expected duplicate-period error, got: {errors}"
+
+
 def test_arm_request_aligned_index_path_succeeds() -> None:
     """ARM-01 + D-01 (model-layer): ARMRequest accepts index_path entries that
     align to reset triggers. 5/1 ARM trigger 61 + 73 should both pass.
