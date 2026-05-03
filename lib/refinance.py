@@ -706,6 +706,73 @@ def _compute_breakeven_npv(
 
 
 # ---------------------------------------------------------------------------
+# Private helpers (Plan 06-03 Task 2): after-tax tax-shield cashflow stream
+# (D-09; cites lib.rules.irs_pub936.qualified_loan_limit / RUL-11)
+# ---------------------------------------------------------------------------
+
+
+def _compute_tax_shield_cashflows(
+    *,
+    new_loan: Loan,
+    marginal_tax_rate: Decimal,
+    filing_status: Literal["single", "mfj", "mfs", "hoh"],
+    has_grandfathered_debt: bool,
+    horizon_months: int,
+) -> list[RefiCashflow]:
+    """Per-period tax_shield inflow stream for the after-tax NPV overlay (D-09).
+
+    Per 06-RESEARCH §"(f) Tax Treatment":
+      qualified_limit = lib.rules.irs_pub936.qualified_loan_limit(
+          filing_status, has_grandfathered_debt=...
+      )
+      deductible_principal = min(new_principal, qualified_limit)
+      deduction_fraction   = deductible_principal / new_principal  (Decimal)
+      For each period t in 1..horizon:
+          interest_t            = new_schedule.payments[t-1].interest
+          deductible_interest_t = interest_t * deduction_fraction
+          tax_shield_t          = deductible_interest_t * marginal_tax_rate
+          emit RefiCashflow(period=t, direction='inflow',
+                            amount=tax_shield_t, kind='tax_shield')
+
+    Tax-shield cashflows with quantized amount == $0.00 are dropped (no sign
+    hazard at the validator, but they bloat the audit trail).
+
+    The cashflow stream is appended to the pre-tax cashflow list before NPV
+    re-computation; the engine never mutates the pre-tax list.
+    """
+    # Lazy import: keeps Phase 6 cold path (after_tax_mode=False) free of the
+    # IRS predicate's reference-data load cost.
+    from lib.rules.irs_pub936 import qualified_loan_limit
+
+    qualified_limit = qualified_loan_limit(
+        filing_status=filing_status,
+        has_grandfathered_debt=has_grandfathered_debt,
+    )
+    if new_loan.principal == Decimal("0"):
+        return []
+    deductible_principal = min(new_loan.principal, qualified_limit)
+    deduction_fraction = deductible_principal / new_loan.principal
+
+    new_schedule = build_schedule(new_loan)
+    cashflows: list[RefiCashflow] = []
+    upper = min(horizon_months, len(new_schedule.payments))
+    for t in range(1, upper + 1):
+        interest_t = new_schedule.payments[t - 1].interest
+        deductible_interest_t = interest_t * deduction_fraction
+        tax_shield_t = quantize_cents(deductible_interest_t * marginal_tax_rate)
+        if tax_shield_t > Decimal("0.00"):
+            cashflows.append(
+                RefiCashflow(
+                    period=t,
+                    direction="inflow",
+                    amount=tax_shield_t,
+                    kind="tax_shield",
+                )
+            )
+    return cashflows
+
+
+# ---------------------------------------------------------------------------
 # Cross-plan stub bodies (Phase 2 D-08 cross-plan stub idiom)
 # ---------------------------------------------------------------------------
 
