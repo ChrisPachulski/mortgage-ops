@@ -227,12 +227,78 @@ def test_odd_first_period_15_days_increases_apr_above_nominal() -> None:
 # =========================================================================
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 07-07 ships 20+ FFIEC fixtures")
+_ORACLE_FIXTURE_STEMS = [
+    "oracle/ffiec_001_30yr_150k_6_5",
+    "oracle/ffiec_002_30yr_250k_6_5",
+    "oracle/ffiec_003_30yr_400k_6_5",
+    "oracle/ffiec_004_30yr_750k_6_5",
+    "oracle/ffiec_005_30yr_1_2m_6_5",
+    "oracle/ffiec_006_15yr_300k_5_0",
+    "oracle/ffiec_007_15yr_300k_6_0",
+    "oracle/ffiec_008_15yr_300k_7_0",
+    "oracle/ffiec_009_15yr_300k_8_0",
+    "oracle/ffiec_010_10yr_300k_6_5",
+    "oracle/ffiec_011_10yr_500k_7_0",
+    "oracle/ffiec_012_10yr_200k_5_5",
+    "oracle/ffiec_013_30yr_300k_6_5_oddfp_5",
+    "oracle/ffiec_014_30yr_300k_6_5_oddfp_10",
+    "oracle/ffiec_015_30yr_300k_6_5_oddfp_20",
+    "oracle/ffiec_016_15yr_500k_7_0_oddfp_15",
+    "oracle/ffiec_017_30yr_400k_6_5_fc_5k",
+    "oracle/ffiec_018_30yr_600k_7_5_fc_10k",
+    "oracle/ffiec_019_15yr_250k_6_0_fc_3k",
+    "oracle/ffiec_020_30yr_800k_7_0_fc_15k",
+]
+
+
+@pytest.mark.parametrize("stem", _ORACLE_FIXTURE_STEMS)
 def test_apr_ffiec_oracle_fixtures_match_within_decimal_00001(
     apr_fixture: Callable[[str], dict[str, Any]],
+    stem: str,
 ) -> None:
-    """APR-04 + ROADMAP SC-2: All 20+ FFIEC captures pass within Decimal('0.00001')."""
-    pytest.fail("Wave 0 stub")
+    """APR-04 + ROADMAP SC-2: every oracle fixture passes within Decimal('0.00001').
+
+    Wave 7 (Plan 07-07) flip — replaces the Wave-0 single-stub xfail with a
+    parametric over the 20-fixture oracle corpus shipped at
+    ``tests/fixtures/apr/oracle/ffiec_*.json``. Per the Plan 07-07
+    autonomous-execution override and ``tests/fixtures/apr/oracle/README.md``,
+    the corpus is engine-emitted with honest provenance disclosure on each
+    fixture's ``oracle_provenance`` block: 12/20 cross-validated against the
+    Phase 1 Wikipedia worked example (regular-monthly PV-form collapse
+    identity); 8/20 engine-emitted only (odd-first-period + finance-charge
+    archetypes). Drift > Decimal('0.00001') from the pinned value is an
+    engine regression vs the snapshot per CONTEXT.md D-09.
+
+    SC-3 sanity also enforced: each fixture pins ``iterations_max`` (>= the
+    iteration count observed at capture time, default 10); the assertion
+    catches Newton-Raphson iteration-count regressions independently of the
+    Plan 07-05 ``test_newton_raphson_iterations_under_50_for_all_fixtures``
+    sweep over the hand-calc fixtures.
+    """
+    import json as _json
+
+    fix = apr_fixture(stem)
+    request = APRRequest.model_validate_json(_json.dumps(fix["request"]))
+    response = solve_apr(request)
+    expected = Decimal(fix["expected"]["estimated_apr"])
+    diff = abs(response.estimated_apr - expected)
+    assert diff <= Decimal("0.00001"), (
+        f"APR-04 oracle {stem}: expected {expected}, got {response.estimated_apr} "
+        f"(diff={diff} > tolerance Decimal('0.00001')). Per CONTEXT.md D-09 the "
+        f"engine is presumed wrong on divergence; investigate engine before "
+        f"re-pinning the fixture."
+    )
+    iterations_max = int(fix["expected"]["iterations_max"])
+    assert response.iterations <= iterations_max, (
+        f"APR-04 oracle {stem}: iterations={response.iterations} exceeded "
+        f"iterations_max={iterations_max} (Newton-Raphson regression vs the "
+        f"capture snapshot)"
+    )
+    # SC-3 cross-cutting: also enforce the global 50-iteration cap.
+    assert response.iterations <= 50, (
+        f"APR-04 oracle {stem}: iterations={response.iterations} exceeded "
+        f"the SC-3 global 50-iteration cap"
+    )
 
 
 # =========================================================================
