@@ -648,10 +648,45 @@ def solve_apr(request: APRRequest) -> APRResponse:
     # for downstream phases to add warning-bearing branches without an API bump.
     f_val = Decimal("0")
     iterations = 0
+
+    # D-17 (locked): APRRequest.odd_first_period_days is the user-friendly shortcut;
+    # the engine internally rewrites the first PaymentScheduleEntry.unit_period_fraction
+    # so the U-equation's (1 + g*i) factor on the first payment carries the long
+    # odd first period per Reg Z §1026.17(c)(4) + Appendix J §(b)(5)(iii).
+    # Advanced callers can bypass by setting unit_period_fraction directly on the
+    # PaymentScheduleEntry and leaving odd_first_period_days=0 (Phase 8 stress
+    # wrapper may use _compute_odd_first_period_fraction with explicit dates instead).
+    payments_with_odd = list(request.payment_schedule)
+    if request.odd_first_period_days > 0:
+        # Wave 3 simplification: convert odd_first_period_days into a unit-period
+        # fraction relative to the standard unit period. For 30/360 the standard
+        # unit is 30 days; for actual/365 it is 365/12 ~= 30.4167 days; for
+        # actual/actual the request lacks origination/first_payment dates here, so
+        # we use 30 days as a proxy (callers needing exact actual/actual fractions
+        # use _compute_odd_first_period_fraction with explicit dates and set
+        # PaymentScheduleEntry.unit_period_fraction directly, leaving
+        # odd_first_period_days=0).
+        if request.day_count == "30/360":
+            unit_days_dec = Decimal("30")
+        elif request.day_count == "actual/365":
+            unit_days_dec = Decimal("365") / Decimal("12")
+        else:  # actual/actual — Wave 3 simplification: use 30 as proxy
+            unit_days_dec = Decimal("30")
+        with localcontext(MONEY_CONTEXT):
+            f_odd = Decimal(request.odd_first_period_days) / unit_days_dec
+        if f_odd >= Decimal("1"):
+            raise ValueError(
+                f"odd_first_period_days ({request.odd_first_period_days}) >= 1 unit "
+                f"period (day_count={request.day_count!r}, unit_days={unit_days_dec}); "
+                f"insert an extra advance entry instead of stretching the first period"
+            )
+        first = payments_with_odd[0]
+        payments_with_odd[0] = first.model_copy(update={"unit_period_fraction": f_odd})
+
     with warnings.catch_warnings():
         warnings.simplefilter("always")
         with localcontext(MONEY_CONTEXT):
-            i = _seed_apr(request.advance_schedule, request.payment_schedule)
+            i = _seed_apr(request.advance_schedule, payments_with_odd)
             # Guard against a degenerate seed that already places (1+i) <= 0 (would
             # blow up the very first _decimal_pow call). Treat as immediate
             # non-convergence rather than letting ValueError propagate raw.
@@ -660,10 +695,8 @@ def solve_apr(request: APRRequest) -> APRResponse:
             for n in range(1, MAX_ITER + 1):
                 iterations = n
                 try:
-                    f_val = _unit_period_equation(
-                        request.advance_schedule, request.payment_schedule, i
-                    )
-                    fprime = _derivative(request.advance_schedule, request.payment_schedule, i)
+                    f_val = _unit_period_equation(request.advance_schedule, payments_with_odd, i)
+                    fprime = _derivative(request.advance_schedule, payments_with_odd, i)
                 except ValueError as exc:
                     # _decimal_pow rejected a non-positive (1+i) base; the
                     # iterate has wandered out of the equation's domain — this
