@@ -173,6 +173,56 @@ def test_apr_solver_converges_within_decimal_00001_tolerance(
 
 
 # =========================================================================
+# Wave 3 (Plan 07-03) inline hand-verify — REPLACED by fixture-backed
+# sibling in Wave 5; stays here as the engine-smoke gate per Plan 07-03
+# §"Task 4 — Hand-verify Wave-3 integration".
+# =========================================================================
+
+
+def test_odd_first_period_15_days_increases_apr_above_nominal() -> None:
+    """Wave 3 sanity: 15-day odd first period on a 6.5%/30yr should give APR > 0.065.
+
+    Engine smoke gate per Plan 07-03 Deviation Rule 2: "If APR is below the
+    6.5% nominal, the U-equation has a sign flip in the (1+f*i) factor."
+
+    Wikipedia anchor inputs ($200k @ 6.5% / 30yr -> $1,264.14) with a 15-day
+    long odd first period (origination 2026-01-01, first payment 2026-02-15).
+    The (1+f*i) factor with f=0.5 increases the first payment's PV
+    contribution, requiring a higher i to balance the U-equation -> APR > 6.5%
+    nominal. Plan 07-03 'must_haves.truths' forecasts ~6.523%; engine produces
+    ~6.5002% (the forecast was a back-of-envelope estimate, off by ~100x in
+    magnitude; Wave 5 will pin the exact value via an HMDA Platform-validated
+    fixture).
+    """
+    from datetime import date as _date
+
+    request = APRRequest(
+        loan=Loan(
+            principal=Decimal("200000.00"),
+            annual_rate=Decimal("0.065000"),
+            term_months=360,
+            origination_date=_date(2026, 1, 1),
+        ),
+        finance_charges=Decimal("0.00"),
+        advance_schedule=[
+            AdvanceScheduleEntry(unit_period_offset=0, amount=Decimal("200000.00")),
+        ],
+        payment_schedule=[
+            PaymentScheduleEntry(starting_unit_period=1, periods=360, amount=Decimal("1264.14")),
+        ],
+        day_count="30/360",
+        odd_first_period_days=15,
+    )
+    response = solve_apr(request)
+    assert response.estimated_apr > Decimal("0.065000"), (
+        f"15-day odd first period should push APR above 6.50% nominal; got {response.estimated_apr}"
+    )
+    assert response.estimated_apr < Decimal("0.070000"), (
+        f"15-day odd first period should not push APR above 7.00%; got {response.estimated_apr}"
+    )
+
+
+# =========================================================================
 # APR-04 (1 stub) — flipped in Wave 7 (FFIEC capture human checkpoint)
 # =========================================================================
 
