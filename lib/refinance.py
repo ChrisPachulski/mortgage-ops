@@ -829,8 +829,10 @@ def evaluate_rate_and_term(req: RateAndTermRefiRequest) -> RefiResponse:
       3. Extract new_monthly_pi (or use req.new_loan_monthly_pi_override
          per D-10 when supplied).
       4. monthly_savings = old_monthly_pi - new_monthly_pi (signed).
-      5. horizon = req.analysis_horizon_months or new_loan.term_months
-         (D-11 default = full new term).
+      5. horizon = req.analysis_horizon_months if not None else
+         new_loan.term_months (D-11 default = full new term; WR-06: explicit
+         None-check, not truthy-or, to avoid silently treating any future
+         "0 horizon" relaxation as "use full term").
       6. Build cashflows via _build_refi_cashflows (closing_costs at t=0
          as outflow per D-15; per-period savings as inflow when positive).
       7. NPV via _compute_npv.
@@ -869,7 +871,11 @@ def evaluate_rate_and_term(req: RateAndTermRefiRequest) -> RefiResponse:
     monthly_savings = old_monthly_pi - new_monthly_pi
 
     # 5: horizon
-    horizon = req.analysis_horizon_months or new_loan.term_months
+    horizon = (
+        req.analysis_horizon_months
+        if req.analysis_horizon_months is not None
+        else new_loan.term_months
+    )
 
     # 6: cashflows
     cashflows = _build_refi_cashflows(
@@ -1012,7 +1018,11 @@ def evaluate_cash_out(req: CashOutRefiRequest) -> RefiResponse:
     total_interest_delta = quantize_cents(new_schedule.total_interest - old_schedule.total_interest)
 
     # 4: horizon (D-11)
-    horizon = req.analysis_horizon_months or new_loan.term_months
+    horizon = (
+        req.analysis_horizon_months
+        if req.analysis_horizon_months is not None
+        else new_loan.term_months
+    )
 
     # 5: cashflows
     # When cash_proceeds_net > 0 (typical), closing costs are netted into cash
