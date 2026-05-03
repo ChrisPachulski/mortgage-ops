@@ -95,12 +95,30 @@ References (canonical URLs verified 2026-05-02 in 07-RESEARCH.md):
 from __future__ import annotations
 
 import re
-from decimal import Decimal
+from decimal import Decimal, localcontext
 from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from lib.models import Loan, Money  # noqa: TC001  # Pydantic resolves field annotations at runtime
+from lib.money import MONEY_CONTEXT
+
+
+def _decimal_pow(base: Decimal, exponent: Decimal) -> Decimal:
+    """Compute base ** exponent via Decimal.exp(Decimal.ln(base) * exponent).
+
+    Native Decimal.__pow__ requires integer exponents; we route through
+    ln/exp for fractional exponents (the (1+i)^(-t-f) terms in the Reg Z
+    Appendix J unit-period equation), preserving MONEY_CONTEXT.prec=28.
+
+    D-13 (locked): negative-base inputs raise ValueError (mathematically
+    undefined for fractional exponents in the reals). Pinned by sibling
+    test ``test_decimal_pow_fractional_exponent_correctness`` (Wave 5).
+    """
+    if base <= Decimal("0"):
+        raise ValueError(f"_decimal_pow requires positive base; got {base}")
+    with localcontext(MONEY_CONTEXT):
+        return (base.ln() * exponent).exp()
 
 
 class AdvanceScheduleEntry(BaseModel):
