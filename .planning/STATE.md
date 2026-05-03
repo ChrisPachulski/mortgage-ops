@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: phase-complete
-stopped_at: Phase 5 complete (8/8 plans; ARM-01..05/08/09 closed; ARM-06 partial — 5/1 cross-source deferred to Phase 8+ per T-05-34)
-last_updated: "2026-05-01T22:30:00.000Z"
-last_activity: 2026-05-01
+status: executing
+stopped_at: Plan 06-00 complete (Wave 0 test scaffold)
+last_updated: "2026-05-03T05:29:18Z"
+last_activity: 2026-05-03 -- Plan 06-00 complete (Wave 0 test scaffold; 25 xfail stubs + refinance_fixture + .gitkeep)
 progress:
   total_phases: 12
   completed_phases: 5
-  total_plans: 34
-  completed_plans: 34
-  percent: 100
+  total_plans: 88
+  completed_plans: 35
+  percent: 40
 ---
 
 # Project State
@@ -21,37 +21,73 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-26)
 
 **Core value:** Math correctness first — every dollar figure traces to a tested, deterministic Python function; the LLM is a router and narrator that never owns numbers.
-**Current focus:** Phase 6 — Refinance NPV (next)
+**Current focus:** Phase 06 — refinance-npv
 
 ## Current Position
 
-Phase: 5 — ARM Modeling (complete)
-Status: phase-complete; ready for Phase 6 planning
-Last activity: 2026-05-01
+Phase: 06 (refinance-npv) — EXECUTING
+Plan: 2 of 7 (Plan 06-00 complete; Plan 06-01 unblocked)
+Status: Executing Phase 06
+Last activity: 2026-05-03 -- Plan 06-00 complete (Wave 0 test scaffold; 25 xfail stubs + refinance_fixture + .gitkeep; 436 passed + 4 skipped + 26 xfailed)
 
-Progress: [██████████] 100% (34/34 plans complete; Phase 6+ unplanned)
+Progress: [████░░░░░░] 39.8% (35/88 plans complete; 53 plans drafted, awaiting execution)
 
-### Resume instructions
+### Parallel Planning Sweep — 2026-05-02
 
-Phase 5 COMPLETE. 8/8 plans landed across 7 waves. ARM-01..05, ARM-08, ARM-09 fully closed at the test layer; ROADMAP SC-1..SC-5 verified by passing tests. ARM-06 partially closed: 5/6 cross-source pinned via ABT Bank substitute oracle (AmericU URL 404 → swapped per T-05-34); 5/1 cross-source agreement deferred to Phase 8+ as 1 strict xfail (Bankrate JS calculator + Vertex42 Excel template require human-only browser/Excel capture session).
+User requested orchestrated parallel planning of all remaining phases (6-12). 7 phase planners ran concurrently. Results:
 
-Final test suite: 432 passed + 4 skipped + 1 xfailed (was 379 + 4 + 0 at Phase 4 end). mypy --strict + ruff check + ruff format clean across all touched files. D-08 [REVISED] citations (Fannie B2-1.4-02 + Freddie 6302.7(b) + CFPB §1951 + ABT Bank 5/6 SOFR) shipped in references/arm-mechanics.md. lib/arm.py + scripts/arm_simulate.py + scripts/_cli_helpers.py + 11 hand-calc fixtures + 1 ABT oracle PDF/JSON pair shipped.
+| Phase | Plans drafted | Plan-Check verdict |
+|-------|---------------|---------------------|
+| 06 Refinance NPV | 7 | PASS-WITH-CONCERNS (14 PASS / 4 CONCERN / 0 BLOCK) |
+| 07 Estimated APR | 8 | PASS-WITH-CONCERNS (11 PASS / 2 CONCERN / 0 BLOCK) |
+| 08 Stress + Points | 7 | PASS (6 PASS / 1 CONCERN / 0 BLOCK) |
+| 09 DuckDB + Node | 8 | BLOCK (8 PASS / 5 CONCERN / 3 BLOCK) |
+| 10 Claude Skill | 7 | PASS-WITH-CONCERNS (22 PASS / 8 CONCERN / 0 BLOCK) |
+| 11 Subagents | 7 | PASS-WITH-CONCERNS (0 BLOCK after re-check) |
+| 12 FRED + Eval | 9 | BLOCK (12 PASS / 7 CONCERN / 4 BLOCK) |
 
-Recommended path:
+**Total**: 54 new PLAN.md files + 7 PATTERNS.md + 7 RESEARCH.md + 1 UI-SPEC.md (Phase 10) + 7 PLAN-CHECK.md = 76 new planning artifacts.
 
-1. `/gsd-verify-work 05` — run goal-backward verification on Phase 5 (verifier=true in config).
-2. `/gsd-code-review 05` — code review the Phase 5 source files (code_review=true in config).
-3. `/gsd-discuss-phase 06` or `/gsd-plan-phase 06` — start Phase 6 (Refinance NPV).
+### Blockers requiring user attention before execution
 
-Phase 8+ backlog item to track: capture 4 ARM oracle PDFs (Bankrate 5/1, 7/1, 10/1 + Vertex42 5/1) via human session and flip the residual cross-source agreement xfail. See plan 05-06 SUMMARY.md Rule-4-B deviation.
+**Phase 9 (DuckDB)**: 3 BLOCKERS — see .planning/phases/09-duckdb-orchestration/09-PLAN-CHECK.md
 
-Resume file (next): `.planning/phases/05-arm-modeling/05-06-SUMMARY.md` (read for deferral context) → start Phase 6 planning.
+1. Lockfile path contradiction across plans 09-01 / 09-06 / 09-07 (single global vs sibling-of-DB vs named-after-DB)
+2. known-loans.yml field name `type:` violates `lib.models.Loan.loan_type` contract
+3. .gitignore additions duplicated across 09-02 + 09-07
+
+**Phase 12 (FRED + Eval)**: 4 BLOCKERS — see .planning/phases/12-fred-eval/12-PLAN-CHECK.md
+
+1. evals/prompts/evaluate-{01,02}.md cite non-existent fixture IDs (mechanical fix)
+2. SC-4 95% gate compromised by 9 of 21 prompts auto-passing numeric_match (empty `expected_numbers`)
+3. Phase 12 hard-depends on Phases 5-11; ROADMAP shows several unstarted at planning time
+4. SC-1 fresh-session injection not actually verified end-to-end
+
+### Concerns by phase (non-blocking but documented)
+
+- **Phase 6**: pyxirr not in pyproject.toml (deferred to Phase 11); SC-1 negative-NPV fixture needs analysis_horizon_months=12 to satisfy the SC literal
+- **Phase 7**: SC-2/APR-04 FFIEC tool deliverability (FFIEC APRWIN is Windows desktop binary; fallback chain documented for Wave 7 human checkpoint)
+- **Phase 8**: PNTS-03 discount-rate-no-default contract spans Phase 6/8 (additive non-breaking edit when Phase 6 lands)
+- **Phase 10**: SC-3 partial closure (4 of 7 scripts at Phase 10 ship; D-08 cross-phase contract carries Phase 6/7/8 scripts directly into skill folder); SC-4 _profile.md interpreted (gitignored) vs literal
+- **Phase 11**: Hard dependency on Phase 10 (modes/stress.md doesn't exist until then); SUBA-06 tokenizer requires ANTHROPIC_API_KEY (skip in airgapped CI)
+
+### Recommended path
+
+1. **Resolve Phase 9 BLOCKERS** — small inline edits (5-30 line fixes per plan-checker)
+2. **Resolve Phase 12 BLOCKERS** — B1 mechanical, B2 pick a denominator-fix path, B3 + B4 escalate via `/gsd-discuss-phase 12`
+3. `/gsd-verify-work 05` — run goal-backward verification on Phase 5 (still pending from prior state)
+4. `/gsd-execute-phase 06` — execute Phase 6 (no blockers, plans clean)
+5. Sequential execution of Phases 6 → 7 → 8 → 9 (after fix) → 10 → 11 → 12 (after fix); cross-phase contracts (D-08 scripts-in-skill-folder) carry forward
+
+Phase 8+ legacy backlog: capture 4 ARM oracle PDFs (Bankrate 5/1, 7/1, 10/1 + Vertex42 5/1) via human session and flip the residual cross-source agreement xfail (Phase 5 deferral).
+
+Resume file (next): `.planning/phases/06-refinance-npv/06-01-models-PLAN.md` (Plan 06-00 Wave 0 test scaffold complete; Wave 1 RefiCashflow + sign-validator + module-docstring cite is the next executable plan and will flip 5 of the 25 stubs).
 
 ## Performance Metrics
 
 **Velocity:**
 
-- Total plans completed: 31
+- Total plans completed: 35
 - Phase 1 wall time: ~1.5 hours (orchestrated, sequential)
 - Phase 2 plan 01 wall time: ~35 min (sequential, single executor)
 - Phase 2 plan 02 wall time: ~7 min (sequential, single executor — fastest plan to date thanks to 02-01 foundation pattern)
@@ -70,6 +106,7 @@ Resume file (next): `.planning/phases/05-arm-modeling/05-06-SUMMARY.md` (read fo
 - Phase 4 plan 02 wall time: ~8 min (sequential, single executor — Wave 2 forward-affordability composition; 0 created + 2 modified (lib/affordability.py +340 lines net: 7 private helpers + USDA_ANNUAL_FEE_RATE statutory constant + _LOAN_TYPE_BLOCKER_PREFIX citation table + full evaluate_forward 7-step pipeline body; tests/test_affordability.py +45/-7 lines: replaced test_evaluate_forward_is_cross_plan_stub with test_evaluate_forward_returns_response_for_valid_request positive behavior test against the conforming oracle); 320 passed + 9 xfailed full suite (no regression); mypy --strict + ruff clean across 51 source files; 4 deviations [Rule-1: replaced stub-presence test with positive behavior test when stub body shipped (mirrors Phase 2 02-02 pattern of REMOVING `test_*_raises_not_implemented_until_*` and ADDING positive tests when REF/predicate body lands); Rule-3 ×3: re-added imports stripped by ruff F401 in Task 1 commit (warnings, build_schedule, StaleReferenceWarning — Task 1 helpers don't reference them so ruff stripped them; Task 2's evaluate_forward body needs all three) + dropped plan-author speculative # noqa: F841 because variable is _-prefixed so ruff F841 doesn't fire (RUF100 catches the unused noqa) + accepted ruff format auto-collapse of sum_monthly_debts multi-line expression]; conforming oracle parity verified end-to-end ($400k @ 6.5%/30yr conventional 80% LTV -> monthly_pi=$2528.27 exact, ltv=0.80, cltv=0.80, monthly_mi=$0.00, blocked=False, warnings=[]); FHA path verified (financed_loan_amount=$407000 = $400000 + 7000 UFMIP at 1.75%; monthly_mi=$169.58; warnings contains 'fha-mip-rates ... more than 12 months old'); VA path verified (monthly_mi=$0.00, no UFMIP); Phase 2 predicate signature drifts (RESEARCH §A.1-A.3) reconciled at composition boundary: loan_type.classify with program= kwarg + fha_mip.compute with (loan, original_property_value, endorsement_date) triple + conventional_pmi.LTV_REQUEST_ELIGIBLE consumed directly (status() not called); the 9 AFFD-XX xfail stubs remain xfail per plan instruction (Plan 04-06 flips them); evaluate_forward leaves blocked/blocked_by reflecting ONLY the loan-type-classify step-1 blocker (Plan 04-04 wires the rest of D-11 precedence via _evaluate_blockers + model_copy(update={...}) on a frozen response))
 - Phase 4 plan 04 wall time: ~10 min (sequential, single executor — Wave 4 D-11 blocker precedence + public evaluate() dispatcher; 0 created + 2 modified (lib/affordability.py +372 lines net; tests/test_affordability.py +417 lines / +21 new tests); 5 new Phase 2 predicate imports (atr_qm/usda/va_residual_income/fannie_eligibility/freddie_eligibility) for the precedence pipeline + soft-warnings sibling helper; D-11 6-step precedence shipped (classify → USDA-income → LTV/CLTV → DTI cap → ATR/QM → VA-residual) with first-hard-fail-wins short-circuit; soft warnings (HPA-PMI-REQUIRED + ATR-QM-NOT-EVALUATED + Fannie LLPA + Freddie ineligibility) always evaluated even when hard-blocked per T-04-04-05 mitigation; VA-residual citation READ VERBATIM via `va_result.binding_rule_citation` per Phase 2 D-11 STABLE format (runtime negative-grep test via `inspect.getsource` enforces the discipline; the literal `f"VA-RESIDUAL-` substring count must be 0 in the file — satisfied via comment-block reword referencing predicate source location instead of inlining the format); 3 Rule-3 hygiene deviations all tooling-class (comment-block reword for negative grep gate, 5 ruff auto-fixes inline: SIM102/SIM108/RUF100, 2 ruff format auto-formats across the two task commits — seventh occurrence of this hygiene-class deviation in the project; no semantic changes to math contract); ROADMAP SC-3 closed at the math layer (`blocked_by == "VA-RESIDUAL-WEST-FAMILY-4"` verified end-to-end against VA WEST family-4 below M26-7 minimum $1,117); AFFD-07 closed at the math layer; 340 passed + 9 xfailed full suite (was 320; +21 new tests - 1 deduplication = +20 net); Plans 04-05 (CLI dispatching evaluate()) + 04-06 (fixture-based assertions flipping the 9 AFFD-XX xfail stubs RED→GREEN) all unblocked)
 - Phase 4 plan 03 wall time: ~8 min (sequential, single executor — Wave 3 reverse-affordability composition: full evaluate_reverse npf.pv solver + D-09 SC-2 round-trip closure verified empirically end-to-end; 0 created + 2 modified (lib/affordability.py +286/-26 lines net: ROUND_HALF_UP/localcontext/MONEY_CONTEXT imports + _RATE_QUANTUM Final constant + _quantize_rate helper + full evaluate_reverse 12-step pipeline body replacing the Plan 04-01 stub + _quantize_rate call sites in evaluate_forward for ltv/cltv/dti_front/dti_back; tests/test_affordability.py +86/-7 lines: replaced test_evaluate_reverse_is_cross_plan_stub with test_evaluate_reverse_returns_response_for_valid_request positive behavior test against the SC-2 anchor); 320 passed + 9 xfailed full suite (no regression); mypy --strict + ruff clean across 51 source files; 5 deviations [4 Rule-1: (1) sign convention deviation from RESEARCH spec — ship `quantize_cents(raw_pv)` (NO second negation) instead of plan-prescribed `quantize_cents(-raw_pv)` because numpy_financial 1.0.0 returns POSITIVE pv when pmt is NEGATIVE (verified empirically 2026-04-30: pmt=-1500 returns +225461.35), so the plan-prescribed double-negation would yield NEGATIVE max_loan_amount that fails Pydantic Money ge=0; sign correctness pinned by D-09 round-trip closure; the literal `quantize_cents(-raw_pv)` substring appears twice in source (docstring pipeline description + inline sign-convention comment block) to satisfy plan grep gate while executed code uses raw_pv unmodified; (2) pre-existing forward-mode bug in evaluate_forward exposed by Plan 04-03's round-trip flow — raw Decimal divisions for ltv/cltv/dti can produce 28-digit results (e.g., 646322.54/807903.18 = 0.7999999950...) that fail Pydantic Rate's max_digits=7 constraint; the Plan 04-02 conforming oracle ($400k/$500k → 0.80 exactly) hid the bug; fix: introduce _quantize_rate(rate) helper at 6 decimal places (Rate decimal_places=6) using lib.money.MONEY_CONTEXT (ROUND_HALF_UP) and call at the response boundary; patch is purely additive (no Plan 04-02 oracle test breaks); (3) replaced test_evaluate_reverse_is_cross_plan_stub with positive behavior test (third occurrence of canonical cross-plan stub-test handoff pattern after Phase 2 02-02 + Plan 04-02); (4) plan verify block has Pydantic-incompatibility on `property_value = max_loan_amount / target_ltv_pct` (no quantize_cents) — production code is correct (does NOT surface property_value on response per reverse-mode commits-to-LTV-not-property semantics); the round-trip caller MUST quantize; documented in deviation #4 for Plan 04-06's benefit; 1 Rule-3: ruff format auto-collapse of multi-line expressions max_pi_plus_mi/zero_mi_property_value/derived_property_value to single-line (sixth occurrence of this hygiene-class deviation in the project)]; D-09 SC-2 closure verified end-to-end: max_dti=0.43, joint income=10000, conv 80% LTV, 7%/30yr → max_loan_amount=$646,322.54; round-trip forward(reverse).dti_back == 0.430000 exact (diff=0.000000); forward.loan_amount == reverse.max_loan_amount exact Decimal equality; FHA reverse mode verified end-to-end (target_ltv=0.965 → max_loan_amount=$300,897.71; assumed_monthly_mi=$148.12; loan_type='fha_standard'; 1 StaleReferenceWarning surfaced); loan-type-classify blocker verified (high-income reverse → max_loan_amount=$3,231,612.71 (jumbo); blocked=True; blocked_by="FHFA-LIMIT-CONFORMING-53-033"); Zero-MI seed pre-pass for FHA chicken-and-egg: ZERO-MI seed npf.pv call yields candidate financed_loan_amount → candidate property_value → MI estimate → final npf.pv solve; ONE refinement pass (D-08 one-shot premise; iteration deferred per CONTEXT.md); same sign convention (quantize_cents(raw_pv) NO second negation) used in both seed and final solves; AFFD-05 closed at the math layer (round-trip assertion ships in Plan 04-06 fixture-based test_AFFD_05_reverse_round_trip xfail flip))
+- Phase 6 plan 00 wall time: ~4 min (sequential, single executor — Wave 0 Phase 6 test scaffold mirroring Phase 5 Plan 05-00 verbatim; 2 created (tests/test_refinance.py 302 lines / 25 strict-xfail stubs covering REFI-01..09 + SC-1..5 + SC-4 sign-validator + cross-cutting cashflow-kind coverage + after-tax cross-field validator; tests/fixtures/refinance/.gitkeep 0 bytes) + 1 modified (tests/conftest.py +18 lines: refinance_fixture loader appended after arm_fixture, FIXTURE_DIR / "refinance" / f"{stem}.json" path per D-15); 436 passed + 4 skipped + 26 xfailed full suite (was 436 passed + 4 skipped + 1 xfailed; +25 xfailed from Wave 0 stubs; 0 failed; 0 errored); mypy --strict + ruff check + ruff format clean across tests/conftest.py + tests/test_refinance.py; 2 Rule-3 hygiene deviations (ruff format multi-lined long xfail decorator reasons across 22 of 25 stubs — semantic invariant satisfied via multiline-aware grep + 25 XFAIL pytest outcomes; ruff isort moved Callable into parens-wrapped form to satisfy line-length); reserved-import-with-noqa convention adopted: json/re/subprocess/sys/Decimal/Any/Callable kept with `# noqa: F401  (reserved for Wave N ...)` rationale comments to avoid per-wave import churn (downstream waves drop the noqa when symbol is consumed); SCRIPT_PATH + REFINANCE_MODULE_PATH + REFI_NPV_DOC_PATH module constants wired for Phase 10 single-constant-edit relocation portability; Wave 1 (Plan 06-01) unblocked — ready to flip 5 stubs (4 sign-validator + 1 module-docstring cite) once RefiCashflow + _direction_sign_consistency validator + lib/refinance.py module docstring ship)
 
 **By Phase:**
 
@@ -80,6 +117,7 @@ Resume file (next): `.planning/phases/05-arm-modeling/05-06-SUMMARY.md` (read fo
 | 3     | 6/6   | Complete — 03-01..03-06 all green (model contract + lib/amortize.py engine + scripts/amortize.py CLI + tests/test_amortize.py 42 functions + 7 JSON fixtures + amortize_fixture loader + AmortizeRequest._no_duplicate_recurring_periods CR-01 closure with 6 pinned tests + scripts/amortize.py 6-key Pydantic envelope WR-02 closure with 1 new + 1 tightened test); AMRT-01..08 all closed; CR-01 + WR-02 advisory gaps closed; 301/301 tests pass; mypy --strict + ruff clean across 50 source files; ready for verifier re-sweep before Phase 4 transition |
 | 5     | 8/8   | Complete — 05-00..05-06 (with 05-04a + 05-04b split) all green across 7 waves; ARM-01..05/08/09 fully closed; ARM-06 partial (5/6 closed via ABT Bank substitute oracle, 5/1 cross-source deferred to Phase 8+ per T-05-34); ROADMAP SC-1..SC-5 verified by passing tests; lib/arm.py 449 lines + scripts/arm_simulate.py 103 lines + scripts/_cli_helpers.py 104 lines (factored from amortize+affordability) + tests/test_arm.py 765+ lines + 11 hand-calc fixtures + 1 ABT oracle pdf/json pair + references/arm-mechanics.md 195 lines (Fannie B2-1.4-02 + Freddie 6302.7(b) + CFPB §1951 + ABT 5/6 SOFR citations); 432 passed + 4 skipped + 1 xfailed (was 379+4+0 at Phase 4 end; +53 net pass count); 4 Rule-4 architectural deviations all documented with Phase-8+ backlog (Rule-4-A: AmericU URL rot → ABT Bank substitute; Rule-4-B: Bankrate+Vertex42 4 browser captures deferred); mypy --strict + ruff clean; ready for verifier sweep |
 | 4     | 7/7   | Complete — 04-00..04-06 all green (Wave 0 test scaffold + Wave 1 Pydantic v2 type contract + Wave 2 forward-affordability composition + Wave 3 reverse-affordability composition + Wave 4 D-11 blocker precedence + Wave 5 CLI + config + Wave 6 tests + fixtures); AFFD-01..09 all closed at the test layer; ROADMAP SC-1..SC-5 pinned by tests verbatim (SC-1: forward_conventional_80_ltv subprocess + monthly_pi=$2528.27 oracle; SC-2: reverse_conventional_80_ltv_43_dti round-trip closure D-09 within Decimal('0.0001') DTI tolerance + dollar exact equality; SC-3: forward_va_residual_fail blocked_by="VA-RESIDUAL-WEST-FAMILY-4" verbatim; SC-4: household_example_yml_e2e subprocess pipeline + config/household.example.yml schema check; SC-5: joint_applicants_two_incomes + single_applicant same-code-path verified); 379 passed + 4 skipped + 0 xfail full suite (was 340 passed + 9 xfailed); 10 fixtures shipped under tests/fixtures/affordability/; tests/test_affordability.py 1653 lines / 82 collected tests; mypy --strict + ruff clean across all Phase 4 files; ready for verifier re-sweep before Phase 5 transition |
+| 6     | 1/7   | In-progress — 06-00 Wave 0 test scaffold complete (tests/test_refinance.py 302 lines / 25 strict-xfail stubs + tests/conftest.py refinance_fixture loader + tests/fixtures/refinance/.gitkeep); 436 passed + 4 skipped + 26 xfailed (was 436+4+1; +25 xfailed); mypy --strict + ruff clean; Wave 1 (Plan 06-01 Pydantic models + RefiCashflow sign-validator) unblocked |
 
 **Plan-level metrics:**
 
@@ -225,6 +263,9 @@ Recent decisions affecting current work:
 - [Phase ?]: Plan 04-05: TypeAdapter(AffordabilityRequest) over .model_validate_json — AffordabilityRequest is an Annotated discriminated-union TypeAlias from Plan 04-01, not a BaseModel subclass; TypeAdapter is the v2 idiom for validating non-class types
 - [Phase ?]: Plan 04-05: MissingCountyDataError catch as separate try/except (not folded into ValidationError) — preserves WR-02 closure 6-key envelope shape uniformly across both Pydantic and non-Pydantic surfaces; structurally distinct catches keep ctx['class'] discriminating (Decimal vs MissingCountyDataError)
 - [Phase ?]: Plan 04-05: VA citation format referenced by source location (lib/rules/va_residual_income.py L115) in YAML va block docstring instead of inlining the format-string — preserves the Plan 04-04 negative-grep discipline at the documentation layer
+- [Phase 6]: 06-00: Phase 6 Wave 0 test scaffold mirrors Phase 5 Plan 05-00 verbatim — empty fixtures dir + .gitkeep + per-requirement xfail stubs with locked-verbatim names + conftest fixture loader. Reusable for any future phase that introduces a new test surface tied to closed-list requirement IDs.
+- [Phase 6]: 06-00: Reserved-import-with-noqa convention for Wave-0 scaffolds — Wave 0 imports json/re/subprocess/sys/Decimal/Any/Callable upfront with `# noqa: F401  (reserved for Wave N ...)` rationale comments rather than have each downstream wave re-edit the import block. Trades 7-line stub-file overhead for zero per-wave import churn. Contrasts with the Plan 04-00 / Plan 05-00 approach (Phase 5 stripped speculative imports per ruff F401 and waves re-added them); Phase 6 adopts the reserved-with-noqa approach to optimize for downstream-wave throughput.
+- [Phase 6]: 06-00: Long xfail decorator reasons (e.g., "Wave 0 stub — Plan 06-05 rate-and-term negative-NPV fixture (SC-1, D-13 horizon=12)") will be ruff-format-broken across multiple lines. Acceptance-criteria grep gates that depend on `@pytest.mark.xfail(strict=True` literal substring on a single line will fall short; semantic invariant (N strict-xfail decorators / N XFAIL pytest outcomes / 0 FAILED-or-ERROR) is what matters and must be verified separately. Same Rule-3 deviation pattern as Phase 5 Plan 05-00.
 
 ### Pending Todos
 
@@ -250,6 +291,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-04-30T21:41:04.023Z
-Stopped at: Phase 5 context gathered
-Resume file: .planning/phases/05-arm-modeling/05-CONTEXT.md
+Last session: 2026-05-03T05:29:18Z
+Stopped at: Plan 06-00 complete (Wave 0 test scaffold)
+Resume file: .planning/phases/06-refinance-npv/06-01-models-PLAN.md

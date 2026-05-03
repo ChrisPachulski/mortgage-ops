@@ -194,7 +194,14 @@ User selected **fine** (8-12 phases). This roadmap is **12 phases** — each cal
   3. All seven calc scripts (`amortize.py`, `affordability.py`, `arm_simulate.py`, `refi_npv.py`, `apr_reg_z.py`, `stress_test.py`, `points_breakeven.py`) live INSIDE `.claude/skills/mortgage-ops/scripts/` (NOT at project root) — verified by a structure test
   4. All seven mode files (`evaluate.md`, `compare.md`, `refinance.md`, `affordability.md`, `stress.md`, `amortize.md`, `arm.md`) exist under `modes/`, plus `_shared.md` and `_profile.md`
   5. References folder contains all nine documents (amortization-formulas, apr-reg-z, arm-mechanics, refi-npv, affordability-rules, gse-limits, mip-pmi, tax-deductibility, spreadsheet-conventions); SKILL.md instructs Claude to ALWAYS shell out to scripts and includes the "run --help first; do not read source" doctrine
-**Plans**: TBD
+**Plans:** 7 plans
+- [ ] 10-00-test-infrastructure-PLAN.md — Wave 0: tests/test_skill.py 13+ xfail stubs + tests/_skill_helpers.py tiktoken harness + skill_root fixture + tiktoken dev-dep (D-02 Nyquist gate)
+- [ ] 10-01-scripts-relocation-PLAN.md — Wave 1: git mv 4 CLIs (amortize/affordability/arm_simulate/_cli_helpers) into .claude/skills/mortgage-ops/scripts/ + update sys.path + 4 SCRIPT_PATH constants + pyproject.toml — closes SKLL-10 (D-01 + D-06 + D-08 cross-phase contract published)
+- [ ] 10-02-skill-md-scaffold-PLAN.md — Wave 2: SKILL.md (frontmatter + routing skeleton in first 200 lines + math discipline + run-help-first doctrine + progressive-disclosure table) + LICENSE.txt MIT — sets up SKLL-01..04 + SKLL-09 + SKLL-11..12 (Wave 5 wires CI)
+- [ ] 10-03-modes-PLAN.md — Wave 3: 9 mode files (_shared, _profile.example, evaluate, compare, refinance, affordability, stress, amortize, arm) + .gitignore + scripts/hooks/block-user-layer.py + DATA_CONTRACT.md User Layer enforcement — closes SKLL-05/06/07 (D-07 + D-10; UI-SPEC §b/§h/§i)
+- [ ] 10-04-references-PLAN.md — Wave 4: 9 reference files (5 full + 1 byte-equal copy of arm-mechanics + 2 forward-link stubs for refi-npv/apr-reg-z + 1 hybrid tax-deductibility) + assets/.gitkeep — closes SKLL-08 (D-08 forward-link strategy)
+- [ ] 10-05-ci-tests-PLAN.md — Wave 5: flip 11 Wave 0 xfails to PASS + 4 bonus tests (drift / envelope smoke / write-block / subagent forward-link) — closes SKLL-01..09 + SKLL-11..12 (SKLL-13 deferred to Phase 9)
+- [ ] 10-06-integration-smoke-PLAN.md — Wave 6: tests/test_skill_integration.py portability smoke (rsync copy + symlink-free walk + --help from copy) + token-headroom recheck + User Layer leak gate — verifies D-01 contract end-to-end
 **UI hint**: yes
 
 ### Phase 11: Subagents
@@ -232,14 +239,15 @@ Phases execute in numeric order: 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 →
 | 2. Regulatory Reference Data & Rules Predicates | 7/7 | Complete (PASSED) — 02-01..02-07 green; mutation harness proves citation-coverage + schema meta-tests have teeth; 11 predicates + 10 reference YAMLs; code review 14/14 fixed; 254/254 tests pass; verifier 5/5 must_haves PASSED 22/22 requirements SATISFIED | 2026-04-26 |
 | 3. Core Amortization | 6/6 | Complete — 03-01..03-06 green; lib/models.py extended (D-14 cumulative totals + D-15 validator); lib/amortize.py engine (numpy-financial wrapper, fixed-rate + biweekly true/half-monthly + extra-principal + D-09 final-cleanup) + AmortizeRequest._no_duplicate_recurring_periods CR-01 closure; scripts/amortize.py CLI (argparse + lazy-import + JSON-float pre-validation gate emitting unified 6-key Pydantic envelope per WR-02); tests/test_amortize.py 27 functions / 42 cases + 7 JSON fixtures; 301/301 tests pass; AMRT-01..08 closed; CR-01 + WR-02 gaps closed | 2026-04-30 |
 | 4. Affordability | 7/7 | Complete    | 2026-04-30 |
-| 5. ARM Modeling | 0/TBD | Not started | - |
-| 6. Refinance NPV | 0/TBD | Not started | - |
-| 7. Estimated APR (Reg Z Appendix J) | 0/TBD | Not started | - |
-| 8. Stress Tests & Points Breakeven | 0/TBD | Not started | - |
-| 9. DuckDB Persistence & Node Orchestration | 0/TBD | Not started | - |
-| 10. Claude Skill Frontend | 0/TBD | Not started | - |
-| 11. Subagents | 0/TBD | Not started | - |
-| 12. FRED MCP Live Rates & Eval Harness | 0/TBD | Not started | - |
+| 5. ARM Modeling | 8/8 | Complete | 2026-05-01 |
+| 6. Refinance NPV | 1/7 | In-progress — 06-00 Wave 0 test scaffold complete (25 strict-xfail stubs in tests/test_refinance.py + refinance_fixture loader + tests/fixtures/refinance/.gitkeep; 436 passed + 4 skipped + 26 xfailed full suite; mypy --strict + ruff clean; Wave 1 Plan 06-01 unblocked) | - |
+| 7. Estimated APR (Reg Z Appendix J) | 0/8 | Planned 2026-05-02 (PASS-WITH-CONCERNS, 2 concerns; Wave 7 human checkpoint for FFIEC fixtures) | - |
+| 8. Stress Tests & Points Breakeven | 0/7 | Planned 2026-05-02 (PASS, 1 concern: Phase 6 discount-rate coupling) | - |
+| 9. DuckDB Persistence & Node Orchestration | 0/8 | Planned-BLOCKED 2026-05-02 (3 blockers: lockfile path contradiction; known-loans field name; .gitignore dup) | - |
+| 10. Claude Skill Frontend | 0/7 | Planned 2026-05-02 (PASS-WITH-CONCERNS, 8 concerns; SC-3 partial pending Phase 6/7/8 scripts) | - |
+| 11. Subagents | 0/7 | Planned 2026-05-02 (PASS-WITH-CONCERNS, 4 concerns; hard-deps on Phase 10) | - |
+| 12. FRED MCP Live Rates & Eval Harness | 0/9 | Planned-BLOCKED 2026-05-02 (4 blockers: fixture-id drift; SC-4 denominator inflation; upstream phase deps; SC-1 not verified end-to-end) | - |
 
 ---
 *Roadmap created: 2026-04-26*
+*Phases 6-12 planned in parallel orchestration sweep: 2026-05-02*
