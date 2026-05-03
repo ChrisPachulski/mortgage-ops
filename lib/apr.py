@@ -94,8 +94,9 @@ References (canonical URLs verified 2026-05-02 in 07-RESEARCH.md):
 
 from __future__ import annotations
 
+import re
 from decimal import Decimal
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -250,4 +251,97 @@ class APRRequest(BaseModel):
         total_periods = sum(p.periods for p in self.payment_schedule)
         if total_periods == 0:
             raise ValueError("payment_schedule MUST sum to at least 1 period")
+        return self
+
+
+class APRResponse(BaseModel):
+    """Result of solve_apr() (boundary model).
+
+    summary always contains the literal text "estimated APR" (ROADMAP
+    SC-4) AND must NOT contain a bare "APR" word outside the allowed
+    phrases ("estimated APR", "APR tolerance"). Both halves are enforced
+    at the Pydantic boundary by D-05's @model_validator —
+    constructing APRResponse(summary="APR is 7%") raises ValidationError
+    even from the engine, not just from the CLI surface.
+
+    Surfaced fields (D-05):
+      estimated_apr   — fractional APR in [0, 1] quantized to 6 decimal
+                        places (matches Phase 5 D-14 Rate quantization).
+      iterations      — Newton iterations to converge; ROADMAP SC-3 caps
+                        at 50 (D-07: enforced at this boundary).
+      final_residual  — abs(f(i_final)) in dollars at convergence; the
+                        D-06 dual-criterion residual sanity-check value
+                        (informational; convergence test is internal to
+                        solve_apr).
+      summary         — user-facing string with the literal "estimated
+                        APR" phrase (D-05 / SC-4).
+      tolerance_check — populated only when APRRequest.disclosed_apr was
+                        supplied; dict shape (D-08, kept loose for Phase
+                        8/12 extensibility):
+                          {
+                            "within_tolerance": bool,
+                            "tolerance_used": Decimal,    # 0.00125 regular
+                                                          # 0.0025 irregular
+                            "regulation": "12 CFR §1026.22(a)(2)",
+                          }
+                        Wave 4 (CLI) will mirror this docstring shape in
+                        scripts/apr_reg_z.py --help.
+    """
+
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
+
+    estimated_apr: Decimal = Field(
+        strict=True,
+        max_digits=7,
+        decimal_places=6,
+        ge=Decimal("0"),
+        le=Decimal("1"),
+        description="Fractional APR in [0, 1] quantized to 6 decimal places (Phase 5 D-14)",
+    )
+    iterations: int = Field(
+        ge=1,
+        le=50,
+        description="Newton iterations to converge (ROADMAP SC-3 cap; D-07)",
+    )
+    final_residual: Money = Field(
+        description="abs(f(i_final)) — dollar residual at convergence (D-06 dual criterion)",
+    )
+    summary: str = Field(
+        min_length=10,
+        description=(
+            "User-facing summary; MUST contain literal 'estimated APR' (ROADMAP SC-4) "
+            "and MUST NOT contain bare 'APR' (only 'estimated APR' or 'APR tolerance' allowed)."
+        ),
+    )
+    tolerance_check: dict[str, Any] | None = Field(
+        default=None,
+        description=(
+            "Populated when APRRequest.disclosed_apr supplied; cites "
+            "12 CFR §1026.22(a)(2)-(a)(3). dict shape kept loose (D-08) for "
+            "Phase 8/12 extensibility."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _summary_contains_literal_estimated_apr(self) -> APRResponse:
+        """ROADMAP SC-4 / APR-06 / D-05: literal 'estimated APR' MUST appear; bare 'APR' MUST NOT.
+
+        Strips the allowed phrases ('estimated APR') and then scans for any
+        bare 'APR' word; allows 'APR tolerance' (the regulatory phrase
+        used in lib.rules.reg_z.within_apr_tolerance docstrings).
+        """
+        if "estimated APR" not in self.summary:
+            raise ValueError(
+                f"APRResponse.summary MUST contain literal 'estimated APR' per "
+                f"ROADMAP SC-4; got: {self.summary!r}"
+            )
+        # Strip the allowed literal then check for any bare 'APR' word
+        stripped = self.summary.replace("estimated APR", "")
+        # Allow 'APR tolerance' (regulatory phrase) but not bare 'APR'
+        bare_apr = re.search(r"\bAPR\b(?!\s*tolerance)", stripped)
+        if bare_apr is not None:
+            raise ValueError(
+                f"APRResponse.summary MUST NOT contain bare 'APR' (only "
+                f"'estimated APR' or 'APR tolerance' permitted); got: {self.summary!r}"
+            )
         return self
