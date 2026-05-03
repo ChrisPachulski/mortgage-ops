@@ -94,10 +94,12 @@ References (canonical URLs verified 2026-05-02 in 07-RESEARCH.md):
 
 from __future__ import annotations
 
+import math
 import re
 from decimal import Decimal, localcontext
 from typing import Any, Literal
 
+import numpy_financial as npf
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from lib.models import Loan, Money  # noqa: TC001  # Pydantic resolves field annotations at runtime
@@ -189,6 +191,48 @@ def _derivative(
                 term2 = p.amount * (one + g * i) * s * _decimal_pow(one + i, -s - one)
                 pmt_d += term1 - term2
         return adv_d - pmt_d
+
+
+def _seed_apr(
+    advance_schedule: list[AdvanceScheduleEntry],
+    payment_schedule: list[PaymentScheduleEntry],
+) -> Decimal:
+    """Seed Newton-Raphson via npf.rate treating loan as a regular transaction.
+
+    Per APR-02: treat as if every advance were a single t=0 net principal
+    and every payment were the average. ``numpy_financial.rate`` returns a
+    float; cast through ``Decimal(str(...))`` exactly ONCE at the boundary
+    (D-11). The Newton iteration is pure Decimal thereafter.
+
+    Fallback chain (RESEARCH §Q(c)):
+      1. If npf.rate returns NaN, +/-inf, negative, or > 1, treat as
+         out-of-range and fall through.
+      2. Nominal rate-of-return: total_interest / pv / n_total
+         (assumes payments > advances; gives a positive seed proportional
+         to the average per-period interest accrual).
+      3. Last-resort 0.005 (~6% annualized) when pv <= 0 or n_total <= 0
+         (degenerate inputs that the cross-field validators should already
+         have rejected, but defense-in-depth).
+    """
+    pv_float = float(sum(a.amount for a in advance_schedule))
+    total_pmt_float = float(sum(p.amount * p.periods for p in payment_schedule))
+    n_total = sum(p.periods for p in payment_schedule)
+    if pv_float <= 0 or n_total <= 0:
+        return Decimal("0.005")
+    pmt_avg_float = total_pmt_float / n_total
+    try:
+        seed_float = float(
+            npf.rate(nper=n_total, pmt=-pmt_avg_float, pv=pv_float, fv=0),
+        )
+        if math.isnan(seed_float) or math.isinf(seed_float) or seed_float < 0 or seed_float > 1:
+            raise ValueError("npf.rate seed out of range")
+        return Decimal(str(seed_float))
+    except (ValueError, ZeroDivisionError):
+        # Fallback: nominal rate-of-return from total interest paid
+        total_interest = total_pmt_float - pv_float
+        if total_interest <= 0:
+            return Decimal("0.005")
+        return Decimal(str(total_interest / pv_float / n_total))
 
 
 class AdvanceScheduleEntry(BaseModel):
