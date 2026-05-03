@@ -95,10 +95,11 @@ References (canonical URLs verified 2026-05-02 in 07-RESEARCH.md):
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from lib.models import Money  # noqa: TC001  # Pydantic resolves field annotations at runtime
+from lib.models import Loan, Money  # noqa: TC001  # Pydantic resolves field annotations at runtime
 
 
 class AdvanceScheduleEntry(BaseModel):
@@ -164,3 +165,89 @@ class PaymentScheduleEntry(BaseModel):
         lt=Decimal("1"),
         description="Fractional unit period in [0, 1) for odd first period (long case only in v1)",
     )
+
+
+class APRRequest(BaseModel):
+    """Reg Z Appendix J APR-solve request (boundary model).
+
+    See `references/apr-reg-z.md` for the unit-period model + day-count
+    conventions. Pydantic v2 strict + frozen + forbid per Phase 1 D-08
+    (mortgage-ops project-wide convention; D-01 above).
+
+    Cross-field invariants (LOCKED, see D-06):
+      - advance_schedule MUST contain at least one entry with
+        unit_period_offset=0 AND unit_period_fraction=Decimal("0") (the
+        t=0 advance — Reg Z Appendix J §(b)(2)).
+      - payment_schedule.periods summed over all entries MUST be >= 1
+        (otherwise the U-equation has no payment side).
+
+    Reverse-mode "amount-financed only" callers (the standard
+    single-disbursement mortgage) pass:
+
+        AdvanceScheduleEntry(
+            unit_period_offset=0,
+            amount=loan.principal - finance_charges,
+        )
+
+    The engine subtracts finance_charges from loan.principal to form
+    amount_financed per Reg Z §1026.18(b); D-04 makes finance_charges
+    caller-supplied (no §1026.4 classifier in v1).
+    """
+
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
+
+    loan: Loan
+    finance_charges: Money = Field(
+        description=(
+            "Sum of §1026.4 finance charges; subtracted from loan.principal "
+            "per §1026.18(b). CALLER-SUPPLIED (D-04) — engine does not "
+            "classify which closing costs qualify under §1026.4."
+        ),
+    )
+    advance_schedule: list[AdvanceScheduleEntry]
+    payment_schedule: list[PaymentScheduleEntry]
+    day_count: Literal["30/360", "actual/365", "actual/actual"] = "30/360"
+    unit_periods_per_year: int = Field(
+        default=12,
+        ge=1,
+        le=365,
+        description="Unit periods per year (D-03; default 12 = monthly mortgage)",
+    )
+    odd_first_period_days: int = Field(
+        default=0,
+        ge=0,
+        le=365,
+        description=(
+            "Days beyond standard unit period from origination to first payment; "
+            "0 = no odd period (Reg Z §1026.17(c)(4); long case only in v1)."
+        ),
+    )
+    disclosed_apr: Money | None = Field(
+        default=None,
+        description=(
+            "Optional lender-disclosed APR; when set, APRResponse.tolerance_check "
+            "is populated against lib.rules.reg_z.within_apr_tolerance per "
+            "12 CFR §1026.22(a)(2)-(a)(3)."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _advance_schedule_has_t0_advance(self) -> APRRequest:
+        """D-06: advance_schedule MUST have at least one entry at t=0 with f=0."""
+        if not any(
+            a.unit_period_offset == 0 and a.unit_period_fraction == Decimal("0")
+            for a in self.advance_schedule
+        ):
+            raise ValueError(
+                "advance_schedule MUST contain at least one advance at "
+                "unit_period_offset=0 (Reg Z Appendix J §(b)(2))"
+            )
+        return self
+
+    @model_validator(mode="after")
+    def _payment_schedule_non_empty(self) -> APRRequest:
+        """payment_schedule must sum to >= 1 unit period."""
+        total_periods = sum(p.periods for p in self.payment_schedule)
+        if total_periods == 0:
+            raise ValueError("payment_schedule MUST sum to at least 1 period")
+        return self
