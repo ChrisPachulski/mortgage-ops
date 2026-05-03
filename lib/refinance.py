@@ -144,9 +144,7 @@ from typing import TYPE_CHECKING, Annotated, Final, Literal
 import numpy_financial as npf
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from lib.amortize import (
-    build_schedule,  # noqa: F401  (reserved for Plan 06-02 Task 3 evaluate_rate_and_term body)
-)
+from lib.amortize import build_schedule
 from lib.models import (
     Loan,
     Money,
@@ -714,17 +712,99 @@ def _compute_breakeven_npv(
 
 
 def evaluate_rate_and_term(req: RateAndTermRefiRequest) -> RefiResponse:
-    """Evaluate a rate-and-term refi (Wave 2 / Plan 06-02 ships the body).
+    """Rate-and-term refi NPV (REFI-01).
 
-    REFI-01 anchor. Computes:
-      - old_monthly_pi via build_schedule(old_residual_loan).monthly_pi
-      - new_monthly_pi via build_schedule(new_loan).monthly_pi (or override)
-      - monthly_savings = old_monthly_pi - new_monthly_pi
-      - cashflows: t=0 closing_costs (outflow); t=1..N monthly_savings (inflow if positive)
-      - npv = numpy_financial.npv(discount_rate_monthly, cashflows)
-      - breakeven (simple + NPV-based per D-06)
+    Pipeline (mirrors lib/affordability.py::evaluate_forward 12-step shape):
+      1. Build OLD-loan residual schedule via Phase 3 build_schedule;
+         extract old_monthly_pi (= schedule.monthly_pi).
+      2. Build NEW loan with new principal == old_balance (rate-and-term
+         definition), new_annual_rate, new_term_months.
+      3. Extract new_monthly_pi (or use req.new_loan_monthly_pi_override
+         per D-10 when supplied).
+      4. monthly_savings = old_monthly_pi - new_monthly_pi (signed).
+      5. horizon = req.analysis_horizon_months or new_loan.term_months
+         (D-11 default = full new term).
+      6. Build cashflows via _build_refi_cashflows (closing_costs at t=0
+         as outflow per D-15; per-period savings as inflow when positive).
+      7. NPV via _compute_npv.
+      8. Breakeven (simple + NPV) via _compute_breakeven_*.
+      9. Construct RefiResponse with all populated fields.
+
+    After-tax mode (D-09): when req.after_tax_mode=True, Wave 3 (Plan 06-03)
+    adds a tax_shield branch. Wave 2 emits a warning if after_tax_mode=True
+    (signaling "feature ships in Wave 3"); Wave 3 swaps in the real branch.
     """
-    raise NotImplementedError("Plan 06-02 ships rate-and-term engine body (Wave 2 of Phase 6)")
+    # 1-2: build loans
+    old_loan = _build_old_loan_residual(
+        balance_remaining=req.old_loan_balance,
+        annual_rate=req.old_annual_rate,
+        remaining_months=req.old_remaining_months,
+    )
+    new_loan = _build_new_loan(
+        new_principal=req.old_loan_balance,  # rate-and-term: same principal
+        new_annual_rate=req.new_annual_rate,
+        new_term_months=req.new_term_months,
+    )
+
+    # 3: P&I (use override if supplied per D-10)
+    old_monthly_pi = build_schedule(old_loan).monthly_pi
+    new_monthly_pi = (
+        req.new_loan_monthly_pi_override
+        if req.new_loan_monthly_pi_override is not None
+        else build_schedule(new_loan).monthly_pi
+    )
+
+    # 4: signed savings
+    monthly_savings = old_monthly_pi - new_monthly_pi
+
+    # 5: horizon
+    horizon = req.analysis_horizon_months or new_loan.term_months
+
+    # 6: cashflows
+    cashflows = _build_refi_cashflows(
+        closing_costs=req.closing_costs,
+        old_monthly_pi=old_monthly_pi,
+        new_monthly_pi=new_monthly_pi,
+        horizon_months=horizon,
+        cash_proceeds_net=Decimal("0.00"),  # rate-and-term has no proceeds
+    )
+
+    # 7: NPV
+    discount_rate = quantize_rate(req.discount_rate_annual)
+    npv = _compute_npv(discount_rate, cashflows, horizon)
+
+    # 8: breakeven
+    simple_months, simple_status = _compute_breakeven_simple(req.closing_costs, monthly_savings)
+    npv_months, npv_status = _compute_breakeven_npv(discount_rate, cashflows, horizon)
+
+    # 9: response
+    warnings_list: list[str] = []
+    if req.after_tax_mode:
+        warnings_list.append(
+            "after_tax_mode=True surfaced; Wave 3 (Plan 06-03) will populate after_tax_npv"
+        )
+
+    return RefiResponse(
+        refi_kind="rate_and_term",
+        npv=npv,
+        breakeven=RefiBreakeven(
+            simple_months=simple_months,
+            simple_status=simple_status,
+            npv_months=npv_months,
+            npv_status=npv_status,
+        ),
+        old_monthly_pi=old_monthly_pi,
+        new_monthly_pi=new_monthly_pi,
+        monthly_savings=quantize_cents(monthly_savings),
+        cash_proceeds=None,
+        monthly_payment_delta=None,
+        total_interest_delta=None,
+        after_tax_npv=None,
+        discount_rate_annual_used=discount_rate,
+        analysis_horizon_months_used=horizon,
+        cashflows=cashflows,
+        warnings=warnings_list,
+    )
 
 
 def evaluate_cash_out(req: CashOutRefiRequest) -> RefiResponse:
