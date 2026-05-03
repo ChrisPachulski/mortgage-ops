@@ -588,22 +588,36 @@ def test_full_remaining_term_re_amortization() -> None:
         assert engine_p.balance == synthetic_p.balance
 
 
-def test_arm_continuous_period_numbering() -> None:
-    """ARM-05 + D-03: Continuous period numbering 1..N; final balance == 0.00."""
+def test_arm_continuous_period_numbering(arm_fixture: Callable[[str], dict[str, Any]]) -> None:
+    """ARM-05 + D-03: Continuous period numbering 1..N; final balance == 0.00.
+
+    WR-04: Loads `arm_continuous_period_numbering.json` fixture (committed via Plan
+    05-06) so the per-payment hand-calc rows are cross-validated against engine output.
+    Without this binding the fixture's per-row assertions would never run, weakening
+    the D-04 / D-09 hand-calc-vs-engine cross-validation contract.
+    """
     from decimal import Decimal
 
     from lib.arm import build_arm_schedule
 
-    req = _make_5_1_arm_request()
-    schedule = build_arm_schedule(req)
-    # Continuous numbering: payments[i].period == i + 1 for all i
+    fx = arm_fixture("arm_continuous_period_numbering")
+    request = _request_from_fixture(fx)
+    schedule = build_arm_schedule(request)
+    expected = fx["expected"]
+
+    # Structural invariants: continuous numbering, length, final-balance.
     for i, p in enumerate(schedule.payments):
         assert p.period == i + 1, f"period mismatch at index {i}: got {p.period}"
-    # Length matches loan term
-    assert len(schedule.payments) == req.loan.term_months
-    # Final balance is exactly zero (Phase 3 D-09 cleanup on final epoch)
+    assert len(schedule.payments) == request.loan.term_months
+    assert len(schedule.payments) == len(expected["payments"])
     assert schedule.payments[-1].balance == Decimal("0.00")
-    assert schedule.payments[-1].period == req.loan.term_months
+    assert schedule.payments[-1].period == request.loan.term_months
+
+    # Hand-calc cross-validation: spot-check first, last, and the first reset boundary.
+    _assert_engine_matches_fixture_at_period(schedule.payments[0], expected["payments"][0])
+    _assert_engine_matches_fixture_at_period(schedule.payments[59], expected["payments"][59])
+    _assert_engine_matches_fixture_at_period(schedule.payments[60], expected["payments"][60])
+    _assert_engine_matches_fixture_at_period(schedule.payments[-1], expected["payments"][-1])
 
 
 def test_cumulative_totals_continuous_across_resets() -> None:
@@ -1287,37 +1301,106 @@ def test_applied_cap_citation_coverage() -> None:
     )
 
 
-def test_arm_teaser_rate() -> None:
+def test_arm_teaser_rate(arm_fixture: Callable[[str], dict[str, Any]]) -> None:
     """D-02 + LM-3 (engine layer): teaser-rate ARM uses note_rate as lifetime base.
 
     loan.annual_rate=0.030 (teaser); note_rate=0.050 (post-teaser). Lifetime ceiling
     measured against note_rate, not loan.annual_rate. Verify by constructing a scenario
     where the lifetime_cap binds: huge index + initial_cap large enough to NOT bind.
+
+    WR-04: Loads `arm_teaser_rate.json` fixture (committed via Plan 05-06) so the
+    per-payment + per-reset hand-calc rows are cross-validated against engine output.
     """
     from decimal import Decimal
 
     from lib.arm import build_arm_schedule
 
-    # Teaser ARM: 3% initial, 5% post-teaser note rate, 5% lifetime cap -> lifetime ceiling = 10%.
-    # Without the teaser semantic, lifetime ceiling against loan.annual_rate=0.03 would be 8%.
-    req = _make_5_1_arm_request(
-        annual_rate="0.030000",  # teaser initial
-        note_rate="0.050000",  # post-teaser note rate (lifetime base)
-        lifetime_cap_bps=500,  # 5pp
-        initial_cap_bps=2000,  # 20pp (large; won't bind)
-        periodic_cap_bps=2000,
-        floor_rate="0.020000",
-        margin_bps=250,
-        assumed_index_rate="0.150000",  # huge index -> fully_indexed = 0.175 (above lifetime ceiling)
-    )
-    schedule = build_arm_schedule(req)
-    first_reset = schedule.reset_events[0]
-    # Lifetime ceiling = note_rate (0.05) + lifetime_cap_bps/10000 (0.05) = 0.10
+    fx = arm_fixture("arm_teaser_rate")
+    request = _request_from_fixture(fx)
+    schedule = build_arm_schedule(request)
+    expected = fx["expected"]
+
+    # Length + structural invariants
+    assert len(schedule.payments) == len(expected["payments"])
+    assert len(schedule.reset_events) == len(expected["reset_events"])
+
+    # First reset event: lifetime ceiling = note_rate (0.05) + lifetime_cap_bps/10000 (0.05) = 0.10
     # NOT loan.annual_rate (0.03) + 0.05 = 0.08
+    first_reset = schedule.reset_events[0]
     assert first_reset.new_rate == Decimal("0.100000"), (
-        f"teaser ARM: lifetime ceiling should be note_rate+lifetime_cap=0.10, got new_rate={first_reset.new_rate}"
+        f"teaser ARM: lifetime ceiling should be note_rate+lifetime_cap=0.10, "
+        f"got new_rate={first_reset.new_rate}"
     )
     assert first_reset.applied_cap == "lifetime"
+
+    # Hand-calc cross-validation against fixture's reset_events[0].
+    expected_first_reset = expected["reset_events"][0]
+    assert first_reset.new_rate == Decimal(expected_first_reset["new_rate"])
+    assert first_reset.applied_cap == expected_first_reset["applied_cap"]
+    assert first_reset.index_value_used == Decimal(expected_first_reset["index_value_used"])
+
+    # Spot-check teaser-period payments + first post-reset payment against the fixture.
+    _assert_engine_matches_fixture_at_period(schedule.payments[0], expected["payments"][0])
+    _assert_engine_matches_fixture_at_period(schedule.payments[59], expected["payments"][59])
+    _assert_engine_matches_fixture_at_period(schedule.payments[60], expected["payments"][60])
+
+
+def test_arm_index_path_overrides(arm_fixture: Callable[[str], dict[str, Any]]) -> None:
+    """D-01 (engine layer) + WR-04: index_path overrides win at matching reset triggers,
+    while non-overridden triggers fall back to assumed_index_rate.
+
+    Loads `arm_index_path_overrides.json` fixture: assumed_index_rate=0.05 (fallback),
+    index_path provides 0.06 at period 61 and 0.045 at period 73. The engine MUST honor
+    the override at periods 61 + 73 and use the fallback for every later trigger
+    (85, 97, 109, ...). Without this binding the override-wins semantic was implicit.
+    """
+    from decimal import Decimal
+
+    from lib.arm import build_arm_schedule
+
+    fx = arm_fixture("arm_index_path_overrides")
+    request = _request_from_fixture(fx)
+    schedule = build_arm_schedule(request)
+    expected = fx["expected"]
+
+    # Length + structural invariants
+    assert len(schedule.payments) == len(expected["payments"])
+    assert len(schedule.reset_events) == len(expected["reset_events"])
+
+    # Index-path-driven resets (override wins at 61 + 73)
+    by_period = {ev.period: ev for ev in schedule.reset_events}
+    expected_by_period = {ev["period"]: ev for ev in expected["reset_events"]}
+
+    reset_61 = by_period[61]
+    expected_61 = expected_by_period[61]
+    assert reset_61.index_value_used == Decimal(expected_61["index_value_used"])
+    assert reset_61.index_value_used == Decimal("0.060000"), (
+        "period 61 must use index_path override (0.06), not assumed_index_rate (0.05)"
+    )
+    assert reset_61.new_rate == Decimal(expected_61["new_rate"])
+    assert reset_61.applied_cap == expected_61["applied_cap"]
+
+    reset_73 = by_period[73]
+    expected_73 = expected_by_period[73]
+    assert reset_73.index_value_used == Decimal(expected_73["index_value_used"])
+    assert reset_73.index_value_used == Decimal("0.045000"), (
+        "period 73 must use index_path override (0.045), not assumed_index_rate (0.05)"
+    )
+    assert reset_73.new_rate == Decimal(expected_73["new_rate"])
+    assert reset_73.applied_cap == expected_73["applied_cap"]
+
+    # Fallback semantics: period 85 + every later trigger uses assumed_index_rate (0.05)
+    reset_85 = by_period[85]
+    expected_85 = expected_by_period[85]
+    assert reset_85.index_value_used == Decimal(expected_85["index_value_used"])
+    assert reset_85.index_value_used == Decimal("0.050000"), (
+        "period 85 has no override; must fall back to assumed_index_rate (0.05)"
+    )
+    assert reset_85.new_rate == Decimal(expected_85["new_rate"])
+
+    # Spot-check first override payment + reset boundary
+    _assert_engine_matches_fixture_at_period(schedule.payments[60], expected["payments"][60])
+    _assert_engine_matches_fixture_at_period(schedule.payments[72], expected["payments"][72])
 
 
 # =========================================================================
