@@ -127,3 +127,34 @@ def apr_fixture() -> Callable[[str], dict[str, Any]]:
         return json.loads(path.read_text())  # type: ignore[no-any-return]
 
     return _load
+
+
+@pytest.fixture
+def stress_fixture() -> Callable[[str], dict[str, Any]]:
+    """Return a callable that loads a single stress fixture by filename stem
+    from tests/fixtures/stress/. Mirrors arm_fixture / affordability_fixture.
+
+    Per Phase 8 Plan 08-05: every Phase 8 stress fixture lives under
+    tests/fixtures/stress/ as one .json per scenario. Oracle pairs (if any
+    v2 capture-as-fixture lands) live under tests/fixtures/stress/oracle/.
+    """
+
+    def _load(stem: str) -> dict[str, Any]:
+        path = FIXTURE_DIR / "stress" / f"{stem}.json"
+        return json.loads(path.read_text())  # type: ignore[no-any-return]
+
+    return _load
+
+
+@pytest.fixture
+def points_fixture() -> Callable[[str], dict[str, Any]]:
+    """Return a callable that loads a single points-breakeven fixture by
+    filename stem from tests/fixtures/points/. Mirrors arm_fixture /
+    affordability_fixture / stress_fixture. Plan 08-05 ships fixtures here.
+    """
+
+    def _load(stem: str) -> dict[str, Any]:
+        path = FIXTURE_DIR / "points" / f"{stem}.json"
+        return json.loads(path.read_text())  # type: ignore[no-any-return]
+
+    return _load
