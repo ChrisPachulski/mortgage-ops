@@ -1,0 +1,29 @@
+{
+  "description": "Reg Z Appendix J Example J-1 — $5,000 / 36 monthly $166.07 → 12.00% APR. SC-1 anchor.",
+  "citation": "12 CFR Part 1026 Appendix J §(c)(1)",
+  "request": {
+    "loan": {
+      "principal": "5000.00",
+      "annual_rate": "0.120000",
+      "term_months": 36,
+      "origination_date": "2026-01-01",
+      "loan_type": "fixed"
+    },
+    "finance_charges": "0.00",
+    "advance_schedule": [
+      {"unit_period_offset": 0, "amount": "5000.00"}
+    ],
+    "payment_schedule": [
+      {"starting_unit_period": 1, "periods": 36, "amount": "166.07"}
+    ],
+    "day_count": "30/360",
+    "unit_periods_per_year": 12,
+    "odd_first_period_days": 0
+  },
+  "expected": {
+    "estimated_apr": "0.120000",
+    "iterations_max": 5,
+    "tolerance_used": "0.00001",
+    "note": "Reg Z Appendix J Example J-1 — exact 12.00% APR within Decimal('0.00001') of regulatory publication value. Engine emits 0.119994 in 1 iteration; |engine - regulatory| = Decimal('0.000006') (within tolerance). D-25 LOCKED: SC-1 anchor uses regulatory value (NOT engine-emitted); see Phase 7 CONTEXT.md and Plan 07-05."
+  }
+}
