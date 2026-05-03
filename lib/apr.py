@@ -93,3 +93,74 @@ References (canonical URLs verified 2026-05-02 in 07-RESEARCH.md):
 """
 
 from __future__ import annotations
+
+from decimal import Decimal
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from lib.models import Money  # noqa: TC001  # Pydantic resolves field annotations at runtime
+
+
+class AdvanceScheduleEntry(BaseModel):
+    """One advance in the loan disbursement schedule (Reg Z Appendix J §(b)(2)).
+
+    The unit-period equation models each advance Aⱼ as occurring at
+    `unit_period_offset + unit_period_fraction` whole-plus-fractional
+    unit periods after t=0. For the standard single-disbursement mortgage
+    every advance has unit_period_offset=0 and unit_period_fraction=0
+    (the t=0 advance — see APRRequest D-06 invariant).
+
+    Construction loans / draw-down HELOCs may emit multiple entries with
+    increasing offsets. Phase 7 v1 oracle (HMDA Platform) covers
+    single-advance only; multi-advance is on the v2 backlog
+    (07-CONTEXT.md "Deferred Ideas").
+    """
+
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
+
+    unit_period_offset: int = Field(
+        ge=0,
+        description="Whole unit periods between t=0 and the advance",
+    )
+    unit_period_fraction: Decimal = Field(
+        default=Decimal("0"),
+        ge=Decimal("0"),
+        lt=Decimal("1"),
+        description="Fractional unit period in [0, 1) for advances mid-period",
+    )
+    amount: Money
+
+
+class PaymentScheduleEntry(BaseModel):
+    """One regular-payment block in the schedule.
+
+    A 30-year monthly mortgage with one payment level is a single entry
+    with periods=360. Construction loans with payment changes mid-term
+    use multiple entries (e.g., interest-only draw period followed by a
+    fully-amortizing block).
+
+    The unit-period equation evaluates each payment Pₖ at
+    `starting_unit_period + (k-1) + unit_period_fraction` for
+    k = 1..periods. unit_period_fraction handles long odd first periods
+    per Reg Z §1026.17(c)(4); v1 cross-validates only f ∈ [0, 1) (long
+    cases), but the type surface accepts f=0 (regular case) which is the
+    default.
+    """
+
+    model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
+
+    starting_unit_period: int = Field(
+        ge=1,
+        description="The unit-period index of the first payment in this block (1-indexed)",
+    )
+    periods: int = Field(
+        ge=1,
+        description="Number of unit periods this block spans (e.g., 360 for 30yr monthly)",
+    )
+    amount: Money
+    unit_period_fraction: Decimal = Field(
+        default=Decimal("0"),
+        ge=Decimal("0"),
+        lt=Decimal("1"),
+        description="Fractional unit period in [0, 1) for odd first period (long case only in v1)",
+    )
