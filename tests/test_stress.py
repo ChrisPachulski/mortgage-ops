@@ -36,13 +36,41 @@ STRESS_MODULE_PATH: Path = Path(__file__).resolve().parent.parent / "lib" / "str
 # =========================================================================
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Wave 0 stub — Plan 08-01 ships StressRequest discriminated union",
-)
 def test_stress_request_discriminated_union_by_mode() -> None:
-    """STRS-04 + Plan 08-01: StressRequest = RateShock|IncomeShock|ArmReset discriminated by 'mode'."""
-    pytest.fail("Wave 0 stub")
+    """STRS-04 + Plan 08-01: StressRequest = RateShock|IncomeShock|ArmReset discriminated by 'mode'.
+
+    Per Phase 4 idiom (tests/test_affordability.py:_request_from_fixture): strict-mode
+    Decimal fields require the JSON validation path to coerce strings, so we
+    re-encode the dict to JSON and validate via validate_json. This mirrors how
+    scripts/* will exercise the boundary.
+    """
+    import json
+    from datetime import date
+    from decimal import Decimal
+
+    from lib.models import Loan
+    from lib.stress import RateShockRequest, StressRequest
+    from pydantic import TypeAdapter, ValidationError
+
+    adapter: TypeAdapter[StressRequest] = TypeAdapter(StressRequest)
+    loan = Loan(
+        principal=Decimal("400000.00"),
+        annual_rate=Decimal("0.065000"),
+        term_months=360,
+        origination_date=date(2026, 1, 1),
+        loan_type="fixed",  # Loan.loan_type Literal does not include "conventional"
+    )
+    happy_payload = {
+        "mode": "rate-shock",
+        "loan": loan.model_dump(mode="json"),
+        "rates": ["0.06"],
+    }
+    rs = adapter.validate_json(json.dumps(happy_payload))
+    assert isinstance(rs, RateShockRequest)
+
+    bogus_payload = {**happy_payload, "mode": "bogus-mode"}
+    with pytest.raises(ValidationError):
+        adapter.validate_json(json.dumps(bogus_payload))
 
 
 # =========================================================================
@@ -164,13 +192,23 @@ def test_sc5_stress_sweep_50_scenarios_under_100kb(
     pytest.fail("Wave 0 stub")
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Wave 0 stub — Plan 08-01 declares summary BEFORE rows",
-)
 def test_sc5_summary_table_appears_before_rows_in_json() -> None:
     """ROADMAP SC-5: scenario-summary table at the top — summary key appears before rows key."""
-    pytest.fail("Wave 0 stub")
+    import json
+
+    from lib.stress import ScenarioSummary, StressResponse
+
+    resp = StressResponse(
+        mode="rate-shock",
+        scenario_count=0,
+        summary=ScenarioSummary(table=[]),
+        rows=[],
+    )
+    out = resp.model_dump_json()
+    keys = list(json.loads(out).keys())
+    assert keys.index("summary") < keys.index("rows"), (
+        f"SC-5 violation: summary must appear before rows; got order {keys}"
+    )
 
 
 @pytest.mark.xfail(
