@@ -121,6 +121,41 @@ def _decimal_pow(base: Decimal, exponent: Decimal) -> Decimal:
         return (base.ln() * exponent).exp()
 
 
+def _unit_period_equation(
+    advances: list[AdvanceScheduleEntry],
+    payments: list[PaymentScheduleEntry],
+    i: Decimal,
+) -> Decimal:
+    """Reg Z Appendix J §(b): f(i) = sum_advances - sum_payments (PV at rate i).
+
+    Each advance/payment uses the (1 + f·i)·(1+i)^(-t) form (simple interest
+    within the fractional period; compound between full periods). Returns
+    f(i) — zero at the converged APR.
+
+    Each payment-schedule block expands to its constituent k=0..periods-1
+    payments at unit-period offsets ``starting_unit_period + k``. The
+    block's ``unit_period_fraction`` (long odd first period per Reg Z
+    §1026.17(c)(4)) applies ONLY to the first payment in the block (k=0);
+    subsequent payments are regular (g=0).
+
+    Pure Decimal arithmetic under MONEY_CONTEXT (D-09); never mixes float.
+    """
+    with localcontext(MONEY_CONTEXT):
+        one = Decimal("1")
+        adv_sum = Decimal("0")
+        for a in advances:
+            t = Decimal(a.unit_period_offset)
+            f = a.unit_period_fraction
+            adv_sum += a.amount * (one + f * i) * _decimal_pow(one + i, -t)
+        pmt_sum = Decimal("0")
+        for p in payments:
+            for k in range(p.periods):
+                s = Decimal(p.starting_unit_period + k)
+                g = p.unit_period_fraction if k == 0 else Decimal("0")
+                pmt_sum += p.amount * (one + g * i) * _decimal_pow(one + i, -s)
+        return adv_sum - pmt_sum
+
+
 class AdvanceScheduleEntry(BaseModel):
     """One advance in the loan disbursement schedule (Reg Z Appendix J §(b)(2)).
 
