@@ -138,19 +138,24 @@ Stale-warning expected behavior (inherited from Phase 4):
 from __future__ import annotations
 
 from datetime import date  # noqa: F401  (reserved for Plan 06-02/06-03 schedule date math)
-from decimal import Decimal
+from decimal import (  # noqa: F401  (ROUND_CEILING reserved for Plan 06-02 Task 2 _compute_breakeven_simple)
+    ROUND_CEILING,
+    Decimal,
+)
 from typing import TYPE_CHECKING, Annotated, Final, Literal
 
-import numpy_financial as npf  # noqa: F401  (reserved for Plan 06-02 _compute_npv body)
+import numpy_financial as npf  # noqa: F401  (reserved for Plan 06-02 Task 2 _compute_npv body)
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from lib.amortize import build_schedule  # noqa: F401  (reserved for Plan 06-02 schedule builders)
-from lib.models import (
-    Loan,  # noqa: F401  (reserved for Plan 06-02 schedule synthesis)
-    Money,  # noqa: TC001  (Pydantic resolves annotations at runtime; matches lib/models.py convention)
-    Rate,  # noqa: TC001  (Pydantic resolves annotations at runtime; matches lib/models.py convention)
+from lib.amortize import (
+    build_schedule,  # noqa: F401  (reserved for Plan 06-02 Task 3 evaluate_rate_and_term body)
 )
-from lib.money import quantize_cents, quantize_rate  # noqa: F401  (reserved for Plan 06-02)
+from lib.models import (
+    Loan,
+    Money,
+    Rate,
+)
+from lib.money import quantize_cents, quantize_rate
 
 if TYPE_CHECKING:
     from collections.abc import Sequence  # noqa: F401  (reserved for Plan 06-04 dispatcher hints)
@@ -513,6 +518,118 @@ class RefiResponse(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     """Soft signals: StaleReferenceWarning surfaces from after-tax-mode IRS
     predicate calls; PMI/MIP carve-out reminders per D-08; etc."""
+
+
+# ---------------------------------------------------------------------------
+# Private helpers (Plan 06-02): Loan-construction + cashflow builder
+# ---------------------------------------------------------------------------
+
+
+def _build_old_loan_residual(
+    balance_remaining: Decimal,
+    annual_rate: Decimal,
+    remaining_months: int,
+) -> Loan:
+    """Construct a synthetic Loan representing the OLD loan as it stands today
+    (the borrower's residual obligation if they don't refi).
+
+    Uses the OLD rate over the REMAINING term — NOT the original term.
+    Documented in references/refi-npv.md §"Cashflow Inventory".
+    """
+    return Loan(
+        principal=quantize_cents(balance_remaining),
+        annual_rate=quantize_rate(annual_rate),
+        term_months=remaining_months,
+        origination_date=None,  # synthesized at engine time per Phase 3 D-12
+        loan_type="fixed",
+    )
+
+
+def _build_new_loan(
+    new_principal: Decimal,
+    new_annual_rate: Decimal,
+    new_term_months: int,
+) -> Loan:
+    """Construct the NEW loan post-refi (rate-and-term: new_principal == old_balance;
+    cash-out: new_principal == old_balance + cash_out_amount per D-15)."""
+    return Loan(
+        principal=quantize_cents(new_principal),
+        annual_rate=quantize_rate(new_annual_rate),
+        term_months=new_term_months,
+        origination_date=None,
+        loan_type="fixed",
+    )
+
+
+def _build_refi_cashflows(
+    *,
+    closing_costs: Decimal,
+    old_monthly_pi: Decimal,
+    new_monthly_pi: Decimal,
+    horizon_months: int,
+    cash_proceeds_net: Decimal = Decimal("0.00"),  # cash-out only
+) -> list[RefiCashflow]:
+    """Enumerate the per-period RefiCashflow stream for both refi kinds.
+
+    D-04 sign convention enforced via RefiCashflow validator at construction.
+    D-15: closing costs always at t=0 as direction='outflow', amount=-closing_costs.
+
+    For rate-and-term: cash_proceeds_net=0; t=1..horizon emits monthly_savings
+    (= old_pi - new_pi) as direction='inflow' (positive when new < old; the
+    validator REJECTS the cashflow if savings is negative — engine-side caller
+    must classify direction by sign).
+
+    For cash-out: t=0 also gets +cash_proceeds_net inflow; t=1..horizon emits
+    monthly_payment_delta. Wave 3 (Plan 06-03) calls this with cash_proceeds_net>0.
+    """
+    cashflows: list[RefiCashflow] = []
+
+    # t=0: closing costs (always outflow; D-15)
+    if closing_costs > Decimal("0"):
+        cashflows.append(
+            RefiCashflow(
+                period=0,
+                direction="outflow",
+                amount=-quantize_cents(closing_costs),
+                kind="closing_costs",
+            )
+        )
+
+    # t=0: cash proceeds (cash-out only)
+    if cash_proceeds_net > Decimal("0"):
+        cashflows.append(
+            RefiCashflow(
+                period=0,
+                direction="inflow",
+                amount=quantize_cents(cash_proceeds_net),
+                kind="cash_proceeds",
+            )
+        )
+
+    # t=1..horizon: monthly savings or payment delta
+    # Sign-classify per D-04: savings > 0 → inflow; savings < 0 (i.e., new_pi > old_pi) → outflow
+    per_period_signed = old_monthly_pi - new_monthly_pi  # positive = savings; negative = extra cost
+    if per_period_signed != Decimal("0"):
+        for t in range(1, horizon_months + 1):
+            if per_period_signed > Decimal("0"):
+                cashflows.append(
+                    RefiCashflow(
+                        period=t,
+                        direction="inflow",
+                        amount=quantize_cents(per_period_signed),
+                        kind="monthly_savings",
+                    )
+                )
+            else:
+                cashflows.append(
+                    RefiCashflow(
+                        period=t,
+                        direction="outflow",
+                        amount=quantize_cents(per_period_signed),  # already negative
+                        kind="monthly_payment_delta",
+                    )
+                )
+    return cashflows
 
 
 # ---------------------------------------------------------------------------
