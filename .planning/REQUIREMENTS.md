@@ -104,7 +104,7 @@ User selected "all" scope; everything below is in v1.
 - [x] **APR-05**: Reg Z commentary worked example as fixture: $5,000 / 36 × $166.07 → 12.00% APR
 - [x] **APR-06**: User-facing output labeled "estimated APR" (not "APR")
 - [x] **APR-07**: `scripts/apr_reg_z.py` provides JSON-in / JSON-out CLI
-- [ ] **APR-08**: `references/apr-reg-z.md` documents unit-period model + day-count conventions
+- [x] **APR-08**: `references/apr-reg-z.md` documents unit-period model + day-count conventions
 
 ### Stress Testing & Points
 
@@ -285,7 +285,7 @@ Mapped 2026-04-26 by gsd-roadmapper. Every v1 requirement is assigned to exactly
 | APR-05 | Phase 7 | Done (07-05 — tests/fixtures/apr/regz_appendix_j_5000_36_166_07.json shipped per D-25 LOCKED regulatory value Decimal('0.120000'); test_apr_reg_z_appendix_j_worked_example_returns_12_percent flipped to PASS asserting engine within Decimal('0.00001') of regulatory anchor; engine emits 0.119994 in 1 iteration, diff 0.000006 within tolerance) |
 | APR-06 | Phase 7 | Done (07-04 — literal 'estimated APR' contract enforced end-to-end through the CLI surface: D-22 three-layer enforcement combining (a) Pydantic @model_validator on APRResponse.summary [Wave 1 D-05] + (b) literal phrase 4x in scripts/apr_reg_z.py module docstring + epilog body x3 [Wave 4 D-22] + (c) regex test test_apr_response_uses_literal_estimated_apr_text via re.search r'\\bAPR\\b(?!\\s*tolerance)' [Wave 4 flip]) |
 | APR-07 | Phase 7 | Done (07-04 — scripts/apr_reg_z.py 184 lines mirroring scripts/arm_simulate.py byte-for-byte: argparse + --input + sys.path injection + lazy-import block (D-18) + JSON-float gate via scripts._cli_helpers + Pydantic ValidationError + APRConvergenceError 6-key envelope per D-21 + happy-path APRResponse.model_dump_json on stdout exit 0; test_apr_cli_subprocess_round_trip on SC-1 anchor inputs returns estimated_apr=0.119994 within Decimal('0.00001') of 0.120000 in 1 Newton iter) |
-| APR-08 | Phase 7 | Pending |
+| APR-08 | Phase 7 | Done (07-06 — references/apr-reg-z.md shipped at 523 lines with 6 required sections per D-28 LOCKED template inheritance from references/arm-mechanics.md + Citation Index appendix per D-30 verifier-table idiom from references/refi-npv.md; 11 URLs verified 2026-05-02; lib.apr.APRRequest.__doc__ extended with explicit ROADMAP SC-5 / D-29 cite-from contract naming all 4 doc scopes; Wave-0 APR-08 stub test_references_apr_reg_z_doc_present_with_required_sections flipped to PASS asserting (a) doc exists at repo root, (b) all 6 required section headers present, (c) lib/apr.py contains literal 'references/apr-reg-z.md' string per D-29; 482 passed + 4 skipped + 2 xfailed [was 481/4/3; +1 net pass; -1 xfail]; 12 of 13 Wave-0 stubs flipped; 0 deviations) |
 | STRS-01 | Phase 8 | Pending |
 | STRS-02 | Phase 8 | Pending |
 | STRS-03 | Phase 8 | Pending |
