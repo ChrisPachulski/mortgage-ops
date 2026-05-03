@@ -665,3 +665,97 @@ def test_apr_solver_raises_on_non_convergence() -> None:
     assert err.iterations >= 0
     assert isinstance(err.last_residual, Decimal)
     assert isinstance(err.last_i, Decimal)
+
+
+# =========================================================================
+# Wave 5 (Plan 07-05) — additional parametric + sibling tests
+# =========================================================================
+
+
+@pytest.mark.parametrize(
+    ("stem", "expected_apr"),
+    [
+        ("regz_appendix_j_5000_36_166_07", Decimal("0.120000")),
+        ("regz_appendix_j_unit_period_monthly_regular", Decimal("0.065000")),
+    ],
+)
+def test_apr_hand_calc_fixtures_match_expected(
+    apr_fixture: Callable[[str], dict[str, Any]],
+    stem: str,
+    expected_apr: Decimal,
+) -> None:
+    """Per-fixture parametric coverage of hand-calc anchors (Plan 07-05 Task 6).
+
+    Two anchors:
+    - SC-1 anchor (D-25 regulatory value): $5000 / 36 / $166.07 -> 12.00%
+    - Wikipedia regular (D-24 engine-emitted = nominal exactly): $200k / 360 / $1264.14 -> 6.50%
+
+    The 15-day odd-period fixture is excluded from this parametric because
+    its expected value (0.065002) exercises the (1+f*i) factor and is
+    pinned by ``test_odd_first_period_15_days_increases_apr_above_nominal``
+    + the iteration-cap sweep ``test_newton_raphson_iterations_under_50_for_all_fixtures``.
+    The 45-day fixture is a NEGATIVE-path fixture (D-26) and is exercised
+    by ``test_odd_first_period_too_long_raises`` separately.
+
+    D-27: Wave 7 (Plan 07-07) will add a parallel parametric test for the
+    20+ HMDA Platform oracle fixtures (mirrors Phase 5 oracle vs hand-calc
+    test split idiom).
+    """
+    import json as _json
+
+    fix = apr_fixture(stem)
+    request = APRRequest.model_validate_json(_json.dumps(fix["request"]))
+    response = solve_apr(request)
+    diff = abs(response.estimated_apr - expected_apr)
+    assert diff <= Decimal("0.00001"), (
+        f"fixture {stem}: APR must equal {expected_apr} within Decimal('0.00001'); "
+        f"got {response.estimated_apr} (diff={diff})"
+    )
+
+
+def test_odd_first_period_too_long_raises(
+    apr_fixture: Callable[[str], dict[str, Any]],
+) -> None:
+    """D-16 + D-26: 45-day odd first period (f = 1.5) raises ValueError per D-16.
+
+    Wave 5 (Plan 07-05) sibling test for the negative-path fixture
+    ``regz_appendix_j_odd_first_period_45_days.json``. Per
+    Plan 07-03 D-16: helper returns f in [-1, 1); long cases >= 1 unit
+    period are rejected (caller should insert an extra t=1 advance to
+    model the long delay). The fixture's ``expected.message_substring``
+    is checked against the raised exception text.
+    """
+    import json as _json
+    import re as _re
+
+    fix = apr_fixture("regz_appendix_j_odd_first_period_45_days")
+    request = APRRequest.model_validate_json(_json.dumps(fix["request"]))
+    msg_substring = fix["expected"]["message_substring"]
+    with pytest.raises(ValueError, match=_re.escape(msg_substring)) as excinfo:
+        solve_apr(request)
+    # Belt-and-suspenders: also verify the substring is in str(exc) (the
+    # `match` parameter does a regex search; the documented message
+    # substring is included verbatim).
+    assert msg_substring in str(excinfo.value), (
+        f"D-26: ValueError message must contain {msg_substring!r}; got: {excinfo.value!s}"
+    )
+
+
+def test_decimal_pow_fractional_exponent_correctness() -> None:
+    """D-13 sanity: _decimal_pow(2, 0.5) ≈ sqrt(2) within Decimal('0.0000001').
+
+    Wave 5 (Plan 07-05 Task 7) — pinned regression guard for the load-
+    bearing _decimal_pow helper. The Newton-Raphson body uses
+    _decimal_pow for every (1+i)^(-t-f) term in the unit-period equation;
+    a regression in this helper would silently break SC-1 anchor
+    convergence. Pinning sqrt(2) catches order-of-magnitude regressions
+    before the SC-1 anchor test runs (cheaper failure surface).
+    """
+    from lib.apr import _decimal_pow
+
+    result = _decimal_pow(Decimal("2"), Decimal("0.5"))
+    expected = Decimal("1.41421356")
+    assert abs(result - expected) <= Decimal("0.0000001"), (
+        f"_decimal_pow(2, 0.5) must equal sqrt(2) within Decimal('0.0000001'); "
+        f"got {result} (expected ~{expected})"
+    )
