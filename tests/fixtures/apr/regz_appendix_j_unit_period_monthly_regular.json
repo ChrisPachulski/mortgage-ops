@@ -1,0 +1,29 @@
+{
+  "description": "Wikipedia $200k @ 6.5%/30yr regular monthly — sanity: APR == nominal rate.",
+  "citation": "Phase 1 oracle anchor + Reg Z Appendix J §(b)(1) regular case",
+  "request": {
+    "loan": {
+      "principal": "200000.00",
+      "annual_rate": "0.065000",
+      "term_months": 360,
+      "origination_date": "2026-01-01",
+      "loan_type": "fixed"
+    },
+    "finance_charges": "0.00",
+    "advance_schedule": [
+      {"unit_period_offset": 0, "amount": "200000.00"}
+    ],
+    "payment_schedule": [
+      {"starting_unit_period": 1, "periods": 360, "amount": "1264.14"}
+    ],
+    "day_count": "30/360",
+    "unit_periods_per_year": 12,
+    "odd_first_period_days": 0
+  },
+  "expected": {
+    "estimated_apr": "0.065000",
+    "iterations_max": 3,
+    "tolerance_used": "0.00001",
+    "note": "Regular monthly mortgage with no finance charges, no odd period — APR == nominal rate exactly. Engine emits 0.065000 in 1 iteration; D-24 engine-emitted value matches Phase 1 Wikipedia oracle anchor exactly. Sanity check that the unit-period equation collapses to the standard PV form when there is no odd period and no finance charges."
+  }
+}
