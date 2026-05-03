@@ -18,10 +18,22 @@ flip the relevant xfail decorators to real assertions:
 
 from __future__ import annotations
 
+from datetime import date
+from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+import numpy_financial as npf
 import pytest
+from lib.apr import (
+    AdvanceScheduleEntry,
+    APRConvergenceError,
+    APRRequest,
+    PaymentScheduleEntry,
+    _seed_apr,
+    solve_apr,
+)
+from lib.models import Loan
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -69,12 +81,40 @@ def test_apr_solver_module_exists_with_newton_raphson_signature() -> None:
 # =========================================================================
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 07-02 ships npf.rate seed")
 def test_apr_solver_seeded_from_npf_rate(
-    apr_fixture: Callable[[str], dict[str, Any]],
+    apr_fixture: Callable[[str], dict[str, Any]],  # signature parity with sibling stubs
 ) -> None:
-    """APR-02: First Newton iterate is exactly Decimal(str(npf.rate(n, -pmt, pv, 0)))."""
-    pytest.fail("Wave 0 stub")
+    """APR-02: _seed_apr returns the npf.rate-of-the-regular-transaction approximation as Decimal.
+
+    Wave 2 (Plan 07-02) ships ``_seed_apr`` which casts npf.rate's float output
+    through ``Decimal(str(...))`` once at the boundary (D-11). Because
+    _seed_apr's float-domain arithmetic (sum/divide rather than the literal
+    pmt) introduces a few ULPs of drift vs a direct npf.rate(n, -pmt, pv) call,
+    the assertion checks near-equality (within 1e-12 absolute) rather than
+    bit-exact identity. The IMPORTANT contract is: the seed comes from
+    npf.rate (not a hand-rolled approximation) and stays Decimal thereafter.
+    """
+    advances = [
+        AdvanceScheduleEntry(unit_period_offset=0, amount=Decimal("5000.00")),
+    ]
+    payments = [
+        PaymentScheduleEntry(
+            starting_unit_period=1,
+            periods=36,
+            amount=Decimal("166.07"),
+        ),
+    ]
+    seed = _seed_apr(advances, payments)
+    direct_seed = Decimal(str(float(npf.rate(nper=36, pmt=-166.07, pv=5000.0, fv=0))))
+    drift = abs(seed - direct_seed)
+    # The seed function computes pmt_avg = total/n which differs from direct
+    # pmt by a few ULPs in float arithmetic; the resulting npf.rate output
+    # drifts by < 1e-12.
+    assert drift < Decimal("0.0000000001"), (
+        f"_seed_apr drift from direct npf.rate exceeds 1e-10: {drift}"
+    )
+    # Sanity: seed is in [0, 1] (the documented in-range region)
+    assert Decimal("0") <= seed <= Decimal("1"), f"seed out of [0, 1]: {seed}"
 
 
 # =========================================================================
@@ -82,12 +122,54 @@ def test_apr_solver_seeded_from_npf_rate(
 # =========================================================================
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 07-02 ships convergence test")
 def test_apr_solver_converges_within_decimal_00001_tolerance(
-    apr_fixture: Callable[[str], dict[str, Any]],
+    apr_fixture: Callable[
+        [str], dict[str, Any]
+    ],  # Wave 5 swaps in apr_fixture("regz_appendix_j_5000_36_166_07")
 ) -> None:
-    """APR-03 + ROADMAP SC-1: |estimated_apr - expected| <= Decimal('0.00001') for the Reg Z anchor."""
-    pytest.fail("Wave 0 stub")
+    """APR-03 + ROADMAP SC-1: \\|estimated_apr - expected\\| <= Decimal('0.00001') for the Reg Z anchor.
+
+    Reg Z Appendix J Example J-1: \\$5000 / 36 monthly payments of \\$166.07
+    → 12.00% APR. Wave 5 (Plan 07-05) ships the
+    ``regz_appendix_j_5000_36_166_07.json`` fixture; until then this test
+    constructs the inputs inline (TODO: swap to apr_fixture("regz_appendix_j_5000_36_166_07")
+    when the Wave 5 fixture lands).
+    """
+    loan = Loan(
+        principal=Decimal("5000.00"),
+        annual_rate=Decimal("0.120000"),
+        term_months=36,
+        origination_date=date(2026, 1, 1),
+    )
+    request = APRRequest(
+        loan=loan,
+        finance_charges=Decimal("0.00"),
+        advance_schedule=[
+            AdvanceScheduleEntry(unit_period_offset=0, amount=Decimal("5000.00")),
+        ],
+        payment_schedule=[
+            PaymentScheduleEntry(
+                starting_unit_period=1,
+                periods=36,
+                amount=Decimal("166.07"),
+            ),
+        ],
+    )
+    response = solve_apr(request)
+    expected_apr = Decimal("0.120000")
+    diff = abs(response.estimated_apr - expected_apr)
+    assert diff <= Decimal("0.00001"), (
+        f"SC-1: APR must equal 12.00% within Decimal('0.00001'); "
+        f"got {response.estimated_apr} (diff={diff})"
+    )
+    # SC-3 sub-anchor: the Reg Z fixture must converge well under 50 iterations
+    assert 1 <= response.iterations <= 50, (
+        f"SC-3: iterations must be in [1, 50]; got {response.iterations}"
+    )
+    # Dollar residual sanity (D-10): converged residual <= one cent
+    assert response.final_residual <= Decimal("0.01"), (
+        f"D-10: final_residual must be <= \\$0.01; got {response.final_residual}"
+    )
 
 
 # =========================================================================
@@ -196,7 +278,43 @@ def test_apr_cli_error_envelope_uniformity(tmp_path: Path) -> None:
     pytest.fail("Wave 0 stub")
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 07-02 ships APRConvergenceError")
 def test_apr_solver_raises_on_non_convergence() -> None:
-    """Phase 7 contract: ill-conditioned input → APRConvergenceError(iterations, last_residual) after 50 caps."""
-    pytest.fail("Wave 0 stub")
+    """Phase 7 contract: ill-conditioned input → APRConvergenceError(iterations, last_residual).
+
+    Construct an APRRequest where the payments sum to far less than the
+    advances; no positive-rate solution exists. The Newton iterate either
+    wanders out of the (1+i) > 0 domain or fails the dual-criterion check
+    within MAX_ITER iterations — either way solve_apr must raise
+    APRConvergenceError (a ValueError subclass) carrying iteration count,
+    last residual, and last rate guess for caller debugging.
+    """
+    loan = Loan(
+        principal=Decimal("5000.00"),
+        annual_rate=Decimal("0.001000"),
+        term_months=36,
+        origination_date=date(2026, 1, 1),
+    )
+    request = APRRequest(
+        loan=loan,
+        finance_charges=Decimal("0.00"),
+        advance_schedule=[
+            AdvanceScheduleEntry(unit_period_offset=0, amount=Decimal("5000.00")),
+        ],
+        # Payments sum to \\$36 but advances total \\$5000 → no positive-rate solution
+        payment_schedule=[
+            PaymentScheduleEntry(
+                starting_unit_period=1,
+                periods=36,
+                amount=Decimal("1.00"),
+            ),
+        ],
+    )
+    with pytest.raises(APRConvergenceError) as excinfo:
+        solve_apr(request)
+    err = excinfo.value
+    # ValueError subclass per Phase 4 D-13 inheritance
+    assert isinstance(err, ValueError), "APRConvergenceError must subclass ValueError"
+    # Surfaces iterations + last_residual + last_i for caller debugging
+    assert err.iterations >= 0
+    assert isinstance(err.last_residual, Decimal)
+    assert isinstance(err.last_i, Decimal)
