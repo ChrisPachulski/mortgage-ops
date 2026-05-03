@@ -893,7 +893,9 @@ def test_arm_terms_docstring_cites_arm_mechanics() -> None:
 
 def test_arm_mechanics_citations() -> None:
     """ARM-09 + D-08 [REVISED 2026-04-30]: references/arm-mechanics.md cites the verified-correct
-    Selling Guide sections + CFPB + AmericU disclosure, AND does NOT carry forward the broken
+    Selling Guide sections + CFPB + a 5/6 SOFR ARM lender disclosure (Plan 05-06 Rule-4
+    deviation: original AmericU URL 404'd; substituted ABT Bank's functionally equivalent
+    5/6, 7/6 & 10/6 SOFR ARM disclosure per T-05-34), AND does NOT carry forward the broken
     legacy citations B5-3.5-01 / §4404.
     """
     project_root = Path(__file__).resolve().parent.parent
@@ -904,7 +906,7 @@ def test_arm_mechanics_citations() -> None:
         "selling-guide.fanniemae.com/sel/b2-1.4-02",  # Fannie B2-1.4-02 verified
         "sf.freddiemac.com/working-with-us/origination-underwriting/mortgage-products/sofr-indexed-arms",  # Freddie SOFR-Indexed
         "consumerfinance.gov/ask-cfpb/what-are-rate-caps",  # CFPB §1951
-        "5_6-SOFR-ARM-Program-Disclosure",  # AmericU PDF
+        "abt.bank/wp-content/uploads/2022/09/Early-ARM-Disclosure-5yr-7yr-and-10yr-ARM-SOFR-Static.pdf",  # ABT Bank 5/6 SOFR PDF (substituted for AmericU 404 per Plan 05-06)
     ]
     for frag in required_fragments:
         assert frag in content, (

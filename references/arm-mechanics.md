@@ -31,8 +31,9 @@ BOTH directions (month 59 still old rate; month 61 already new rate).
 - Freddie Mac Single-Family Seller/Servicer Guide §6302.7(b) (delivery instructions for ARM mortgages)
 - Freddie SOFR-Indexed ARMs product page (3/6, 5/6, 7/6, 10/6 reset cadence):
   https://sf.freddiemac.com/working-with-us/origination-underwriting/mortgage-products/sofr-indexed-arms
-- AmericU 5/6 SOFR ARM Disclosure (worked example confirming month 61 first reset, month 67 second reset):
-  https://www.americu.com/wp-content/uploads/2022/06/5_6-SOFR-ARM-Program-Disclosure-2_1_5-CAPS.pdf
+- ABT Bank "5/6, 7/6 & 10/6 SOFR ARM Disclosure" (worked example confirming month 61
+  first reset, every-6-months thereafter, 2/1/5 caps for the 5/6 product):
+  https://www.abt.bank/wp-content/uploads/2022/09/Early-ARM-Disclosure-5yr-7yr-and-10yr-ARM-SOFR-Static.pdf
 
 > **Citation correction note (2026-04-30):** The originally locked
 > references in CONTEXT.md D-08 cited a Fannie subsection in the B5
@@ -189,7 +190,7 @@ reproducible 10% ceiling regardless of which convention the user expected.
 | https://selling-guide.fanniemae.com/sel/b2-1.4-02/adjustable-rate-mortgages-arms | §B2-1.4-02 ARM eligibility, cap structure, floor convention | 2026-04-30 (last updated 2025-12-10) |
 | https://sf.freddiemac.com/working-with-us/origination-underwriting/mortgage-products/sofr-indexed-arms | Freddie SOFR-Indexed ARMs (3/6, 5/6, 7/6, 10/6) | 2026-04-30 |
 | https://www.consumerfinance.gov/ask-cfpb/what-are-rate-caps-with-an-adjustable-rate-mortgage-arm-and-how-do-they-work-en-1951/ | CFPB Ask CFPB §1951 ARM rate caps | 2026-04-30 |
-| https://www.americu.com/wp-content/uploads/2022/06/5_6-SOFR-ARM-Program-Disclosure-2_1_5-CAPS.pdf | AmericU 5/6 SOFR ARM Disclosure (2/1/5 caps) | 2026-04-30 (frozen lender artifact, 2022) |
+| https://www.abt.bank/wp-content/uploads/2022/09/Early-ARM-Disclosure-5yr-7yr-and-10yr-ARM-SOFR-Static.pdf | ABT Bank 5/6, 7/6 & 10/6 SOFR ARM Disclosure (5/6 product: 2/1/5 caps) | 2026-04-30 (frozen lender artifact, 2022; replaced AmericU URL after 404 confirmed) |
 
 Annual re-validation cadence: each calendar year, confirm each URL still
 resolves; if any have moved, update the index above.
