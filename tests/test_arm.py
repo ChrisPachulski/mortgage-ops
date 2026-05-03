@@ -1375,6 +1375,51 @@ def test_arm_request_misaligned_index_path_raises() -> None:
     assert len(period_errors) >= 1, f"Expected period-62 misalignment error, got: {errors}"
 
 
+def test_arm_request_floor_exceeds_lifetime_ceiling_raises() -> None:
+    """ARM-01 + D-02 + WR-03 (model-layer): ARMRequest._floor_does_not_exceed_lifetime_ceiling
+    rejects configurations where the effective floor is above the lifetime ceiling.
+
+    Scenario: floor_rate=0.20, note_rate=None (-> loan.annual_rate=0.05), lifetime_cap=500bps
+    -> lifetime_ceiling=0.10. effective_floor=max(margin/10000=0.025, 0.20)=0.20 > 0.10.
+    Every reset would clamp above the lifetime cap, silently violating the D-02 invariant.
+    Construction MUST raise instead.
+    """
+    from datetime import date
+    from decimal import Decimal
+
+    from lib.arm import ARMRequest, ARMTerms
+    from lib.models import Loan
+    from pydantic import ValidationError
+
+    loan = Loan(
+        principal=Decimal("400000.00"),
+        annual_rate=Decimal("0.050000"),
+        term_months=360,
+        origination_date=date(2026, 1, 1),
+        loan_type="arm",
+    )
+    terms = ARMTerms(
+        initial_period_months=60,
+        reset_period_months=12,
+        initial_cap_bps=500,
+        periodic_cap_bps=200,
+        lifetime_cap_bps=500,  # lifetime ceiling = 0.05 + 0.05 = 0.10
+        floor_rate=Decimal("0.200000"),  # 20% floor — well above 0.10 ceiling
+        margin_bps=250,
+        index_series_id="MORTGAGE30US",
+    )
+    with pytest.raises(ValidationError) as exc:
+        ARMRequest(
+            loan=loan,
+            arm_terms=terms,
+            assumed_index_rate=Decimal("0.050000"),
+            index_path=[],
+        )
+    errors = exc.value.errors()
+    floor_errors = [e for e in errors if "lifetime_ceiling" in str(e.get("msg", ""))]
+    assert len(floor_errors) >= 1, f"Expected lifetime-ceiling error, got: {errors}"
+
+
 def test_arm_request_duplicate_index_path_period_raises() -> None:
     """ARM-01 + D-01 + WR-02 (model-layer): ARMRequest._index_path_periods_align_to_reset_triggers
     rejects duplicate index_path entries for the same period.

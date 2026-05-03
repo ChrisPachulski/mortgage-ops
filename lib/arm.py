@@ -144,6 +144,29 @@ class ARMRequest(BaseModel):
             seen_periods.add(entry.period)
         return self
 
+    @model_validator(mode="after")
+    def _floor_does_not_exceed_lifetime_ceiling(self) -> ARMRequest:
+        """WR-03 + D-02: reject configurations where the effective floor exceeds the
+        lifetime ceiling. Otherwise every reset's clamp would force new_rate above the
+        lifetime cap (D-02 invariant violation), and the classifier could not signal it
+        downstream (applied_cap reports "floor" without the lifetime breach being visible).
+
+        note_rate is optional (collapses to loan.annual_rate per D-02), so this check
+        runs at the ARMRequest layer where loan.annual_rate is available.
+        """
+        terms = self.arm_terms
+        note_rate_eff = terms.note_rate if terms.note_rate is not None else self.loan.annual_rate
+        lifetime_ceiling = note_rate_eff + Decimal(terms.lifetime_cap_bps) / Decimal("10000")
+        margin_rate = Decimal(terms.margin_bps) / Decimal("10000")
+        effective_floor = max(margin_rate, terms.floor_rate)
+        if effective_floor > lifetime_ceiling:
+            raise ValueError(
+                f"effective_floor ({effective_floor}) exceeds lifetime_ceiling "
+                f"({lifetime_ceiling}); this would force every reset to violate "
+                f"the lifetime cap (D-02 invariant)."
+            )
+        return self
+
 
 class ARMPayment(Payment):
     """Payment row in an ARM schedule; subclass of Phase 1 Payment per D-03.
