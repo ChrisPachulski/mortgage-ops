@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: ready-to-execute
-stopped_at: Phase 5 planned (8 plans across 7 waves)
-last_updated: "2026-04-30T22:00:00.000Z"
-last_activity: 2026-04-30
+status: phase-complete
+stopped_at: Phase 5 complete (8/8 plans; ARM-01..05/08/09 closed; ARM-06 partial — 5/1 cross-source deferred to Phase 8+ per T-05-34)
+last_updated: "2026-05-01T22:30:00.000Z"
+last_activity: 2026-05-01
 progress:
   total_phases: 12
-  completed_phases: 4
+  completed_phases: 5
   total_plans: 34
-  completed_plans: 26
-  percent: 76
+  completed_plans: 34
+  percent: 100
 ---
 
 # Project State
@@ -21,28 +21,31 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-26)
 
 **Core value:** Math correctness first — every dollar figure traces to a tested, deterministic Python function; the LLM is a router and narrator that never owns numbers.
-**Current focus:** Phase 4 — affordability
+**Current focus:** Phase 6 — Refinance NPV (next)
 
 ## Current Position
 
-Phase: 5 — ARM Modeling
-Plan: 8 plans authored (05-00..05-06 with 05-04 split into 05-04a + 05-04b)
-Status: Ready to execute
-Last activity: 2026-04-30
+Phase: 5 — ARM Modeling (complete)
+Status: phase-complete; ready for Phase 6 planning
+Last activity: 2026-05-01
 
-Progress: [████████░░] 76% (26/34 plans complete; Phase 5 = 8 plans pending)
+Progress: [██████████] 100% (34/34 plans complete; Phase 6+ unplanned)
 
 ### Resume instructions
 
-Phase 5 is PLANNED. 8 plans authored, verified by gsd-plan-checker (iteration 2 PASSED after 4-blocker revision: VALIDATION.md per-task map populated, RESEARCH.md LM-1/LM-2 marked RESOLVED, plan 05-04 split into 05-04a+05-04b, hand_calc_check witness added for cap-bound fixtures). All 9 ARM-N requirements covered; D-04 [REVISED 2026-04-30] (Bankrate+Vertex42+AmericU oracle) + D-08 [REVISED 2026-04-30] (Fannie B2-1.4-02 + Freddie 6302.7(b) + CFPB §1951 + AmericU citations) honored verbatim across all plans.
+Phase 5 COMPLETE. 8/8 plans landed across 7 waves. ARM-01..05, ARM-08, ARM-09 fully closed at the test layer; ROADMAP SC-1..SC-5 verified by passing tests. ARM-06 partially closed: 5/6 cross-source pinned via ABT Bank substitute oracle (AmericU URL 404 → swapped per T-05-34); 5/1 cross-source agreement deferred to Phase 8+ as 1 strict xfail (Bankrate JS calculator + Vertex42 Excel template require human-only browser/Excel capture session).
 
-Wave structure: 0 (test infra) → 1 (quantize_rate promotion) → 2 (Pydantic models) → 3 (build_arm_schedule engine) → 4a (cli-helpers factor) → 4b (arm_simulate.py CLI) → 5 (references/arm-mechanics.md) → 6 (fixtures + oracle PDF captures).
+Final test suite: 432 passed + 4 skipped + 1 xfailed (was 379 + 4 + 0 at Phase 4 end). mypy --strict + ruff check + ruff format clean across all touched files. D-08 [REVISED] citations (Fannie B2-1.4-02 + Freddie 6302.7(b) + CFPB §1951 + ABT Bank 5/6 SOFR) shipped in references/arm-mechanics.md. lib/arm.py + scripts/arm_simulate.py + scripts/_cli_helpers.py + 11 hand-calc fixtures + 1 ABT oracle PDF/JSON pair shipped.
 
 Recommended path:
 
-1. `/gsd-execute-phase 05` — execute 8 plans wave-by-wave. Plan 05-06 has a human-action checkpoint for 5 oracle PDF captures (Bankrate 5/1/7/1/10/1 + Vertex42 5/1 + AmericU 5/6).
+1. `/gsd-verify-work 05` — run goal-backward verification on Phase 5 (verifier=true in config).
+2. `/gsd-code-review 05` — code review the Phase 5 source files (code_review=true in config).
+3. `/gsd-discuss-phase 06` or `/gsd-plan-phase 06` — start Phase 6 (Refinance NPV).
 
-Resume file (next): `.planning/phases/05-arm-modeling/05-00-test-infrastructure-PLAN.md`.
+Phase 8+ backlog item to track: capture 4 ARM oracle PDFs (Bankrate 5/1, 7/1, 10/1 + Vertex42 5/1) via human session and flip the residual cross-source agreement xfail. See plan 05-06 SUMMARY.md Rule-4-B deviation.
+
+Resume file (next): `.planning/phases/05-arm-modeling/05-06-SUMMARY.md` (read for deferral context) → start Phase 6 planning.
 
 ## Performance Metrics
 
@@ -75,7 +78,7 @@ Resume file (next): `.planning/phases/05-arm-modeling/05-00-test-infrastructure-
 | 1     | 6/6   | Complete (PASS-WITH-CAVEATS) |
 | 2     | 7/7   | Complete — 02-01..02-07 green; 11 predicates + 10 reference YAMLs + citation-coverage + schema meta-tests + mutation-harness audit ratification; 224/224 tests pass; ready for Phase 4 affordability consumers |
 | 3     | 6/6   | Complete — 03-01..03-06 all green (model contract + lib/amortize.py engine + scripts/amortize.py CLI + tests/test_amortize.py 42 functions + 7 JSON fixtures + amortize_fixture loader + AmortizeRequest._no_duplicate_recurring_periods CR-01 closure with 6 pinned tests + scripts/amortize.py 6-key Pydantic envelope WR-02 closure with 1 new + 1 tightened test); AMRT-01..08 all closed; CR-01 + WR-02 advisory gaps closed; 301/301 tests pass; mypy --strict + ruff clean across 50 source files; ready for verifier re-sweep before Phase 4 transition |
-| 5     | 0/8   | Planned — 05-00..05-06 (with 05-04a + 05-04b split) authored and verified; 8 plans across 7 waves; 29 tasks; D-04 [REVISED] oracle (Bankrate+Vertex42+AmericU) + D-08 [REVISED] citations (Fannie B2-1.4-02 + Freddie 6302.7(b) + CFPB §1951 + AmericU); hand_calc_check witness for cap-bound fixtures (lifetime/initial/floor); ready to execute |
+| 5     | 8/8   | Complete — 05-00..05-06 (with 05-04a + 05-04b split) all green across 7 waves; ARM-01..05/08/09 fully closed; ARM-06 partial (5/6 closed via ABT Bank substitute oracle, 5/1 cross-source deferred to Phase 8+ per T-05-34); ROADMAP SC-1..SC-5 verified by passing tests; lib/arm.py 449 lines + scripts/arm_simulate.py 103 lines + scripts/_cli_helpers.py 104 lines (factored from amortize+affordability) + tests/test_arm.py 765+ lines + 11 hand-calc fixtures + 1 ABT oracle pdf/json pair + references/arm-mechanics.md 195 lines (Fannie B2-1.4-02 + Freddie 6302.7(b) + CFPB §1951 + ABT 5/6 SOFR citations); 432 passed + 4 skipped + 1 xfailed (was 379+4+0 at Phase 4 end; +53 net pass count); 4 Rule-4 architectural deviations all documented with Phase-8+ backlog (Rule-4-A: AmericU URL rot → ABT Bank substitute; Rule-4-B: Bankrate+Vertex42 4 browser captures deferred); mypy --strict + ruff clean; ready for verifier sweep |
 | 4     | 7/7   | Complete — 04-00..04-06 all green (Wave 0 test scaffold + Wave 1 Pydantic v2 type contract + Wave 2 forward-affordability composition + Wave 3 reverse-affordability composition + Wave 4 D-11 blocker precedence + Wave 5 CLI + config + Wave 6 tests + fixtures); AFFD-01..09 all closed at the test layer; ROADMAP SC-1..SC-5 pinned by tests verbatim (SC-1: forward_conventional_80_ltv subprocess + monthly_pi=$2528.27 oracle; SC-2: reverse_conventional_80_ltv_43_dti round-trip closure D-09 within Decimal('0.0001') DTI tolerance + dollar exact equality; SC-3: forward_va_residual_fail blocked_by="VA-RESIDUAL-WEST-FAMILY-4" verbatim; SC-4: household_example_yml_e2e subprocess pipeline + config/household.example.yml schema check; SC-5: joint_applicants_two_incomes + single_applicant same-code-path verified); 379 passed + 4 skipped + 0 xfail full suite (was 340 passed + 9 xfailed); 10 fixtures shipped under tests/fixtures/affordability/; tests/test_affordability.py 1653 lines / 82 collected tests; mypy --strict + ruff clean across all Phase 4 files; ready for verifier re-sweep before Phase 5 transition |
 
 **Plan-level metrics:**

@@ -18,7 +18,7 @@ User selected **fine** (8-12 phases). This roadmap is **12 phases** — each cal
 - [x] **Phase 2: Regulatory Reference Data & Rules Predicates** - Cited YAML + one-predicate-per-citation library (7/7 plans complete; 11 predicates + 10 reference YAMLs + audit-gate ratified)
 - [x] **Phase 3: Core Amortization** - Wrap numpy-financial; fixed-rate, biweekly, extra-principal schedules
 - [x] **Phase 4: Affordability** - DTI/LTV/CLTV/PITI + household-aware joint-applicant model (7/7 plans complete; AFFD-01..09 closed; 379 passed + 4 skipped + 0 xfail full suite; ROADMAP SC-1..SC-5 pinned by tests)
-- [ ] **Phase 5: ARM Modeling** - 5/1, 7/1, 10/1, 5/6 with caps/floor/margin/reset and re-amortization
+- [x] **Phase 5: ARM Modeling** - 5/1, 7/1, 10/1, 5/6 with caps/floor/margin/reset and re-amortization (8/8 plans complete; ARM-01..05/08/09 closed, ARM-06 partial — 5/1 cross-source deferred to Phase 8+; SC-1..SC-5 verified; 432 passed + 4 skipped + 1 strict xfail)
 - [ ] **Phase 6: Refinance NPV** - Rate-and-term + cash-out, breakeven, sign-convention discipline
 - [ ] **Phase 7: Estimated APR (Reg Z Appendix J)** - Newton-Raphson solver against FFIEC fixtures
 - [ ] **Phase 8: Stress Tests & Points Breakeven** - Parameter sweeps + discount-points NPV
