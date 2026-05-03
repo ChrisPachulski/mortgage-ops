@@ -670,6 +670,57 @@ def test_cli_error_envelope_uniformity(tmp_path: Path) -> None:
     )
 
 
+def test_cli_rate_le1_envelope(
+    refinance_fixture: Callable[[str], dict[str, Any]],
+    tmp_path: Path,
+) -> None:
+    """WR-02 (REVIEW.md fix): CLI 6-key envelope on a Rate le=1 violation
+    consumes the sign_validator_outflow_positive.json fixture.
+
+    Pre-fix: per its _meta docstring, the fixture is supposed to exercise the
+    CLI-layer 6-key envelope on a Rate-bound violation
+    (discount_rate_annual='1.5' exceeds Rate le=1). NO test in
+    test_refinance.py referenced it. The CLI envelope-uniformity contract for
+    Rate-bound violations was therefore unprotected.
+
+    The only Rate-related CLI test is test_cli_rejects_float_discount_rate,
+    which exercises the float-gate path (manual make_decimal_type_envelope),
+    NOT the le=1 validator path (Pydantic native e.json()). Both paths
+    produce the 6-key envelope but through different code routes — and the
+    Pydantic-native path was not subprocess-tested for envelope shape on a
+    Rate field until now.
+    """
+    fx = refinance_fixture("sign_validator_outflow_positive")
+    request_path = tmp_path / "rate_le1_violation.json"
+    request_path.write_text(json.dumps(fx["request"]))
+
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), "--input", str(request_path)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    expected = fx["expected"]
+    assert result.returncode == expected["exit_code"]
+
+    errors = json.loads(result.stderr)
+    assert isinstance(errors, list)
+    assert len(errors) >= 1
+    err = errors[0]
+
+    # 6-key envelope contract (WR-02 closure)
+    assert set(err.keys()) == set(expected["envelope_keys"]), (
+        f"WR-02 envelope drift on Rate le=1 path: got keys={set(err.keys())}; "
+        f"expected {set(expected['envelope_keys'])}"
+    )
+    assert err["type"] == expected["error_type"]
+    # loc tail should be the offending field name
+    assert err["loc"][-1] == expected["error_loc_tail"]
+    # input echo: Pydantic surfaces the offending value
+    assert str(err["input"]) == expected["error_input"]
+
+
 def test_cli_help_cites_references_refi_npv() -> None:
     """SC-5 verbatim: scripts/refi_npv.py --help epilog cites references/refi-npv.md
     AND the canonical sign-convention phrase.
