@@ -1,0 +1,24 @@
+{
+  "_meta": {
+    "oracle_source": "Plan 06-05 Task 5 alternate locked-spec: discount_rate_annual='1.5' (above Pydantic Rate le=1)",
+    "derivation": "CLI-layer rejection fixture; engine never invoked. Per plan: D-15 hides RefiCashflow construction inside the engine, so the CLI round-trip variant of the SC-4 sign-validator rejection uses Rate type-bound violation as the trigger. The model-layer SC-4 sign-validator construction-time rejection is exercised separately by tests/test_refinance.py::test_refi_cashflow_outflow_positive_rejected (Plan 06-01).",
+    "citation": "ROADMAP Phase 6 SC-4 (CLI-layer 6-key envelope on stderr for ValidationError-class boundary surfaces); REFI-08 anchor for round-trip behavior. WR-02 closure: 6-key envelope keyset = {type, loc, msg, input, url, ctx}."
+  },
+  "request": {
+    "refi_kind": "rate_and_term",
+    "old_loan_balance": "300000.00",
+    "old_annual_rate": "0.070000",
+    "old_remaining_months": 300,
+    "new_annual_rate": "0.050000",
+    "new_term_months": 300,
+    "closing_costs": "2000.00",
+    "discount_rate_annual": "1.5"
+  },
+  "expected": {
+    "exit_code": 2,
+    "envelope_keys": ["type", "loc", "msg", "input", "url", "ctx"],
+    "error_type": "less_than_equal",
+    "error_loc_tail": "discount_rate_annual",
+    "error_input": "1.5"
+  }
+}
