@@ -711,6 +711,20 @@ def _compute_breakeven_npv(
 # ---------------------------------------------------------------------------
 
 
+# Pinned Oracles (06-RESEARCH.md §"Pinned Oracles" + Plan 06-05 fixtures):
+#   Oracle 1 (SC-1 positive): old=$300k@7% 25y residual, new=$300k@5% 25y,
+#     closing=$2000, discount=5%, horizon=300 → NPV = Decimal("60705.48")
+#     (RESEARCH approximation cited $60,696.32 from analytical PMT formula;
+#     engine-derived exact Decimal lands at 60705.48 — Plan 06-05 fixture pins
+#     this exact value via Decimal equality per Phase 5 D-04 [REVISED]
+#     hand_calc_check witness pattern.)
+#   Oracle 2 (SC-1 negative): same parameters BUT closing=$5000 +
+#     analysis_horizon_months=12 → NPV = Decimal("-718.01")
+#     (RESEARCH approximation cited -$741; engine-derived exact Decimal lands
+#     at -718.01 — same Plan 06-05 fixture-pinning discipline.)
+# Re-derive at fixture-creation time by running the verification snippets in
+# Plan 06-02 Tasks 3-4. These values are the contract Wave 5 fixtures pin
+# against via Decimal equality (CLAUDE.md money-discipline; never assertAlmostEqual).
 def evaluate_rate_and_term(req: RateAndTermRefiRequest) -> RefiResponse:
     """Rate-and-term refi NPV (REFI-01).
 
