@@ -1,0 +1,29 @@
+{
+  "description": "15-day odd first period on Wikipedia $200k/30yr/6.5% — APR pushed slightly above 6.50%.",
+  "citation": "12 CFR §1026.17(c)(4) + Appendix J §(b)(5)(iii)",
+  "request": {
+    "loan": {
+      "principal": "200000.00",
+      "annual_rate": "0.065000",
+      "term_months": 360,
+      "origination_date": "2026-01-01",
+      "loan_type": "fixed"
+    },
+    "finance_charges": "0.00",
+    "advance_schedule": [
+      {"unit_period_offset": 0, "amount": "200000.00"}
+    ],
+    "payment_schedule": [
+      {"starting_unit_period": 1, "periods": 360, "amount": "1264.14"}
+    ],
+    "day_count": "30/360",
+    "unit_periods_per_year": 12,
+    "odd_first_period_days": 15
+  },
+  "expected": {
+    "estimated_apr": "0.065002",
+    "iterations_max": 10,
+    "tolerance_used": "0.00001",
+    "note": "D-24: engine-emitted value pinned at first compute (Phase 4 04-06 idiom). Engine produces 0.065002 in 2 Newton iterations under MONEY_CONTEXT.prec=28. The (1+f*i) factor on the first payment with f=0.5 (15 days odd / 30-day unit period) increases the first payment's PV contribution, requiring a slightly higher i to balance the U-equation; APR > 6.50% nominal as required by Plan 07-03 sign-flip detector. Plan 07-03 SUMMARY (Rule-1 informational) corrected RESEARCH §Q(e)'s back-of-envelope ~6.523% forecast which was off by ~100x in magnitude — the actual bump is +0.0002 percentage points, not +0.023. Wave 7 will cross-validate against HMDA Platform per CONTEXT D-09."
+  }
+}
