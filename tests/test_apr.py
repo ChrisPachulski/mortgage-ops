@@ -386,10 +386,41 @@ def test_apr_cli_subprocess_round_trip(
 # =========================================================================
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 07-06 ships references/apr-reg-z.md")
 def test_references_apr_reg_z_doc_present_with_required_sections() -> None:
-    """APR-08 + ROADMAP SC-5: references/apr-reg-z.md exists with §1-6 (unit-period, day-count, odd-first, worked example, Newton, citations)."""
-    pytest.fail("Wave 0 stub")
+    """APR-08 + ROADMAP SC-5: references/apr-reg-z.md exists with §1-6 (unit-period, day-count, odd-first, worked example, Newton, citations).
+
+    Plan 07-06 Wave 6 flip — pins the cite-from contract (D-29) at the
+    test layer:
+      1. references/apr-reg-z.md exists at repo root.
+      2. All six required section headers are present (exact prefix match).
+      3. lib/apr.py contains the literal string "references/apr-reg-z.md"
+         (the cite-from contract — APRRequest.__doc__ cites the doc per
+         D-29 LOCKED).
+    """
+    repo_root = Path(__file__).resolve().parent.parent
+    doc_path = repo_root / "references" / "apr-reg-z.md"
+    assert doc_path.exists(), (
+        f"references/apr-reg-z.md must exist (APR-08 + ROADMAP SC-5); got {doc_path}"
+    )
+    content = doc_path.read_text()
+    required_sections = [
+        "## 1. Unit-Period Model",
+        "## 2. Day-Count Conventions",
+        "## 3. Odd First Period Handling",
+        "## 4. Worked Example",
+        "## 5. Newton-Raphson Convergence",
+        "## 6. Citations Summary",
+    ]
+    for section in required_sections:
+        assert section in content, (
+            f"references/apr-reg-z.md missing required section header: {section!r}"
+        )
+    # Cite-from contract (D-29 LOCKED): APRRequest docstring (and broader
+    # lib/apr.py module) must mention the doc by relative path.
+    apr_module = (repo_root / "lib" / "apr.py").read_text()
+    assert "references/apr-reg-z.md" in apr_module, (
+        "lib/apr.py must cite references/apr-reg-z.md per ROADMAP SC-5 / D-29"
+    )
 
 
 # =========================================================================
