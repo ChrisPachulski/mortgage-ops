@@ -812,9 +812,13 @@ def evaluate_rate_and_term(req: RateAndTermRefiRequest) -> RefiResponse:
       8. Breakeven (simple + NPV) via _compute_breakeven_*.
       9. Construct RefiResponse with all populated fields.
 
-    After-tax mode (D-09): when req.after_tax_mode=True, Wave 3 (Plan 06-03)
-    adds a tax_shield branch. Wave 2 emits a warning if after_tax_mode=True
-    (signaling "feature ships in Wave 3"); Wave 3 swaps in the real branch.
+    After-tax mode (D-09): when req.after_tax_mode=True, _compute_tax_shield_cashflows
+    (Plan 06-03 Task 2) builds the period-by-period tax_shield inflow stream from
+    IRS Pub 936 qualified_loan_limit (RUL-11); after_tax_npv on the response is
+    populated with NPV(cashflows + tax_shield_cashflows). When False, after_tax_npv
+    is None and no IRS predicate is invoked. StaleReferenceWarning surfaces from
+    the IRS reference data into RefiResponse.warnings per the module docstring
+    "Stale-warning expected behavior" contract.
     """
     # 1-2: build loans
     old_loan = _build_old_loan_residual(
@@ -859,13 +863,33 @@ def evaluate_rate_and_term(req: RateAndTermRefiRequest) -> RefiResponse:
     simple_months, simple_status = _compute_breakeven_simple(req.closing_costs, monthly_savings)
     npv_months, npv_status = _compute_breakeven_npv(discount_rate, cashflows, horizon)
 
-    # 9: response
-    warnings_list: list[str] = []
+    # 9: after-tax overlay (D-09) — capture StaleReferenceWarning from IRS predicate
+    # per module-docstring "Stale-warning expected behavior" contract.
+    after_tax_npv: Decimal | None = None
+    captured_warnings: list[str] = []
     if req.after_tax_mode:
-        warnings_list.append(
-            "after_tax_mode=True surfaced; Wave 3 (Plan 06-03) will populate after_tax_npv"
-        )
+        # validator (_validate_common D-09) guarantees both fields present
+        assert req.marginal_tax_rate is not None
+        assert req.filing_status is not None
+        with warnings.catch_warnings(record=True) as captured:
+            warnings.simplefilter("always", StaleReferenceWarning)
+            tax_shield_cashflows = _compute_tax_shield_cashflows(
+                new_loan=new_loan,
+                marginal_tax_rate=req.marginal_tax_rate,
+                filing_status=req.filing_status,
+                has_grandfathered_debt=req.has_grandfathered_debt,
+                horizon_months=horizon,
+            )
+            after_tax_npv = _compute_npv(
+                discount_rate,
+                cashflows + tax_shield_cashflows,
+                horizon,
+            )
+        for w in captured:
+            if issubclass(w.category, StaleReferenceWarning):
+                captured_warnings.append(str(w.message))
 
+    # 10: response
     return RefiResponse(
         refi_kind="rate_and_term",
         npv=npv,
@@ -881,11 +905,11 @@ def evaluate_rate_and_term(req: RateAndTermRefiRequest) -> RefiResponse:
         cash_proceeds=None,
         monthly_payment_delta=None,
         total_interest_delta=None,
-        after_tax_npv=None,
+        after_tax_npv=after_tax_npv,
         discount_rate_annual_used=discount_rate,
         analysis_horizon_months_used=horizon,
         cashflows=cashflows,
-        warnings=warnings_list,
+        warnings=captured_warnings,
     )
 
 
@@ -1042,10 +1066,17 @@ def evaluate_cash_out(req: CashOutRefiRequest) -> RefiResponse:
 
 
 def evaluate(req: RefiRequest) -> RefiResponse:
-    """Public dispatcher (Wave 4 / Plan 06-04 ships the body).
+    """Public dispatcher; routes by refi_kind discriminator (D-02).
 
-    Switches on req.refi_kind and routes to evaluate_rate_and_term or
-    evaluate_cash_out. Mirrors lib/affordability.py::evaluate dispatcher pattern.
+    Switches on the runtime type of `req` (which Pydantic v2's discriminated-union
+    TypeAdapter has already routed to RateAndTermRefiRequest or CashOutRefiRequest
+    based on the refi_kind literal field) and forwards to the corresponding
+    private engine entrypoint:
+
+      - RateAndTermRefiRequest → evaluate_rate_and_term (REFI-01)
+      - CashOutRefiRequest     → evaluate_cash_out      (REFI-02)
+
+    Mirrors lib/affordability.py::evaluate dispatcher pattern (Plan 04-04 D-11).
 
     # Phase 11: see pyxirr migration note in module docstring (D-07).
     # When SUBA-02 ships the refi-npv-agent multi-offer ranking, an
@@ -1053,4 +1084,14 @@ def evaluate(req: RefiRequest) -> RefiResponse:
     # for batch ranking (10-50x faster on N≥1000 scenarios). Phase 6 v1's
     # single-scenario surface preserves Decimal discipline via numpy_financial.
     """
-    raise NotImplementedError("Plan 06-04 ships the public dispatcher (Wave 4 of Phase 6)")
+    if isinstance(req, RateAndTermRefiRequest):
+        return evaluate_rate_and_term(req)
+    if isinstance(req, CashOutRefiRequest):
+        return evaluate_cash_out(req)
+    # Defensive: the discriminator should have routed before we get here. If a
+    # caller bypasses TypeAdapter (e.g., subclasses _CommonRefiFields directly),
+    # surface the violation loudly rather than returning a wrong-shape response.
+    raise ValueError(
+        f"Unknown RefiRequest variant: {type(req).__name__!r}; refi_kind discriminator "
+        f"must route to RateAndTermRefiRequest or CashOutRefiRequest (D-02)"
+    )
