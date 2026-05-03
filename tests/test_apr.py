@@ -240,15 +240,29 @@ def test_apr_ffiec_oracle_fixtures_match_within_decimal_00001(
 # =========================================================================
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Wave 0 stub — Plan 07-05 ships regz_appendix_j_5000_36_166_07.json",
-)
 def test_apr_reg_z_appendix_j_worked_example_returns_12_percent(
     apr_fixture: Callable[[str], dict[str, Any]],
 ) -> None:
-    """APR-05 + ROADMAP SC-1: $5000 / 36 monthly $166.07 → APR == 12.00% within Decimal('0.00001')."""
-    pytest.fail("Wave 0 stub")
+    """APR-05 + ROADMAP SC-1: $5000 / 36 monthly $166.07 → APR == 12.00% within Decimal('0.00001').
+
+    Wave 5 (Plan 07-05) flip — loads the SC-1 anchor fixture
+    ``regz_appendix_j_5000_36_166_07.json`` (D-25 LOCKED:
+    ``expected.estimated_apr = "0.120000"`` is the regulatory-publication
+    value from Reg Z Appendix J Example J(c)(1), NOT the engine-emitted
+    value). The engine emits 0.119994 in 1 iteration; the diff vs the
+    regulatory value is Decimal('0.000006'), within the SC-1 tolerance.
+    """
+    import json as _json
+
+    fix = apr_fixture("regz_appendix_j_5000_36_166_07")
+    request = APRRequest.model_validate_json(_json.dumps(fix["request"]))
+    response = solve_apr(request)
+    expected = Decimal(fix["expected"]["estimated_apr"])
+    diff = abs(response.estimated_apr - expected)
+    assert diff <= Decimal("0.00001"), (
+        f"SC-1: APR must equal {expected} within Decimal('0.00001'); "
+        f"got {response.estimated_apr} (diff={diff})"
+    )
 
 
 # =========================================================================
@@ -383,15 +397,36 @@ def test_references_apr_reg_z_doc_present_with_required_sections() -> None:
 # =========================================================================
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Wave 0 stub — Plan 07-02 + 07-05 enforce SC-3 iteration cap",
-)
 def test_newton_raphson_iterations_under_50_for_all_fixtures(
     apr_fixture: Callable[[str], dict[str, Any]],
 ) -> None:
-    """ROADMAP SC-3: every fixture (anchor + 20 FFIEC) converges in <=50 Newton iterations."""
-    pytest.fail("Wave 0 stub")
+    """ROADMAP SC-3: every Phase 7 hand-calc fixture converges in <=50 Newton iterations.
+
+    Wave 5 (Plan 07-05) flip — sweeps every Phase 7 hand-calc fixture
+    that produces a numeric APR (the 45-day negative-path fixture is
+    excluded; it raises ValueError per D-26). The 20+ HMDA Platform
+    oracle fixtures from Wave 7 (Plan 07-07) will join this sweep via a
+    separate parametric test per D-27 (Phase 5 oracle vs hand-calc test
+    split idiom).
+    """
+    import json as _json
+
+    stems = [
+        "regz_appendix_j_5000_36_166_07",
+        "regz_appendix_j_odd_first_period_15_days",
+        "regz_appendix_j_unit_period_monthly_regular",
+    ]
+    for stem in stems:
+        fix = apr_fixture(stem)
+        request = APRRequest.model_validate_json(_json.dumps(fix["request"]))
+        response = solve_apr(request)
+        assert response.iterations <= 50, (
+            f"SC-3: fixture {stem} converged in {response.iterations} iterations (cap=50)"
+        )
+        assert response.iterations >= 1, (
+            f"SC-3: fixture {stem} must report at least 1 Newton iteration; "
+            f"got {response.iterations}"
+        )
 
 
 def test_apr_cli_help_does_not_import_lib_apr() -> None:
