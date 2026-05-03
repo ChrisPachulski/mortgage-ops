@@ -92,7 +92,7 @@ User selected "all" scope; everything below is in v1.
 - [ ] **REFI-05**: Tests with positive-NPV fixture (rate drop, low closing costs)
 - [ ] **REFI-06**: Tests with negative-NPV fixture (same rate, high closing costs)
 - [x] **REFI-07**: Tests with cash-out fixture (proceeds, new balance, total interest comparison)
-- [ ] **REFI-08**: `scripts/refi_npv.py` provides JSON-in / JSON-out CLI
+- [x] **REFI-08**: `scripts/refi_npv.py` provides JSON-in / JSON-out CLI
 - [ ] **REFI-09**: `references/refi-npv.md` documents sign convention explicitly
 
 ### Estimated APR (Reg Z Appendix J)
@@ -276,7 +276,7 @@ Mapped 2026-04-26 by gsd-roadmapper. Every v1 requirement is assigned to exactly
 | REFI-05 | Phase 6 | Pending |
 | REFI-06 | Phase 6 | Pending |
 | REFI-07 | Phase 6 | Implemented (Plan 06-03 — Oracle 3 cash-out engine-derived values pinned end-to-end; Plan 06-05 will pin in fixture file via Decimal equality) |
-| REFI-08 | Phase 6 | Pending |
+| REFI-08 | Phase 6 | Implemented (Plan 06-04 — scripts/refi_npv.py CLI shipped 253 lines; --help fast 25ms with literal SC-5 cite "see references/refi-npv.md" + "outflows negative, savings positive"; 6 Wave-4 stub flips PASS; mypy --strict + ruff clean) |
 | REFI-09 | Phase 6 | Pending |
 | APR-01 | Phase 7 | Pending |
 | APR-02 | Phase 7 | Pending |
