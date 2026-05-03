@@ -156,6 +156,41 @@ def _unit_period_equation(
         return adv_sum - pmt_sum
 
 
+def _derivative(
+    advances: list[AdvanceScheduleEntry],
+    payments: list[PaymentScheduleEntry],
+    i: Decimal,
+) -> Decimal:
+    """Closed-form f'(i) for the Reg Z Appendix J unit-period equation.
+
+    Per RESEARCH §Q(c), differentiating
+        f(i) = sum A*(1+f*i)*(1+i)^(-t) - sum P*(1+g*i)*(1+i)^(-s)
+    yields
+        f'(i) = sum A*[f*(1+i)^(-t) - (1+f*i)*t*(1+i)^(-t-1)]
+              - sum P*[g*(1+i)^(-s) - (1+g*i)*s*(1+i)^(-s-1)]
+
+    Pure Decimal arithmetic under MONEY_CONTEXT (D-09); never mixes float.
+    """
+    with localcontext(MONEY_CONTEXT):
+        one = Decimal("1")
+        adv_d = Decimal("0")
+        for a in advances:
+            t = Decimal(a.unit_period_offset)
+            f = a.unit_period_fraction
+            term1 = a.amount * f * _decimal_pow(one + i, -t)
+            term2 = a.amount * (one + f * i) * t * _decimal_pow(one + i, -t - one)
+            adv_d += term1 - term2
+        pmt_d = Decimal("0")
+        for p in payments:
+            for k in range(p.periods):
+                s = Decimal(p.starting_unit_period + k)
+                g = p.unit_period_fraction if k == 0 else Decimal("0")
+                term1 = p.amount * g * _decimal_pow(one + i, -s)
+                term2 = p.amount * (one + g * i) * s * _decimal_pow(one + i, -s - one)
+                pmt_d += term1 - term2
+        return adv_d - pmt_d
+
+
 class AdvanceScheduleEntry(BaseModel):
     """One advance in the loan disbursement schedule (Reg Z Appendix J §(b)(2)).
 
