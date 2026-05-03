@@ -353,26 +353,32 @@ class _CommonRefiFields(BaseModel):
     Use this when cash-out LTV breaches a PMI/MIP threshold and the caller has
     externally computed the true monthly payment including MI."""
 
-
-def _validate_common(req: _CommonRefiFields) -> _CommonRefiFields:
-    """Cross-field validators applied to both RateAndTermRefiRequest +
-    CashOutRefiRequest.
-
-    - When after_tax_mode=True, marginal_tax_rate AND filing_status MUST be
-      supplied (D-09; otherwise the after-tax tax-shield cashflow stream cannot
-      be computed).
-    - When after_tax_mode=False, marginal_tax_rate AND filing_status SHOULD be
-      None — currently not enforced (warn-but-allow handled in Plan 06-03 engine
-      body, not at construction time, so callers can carry tax fields across
-      mode toggles without re-constructing the request).
-    """
-    if req.after_tax_mode and (req.marginal_tax_rate is None or req.filing_status is None):
-        raise ValueError(
-            "after_tax_mode=True requires both marginal_tax_rate and filing_status "
-            "(D-09; cites lib.rules.irs_pub936.qualified_loan_limit / RUL-11; "
-            "see references/refi-npv.md §'After-Tax Optional Mode')"
-        )
-    return req
+    # WR-07 fix: cross-field validators applied to both RateAndTermRefiRequest
+    # + CashOutRefiRequest are hoisted into a single model_validator on the
+    # shared base, which Pydantic v2 inherits through subclassing. Previously
+    # there was a free-standing _validate_common helper plus per-subclass
+    # _validate_rate_and_term / _validate_cash_out shims that did nothing but
+    # call it. The shim pattern added two methods to each model's introspectable
+    # surface without functional benefit; the helper's
+    # return-the-validated-instance signature was unused (callers ignored the
+    # return). One model_validator at the base layer is the idiomatic v2 shape.
+    @model_validator(mode="after")
+    def _validate_after_tax_fields_present(self) -> _CommonRefiFields:
+        """When after_tax_mode=True, marginal_tax_rate AND filing_status MUST
+        be supplied (D-09; otherwise the after-tax tax-shield cashflow stream
+        cannot be computed). When after_tax_mode=False, marginal_tax_rate AND
+        filing_status SHOULD be None — currently not enforced (warn-but-allow
+        handled in Plan 06-03 engine body, not at construction time, so
+        callers can carry tax fields across mode toggles without
+        re-constructing the request).
+        """
+        if self.after_tax_mode and (self.marginal_tax_rate is None or self.filing_status is None):
+            raise ValueError(
+                "after_tax_mode=True requires both marginal_tax_rate and filing_status "
+                "(D-09; cites lib.rules.irs_pub936.qualified_loan_limit / RUL-11; "
+                "see references/refi-npv.md §'After-Tax Optional Mode')"
+            )
+        return self
 
 
 # ---------------------------------------------------------------------------
@@ -390,11 +396,9 @@ class RateAndTermRefiRequest(_CommonRefiFields):
 
     model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
     refi_kind: Literal["rate_and_term"] = "rate_and_term"
-
-    @model_validator(mode="after")
-    def _validate_rate_and_term(self) -> RateAndTermRefiRequest:
-        _validate_common(self)
-        return self
+    # WR-07: D-09 cross-field validation inherited from
+    # _CommonRefiFields._validate_after_tax_fields_present. No per-subclass
+    # shim required — Pydantic v2 inherits model_validators through subclassing.
 
 
 # ---------------------------------------------------------------------------
@@ -418,11 +422,9 @@ class CashOutRefiRequest(_CommonRefiFields):
     """Equity extracted from the property at refi (gt=0 — a cash-out refi by
     definition has positive cash_out_amount; rate-and-term is the zero-cash-out
     sibling). New loan principal = old_loan_balance + cash_out_amount."""
-
-    @model_validator(mode="after")
-    def _validate_cash_out(self) -> CashOutRefiRequest:
-        _validate_common(self)
-        return self
+    # WR-07: D-09 cross-field validation inherited from
+    # _CommonRefiFields._validate_after_tax_fields_present. No per-subclass
+    # shim required — Pydantic v2 inherits model_validators through subclassing.
 
 
 # ---------------------------------------------------------------------------
