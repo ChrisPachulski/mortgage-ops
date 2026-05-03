@@ -32,6 +32,7 @@
     "total_interest_delta": null,
     "after_tax_npv": null,
     "discount_rate_annual_used": "0.050000",
-    "analysis_horizon_months_used": 300
+    "analysis_horizon_months_used": 300,
+    "cashflows_kinds": ["closing_costs", "monthly_savings"]
   }
 }

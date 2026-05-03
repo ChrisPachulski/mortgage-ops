@@ -33,6 +33,7 @@
     "total_interest_delta": "145706.07",
     "after_tax_npv": null,
     "discount_rate_annual_used": "0.050000",
-    "analysis_horizon_months_used": 240
+    "analysis_horizon_months_used": 240,
+    "cashflows_kinds": ["cash_proceeds", "monthly_payment_delta"]
   }
 }
