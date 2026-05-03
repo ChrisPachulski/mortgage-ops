@@ -102,8 +102,8 @@ User selected "all" scope; everything below is in v1.
 - [x] **APR-03**: Tolerance Decimal("0.00001") (10x tighter than Reg Z's ±0.005% requirement)
 - [ ] **APR-04**: 20+ FFIEC APR Tool capture-as-fixture tests (varying loans, terms, advances)
 - [ ] **APR-05**: Reg Z commentary worked example as fixture: $5,000 / 36 × $166.07 → 12.00% APR
-- [ ] **APR-06**: User-facing output labeled "estimated APR" (not "APR")
-- [ ] **APR-07**: `scripts/apr_reg_z.py` provides JSON-in / JSON-out CLI
+- [x] **APR-06**: User-facing output labeled "estimated APR" (not "APR")
+- [x] **APR-07**: `scripts/apr_reg_z.py` provides JSON-in / JSON-out CLI
 - [ ] **APR-08**: `references/apr-reg-z.md` documents unit-period model + day-count conventions
 
 ### Stress Testing & Points
@@ -283,8 +283,8 @@ Mapped 2026-04-26 by gsd-roadmapper. Every v1 requirement is assigned to exactly
 | APR-03 | Phase 7 | Done (07-02 — TOLERANCE = Decimal("0.00001") + DOLLAR_RESIDUAL = Decimal("0.01") D-10 dual-criterion convergence; 125x tighter than Reg Z's regular-transaction ±1/8 pp = Decimal("0.00125")) |
 | APR-04 | Phase 7 | Pending |
 | APR-05 | Phase 7 | Pending |
-| APR-06 | Phase 7 | Pending |
-| APR-07 | Phase 7 | Pending |
+| APR-06 | Phase 7 | Done (07-04 — literal 'estimated APR' contract enforced end-to-end through the CLI surface: D-22 three-layer enforcement combining (a) Pydantic @model_validator on APRResponse.summary [Wave 1 D-05] + (b) literal phrase 4x in scripts/apr_reg_z.py module docstring + epilog body x3 [Wave 4 D-22] + (c) regex test test_apr_response_uses_literal_estimated_apr_text via re.search r'\\bAPR\\b(?!\\s*tolerance)' [Wave 4 flip]) |
+| APR-07 | Phase 7 | Done (07-04 — scripts/apr_reg_z.py 184 lines mirroring scripts/arm_simulate.py byte-for-byte: argparse + --input + sys.path injection + lazy-import block (D-18) + JSON-float gate via scripts._cli_helpers + Pydantic ValidationError + APRConvergenceError 6-key envelope per D-21 + happy-path APRResponse.model_dump_json on stdout exit 0; test_apr_cli_subprocess_round_trip on SC-1 anchor inputs returns estimated_apr=0.119994 within Decimal('0.00001') of 0.120000 in 1 Newton iter) |
 | APR-08 | Phase 7 | Pending |
 | STRS-01 | Phase 8 | Pending |
 | STRS-02 | Phase 8 | Pending |
