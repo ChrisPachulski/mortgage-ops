@@ -44,22 +44,24 @@ def find_json_float_loc(raw: str) -> tuple[list[str | int], str] | None:
     except json.JSONDecodeError:
         return None
 
-    def _walk(node: Any, path: list[str | int]) -> tuple[list[str | int], str] | None:
+    # WR-05: iterative LIFO walker (was recursive). Recursion overflowed Python's default
+    # `sys.getrecursionlimit()` (~1000) on pathological deep-JSON inputs, raising an
+    # uncaught RecursionError instead of the documented {"error": ...} envelope.
+    # We push children in REVERSED order so that LIFO pop visits keys/indices in the
+    # original dict-insertion / list-positional order — preserving the recursive
+    # walker's depth-first contract pinned by test_multiple_floats_returns_first_depth_first.
+    stack: list[tuple[Any, list[str | int]]] = [(parsed, [])]
+    while stack:
+        node, path = stack.pop()
         if isinstance(node, _Decimal):
             return (path, str(node))
         if isinstance(node, dict):
-            for k, v in node.items():
-                hit = _walk(v, [*path, k])
-                if hit is not None:
-                    return hit
+            for k, v in reversed(list(node.items())):
+                stack.append((v, [*path, k]))
         elif isinstance(node, list):
-            for i, v in enumerate(node):
-                hit = _walk(v, [*path, i])
-                if hit is not None:
-                    return hit
-        return None
-
-    return _walk(parsed, [])
+            for i in range(len(node) - 1, -1, -1):
+                stack.append((node[i], [*path, i]))
+    return None
 
 
 def make_decimal_type_envelope(
