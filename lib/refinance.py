@@ -137,6 +137,7 @@ Stale-warning expected behavior (inherited from Phase 4):
 
 from __future__ import annotations
 
+import warnings
 from datetime import date  # noqa: F401  (reserved for Plan 06-02/06-03 schedule date math)
 from decimal import ROUND_CEILING, Decimal
 from typing import TYPE_CHECKING, Annotated, Final, Literal
@@ -151,6 +152,7 @@ from lib.models import (
     Rate,
 )
 from lib.money import quantize_cents, quantize_rate
+from lib.rules._loader import StaleReferenceWarning
 
 if TYPE_CHECKING:
     from collections.abc import Sequence  # noqa: F401  (reserved for Plan 06-04 dispatcher hints)
@@ -888,19 +890,155 @@ def evaluate_rate_and_term(req: RateAndTermRefiRequest) -> RefiResponse:
 
 
 def evaluate_cash_out(req: CashOutRefiRequest) -> RefiResponse:
-    """Evaluate a cash-out refi (Wave 3 / Plan 06-03 ships the body).
+    """Cash-out refi NPV (REFI-02; SC-3).
 
-    REFI-02 + SC-3 anchor. Computes:
-      - new principal = old_loan_balance + cash_out_amount
-      - cash_proceeds = cash_out_amount - closing_costs (NET of closing per D-15)
-      - monthly_payment_delta = new_monthly_pi - old_monthly_pi
-      - total_interest_delta = new_total_interest - old_total_interest
-      - cashflows: t=0 cash_proceeds (inflow); t=1..N monthly_payment_delta
-        (outflow when new_pi > old_pi, which is typical for cash-out)
-      - npv via numpy_financial.npv
-      - if after_tax_mode: tax_shield cashflows added per RUL-11
+    New principal = old_balance + cash_out_amount (D-15: NO closing-costs
+    financing in v1). Cash proceeds at t=0 = cash_out_amount - closing_costs
+    (NET; D-12 cash-out convention). When closing_costs > cash_out_amount the
+    net is negative; per Rule-1 deviation in PLAN 06-03 we surface
+    cash_proceeds=None (consumer-friendly: 'no positive proceeds') rather than
+    a negative Money value, AND we keep cash_proceeds out of the t=0 cashflow
+    inflow stream so NPV still uses signed cash flows correctly via the
+    closing_costs outflow path.
+
+    Total interest delta = new_schedule.total_interest -
+                           old_residual_schedule.total_interest (signed; positive
+    when new costs more interest, typical for cash-out + extension).
+
+    Pipeline (mirrors evaluate_rate_and_term shape):
+      1. Build OLD residual + NEW loan (NEW principal = old_balance + cash_out).
+      2. Extract monthly_pi (D-10 override honored if supplied).
+      3. Signed deltas: monthly_payment_delta + monthly_savings + cash_proceeds_net
+         + total_interest_delta.
+      4. Horizon (D-11 default = new_loan.term_months).
+      5. Cashflows — closing costs NOT a separate t=0 outflow when cash proceeds
+         positive (already netted into cash_proceeds_net per D-12). When net
+         goes negative, fall back to closing_costs outflow at t=0 + no t=0
+         inflow (consumer-friendly).
+      6. After-tax overlay (D-09) when after_tax_mode=True.
+      7. NPV (pre-tax).
+      8. Breakeven (cash-out: simple is no_savings when payment grows;
+         NPV-based is typically 0 when cash_proceeds > 0 at t=0).
+      9. Construct RefiResponse with all SC-3 fields populated.
     """
-    raise NotImplementedError("Plan 06-03 ships cash-out engine body (Wave 3 of Phase 6)")
+    # 1: build loans
+    old_loan = _build_old_loan_residual(
+        balance_remaining=req.old_loan_balance,
+        annual_rate=req.old_annual_rate,
+        remaining_months=req.old_remaining_months,
+    )
+    new_principal = req.old_loan_balance + req.cash_out_amount
+    new_loan = _build_new_loan(
+        new_principal=new_principal,
+        new_annual_rate=req.new_annual_rate,
+        new_term_months=req.new_term_months,
+    )
+
+    # 2: P&I + schedules (override per D-10 if supplied — important for cash-out
+    # PMI/MIP cases where the caller has externally computed monthly_pi+MI)
+    old_schedule = build_schedule(old_loan)
+    new_schedule = build_schedule(new_loan)
+    old_monthly_pi = old_schedule.monthly_pi
+    new_monthly_pi = (
+        req.new_loan_monthly_pi_override
+        if req.new_loan_monthly_pi_override is not None
+        else new_schedule.monthly_pi
+    )
+
+    # 3: signed deltas
+    monthly_payment_delta = new_monthly_pi - old_monthly_pi  # +ve = pay more
+    monthly_savings = old_monthly_pi - new_monthly_pi  # mirror; -ve when paying more
+    cash_proceeds_net = quantize_cents(req.cash_out_amount - req.closing_costs)
+    total_interest_delta = quantize_cents(new_schedule.total_interest - old_schedule.total_interest)
+
+    # 4: horizon (D-11)
+    horizon = req.analysis_horizon_months or new_loan.term_months
+
+    # 5: cashflows
+    # When cash_proceeds_net > 0 (typical), closing costs are netted into cash
+    # proceeds per D-12 — they do NOT also appear as a t=0 outflow.
+    # When cash_proceeds_net <= 0 (closing > cash out — pathological), surface
+    # closing costs as the t=0 outflow and DO NOT emit a negative inflow.
+    if cash_proceeds_net > Decimal("0.00"):
+        cashflows = _build_refi_cashflows(
+            closing_costs=Decimal("0.00"),  # netted into cash_proceeds_net
+            old_monthly_pi=old_monthly_pi,
+            new_monthly_pi=new_monthly_pi,
+            horizon_months=horizon,
+            cash_proceeds_net=cash_proceeds_net,
+        )
+    else:
+        cashflows = _build_refi_cashflows(
+            closing_costs=req.closing_costs,
+            old_monthly_pi=old_monthly_pi,
+            new_monthly_pi=new_monthly_pi,
+            horizon_months=horizon,
+            cash_proceeds_net=Decimal("0.00"),
+        )
+
+    # 6: after-tax overlay (D-09) — capture StaleReferenceWarning from IRS
+    # predicate per module docstring "Stale-warning expected behavior" contract.
+    after_tax_npv: Decimal | None = None
+    captured_warnings: list[str] = []
+    discount_rate = quantize_rate(req.discount_rate_annual)
+    if req.after_tax_mode:
+        # validator (_validate_common D-09) guarantees both fields present
+        assert req.marginal_tax_rate is not None
+        assert req.filing_status is not None
+        with warnings.catch_warnings(record=True) as captured:
+            warnings.simplefilter("always", StaleReferenceWarning)
+            tax_shield_cashflows = _compute_tax_shield_cashflows(
+                new_loan=new_loan,
+                marginal_tax_rate=req.marginal_tax_rate,
+                filing_status=req.filing_status,
+                has_grandfathered_debt=req.has_grandfathered_debt,
+                horizon_months=horizon,
+            )
+            after_tax_npv = _compute_npv(
+                discount_rate,
+                cashflows + tax_shield_cashflows,
+                horizon,
+            )
+        for w in captured:
+            if issubclass(w.category, StaleReferenceWarning):
+                captured_warnings.append(str(w.message))
+
+    # 7: NPV (pre-tax)
+    npv = _compute_npv(discount_rate, cashflows, horizon)
+
+    # 8: breakeven
+    # cash-out: simple is "no_savings" when monthly_savings <= 0 (typical for
+    # cash-out where new_pi > old_pi); NPV-breakeven is 0 when cash proceeds at
+    # t=0 already make cumulative NPV non-negative (RESEARCH §"(d) Divergence" 3).
+    simple_months, simple_status = _compute_breakeven_simple(req.closing_costs, monthly_savings)
+    npv_months, npv_status = _compute_breakeven_npv(discount_rate, cashflows, horizon)
+
+    # 9: response
+    return RefiResponse(
+        refi_kind="cash_out",
+        npv=npv,
+        breakeven=RefiBreakeven(
+            simple_months=simple_months,
+            simple_status=simple_status,
+            npv_months=npv_months,
+            npv_status=npv_status,
+        ),
+        old_monthly_pi=old_monthly_pi,
+        new_monthly_pi=new_monthly_pi,
+        monthly_savings=quantize_cents(monthly_savings),
+        # D-12 / Rule-1 carve-out: only surface cash_proceeds when it's positive;
+        # negative-net cases (closing > cash) report None to signal "no positive
+        # proceeds" (consumer-friendly; the closing_costs outflow + lifetime
+        # interest delta still flow through the cashflow stream and NPV).
+        cash_proceeds=cash_proceeds_net if cash_proceeds_net > Decimal("0.00") else None,
+        monthly_payment_delta=quantize_cents(monthly_payment_delta),
+        total_interest_delta=total_interest_delta,
+        after_tax_npv=after_tax_npv,
+        discount_rate_annual_used=discount_rate,
+        analysis_horizon_months_used=horizon,
+        cashflows=cashflows,
+        warnings=captured_warnings,
+    )
 
 
 def evaluate(req: RefiRequest) -> RefiResponse:
