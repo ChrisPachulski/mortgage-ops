@@ -38,10 +38,10 @@ import subprocess  # noqa: F401  (reserved for Wave 4 CLI subprocess tests)
 import sys  # noqa: F401  (reserved for Wave 4 sys.executable in subprocess invocations)
 from decimal import Decimal
 from pathlib import Path
-from typing import TYPE_CHECKING, Any  # noqa: F401  (Any reserved for fixture loaders in flips)
+from typing import TYPE_CHECKING, Any
 
 import pytest
-from lib.refinance import RefiCashflow
+from lib.refinance import CashOutRefiRequest, RateAndTermRefiRequest, RefiCashflow
 from pydantic import ValidationError
 
 if TYPE_CHECKING:
@@ -371,9 +371,93 @@ def test_refi_cashflow_kind_citation_coverage() -> None:
     pytest.fail("Wave 0 stub")
 
 
-@pytest.mark.xfail(
-    strict=True, reason="Wave 0 stub — Plan 06-03 after-tax mode cross-field validator (D-09)"
-)
 def test_after_tax_mode_validator_requires_all() -> None:
-    """D-09: when after_tax_mode=True, both marginal_tax_rate AND filing_status are required (else ValidationError)."""
-    pytest.fail("Wave 0 stub")
+    """D-09: when after_tax_mode=True, both marginal_tax_rate AND filing_status are required (else ValidationError).
+
+    The cross-field validator `_validate_common` (Wave 1) is exercised through both
+    request leaf models (RateAndTermRefiRequest + CashOutRefiRequest). When
+    after_tax_mode=True, omitting EITHER marginal_tax_rate OR filing_status raises
+    ValidationError with a message that cites D-09 + RUL-11 (lib.rules.irs_pub936
+    qualified_loan_limit). The happy path (all three supplied) constructs cleanly.
+
+    Wave 3 / Plan 06-03 anchor — the validator was shipped at Wave 1 (Plan 06-01)
+    but only exercised at the engine-consumer level here, where the after-tax
+    tax_shield branch lights up (lib.refinance._compute_tax_shield_cashflows).
+    """
+    base_kwargs: dict[str, Any] = {
+        "old_loan_balance": Decimal("300000.00"),
+        "old_annual_rate": Decimal("0.07"),
+        "old_remaining_months": 300,
+        "new_annual_rate": Decimal("0.05"),
+        "new_term_months": 300,
+        "closing_costs": Decimal("2000.00"),
+        "discount_rate_annual": Decimal("0.05"),
+    }
+
+    # Rejection 1: missing marginal_tax_rate (filing_status supplied)
+    with pytest.raises(
+        ValidationError,
+        match="after_tax_mode=True requires both marginal_tax_rate and filing_status",
+    ):
+        RateAndTermRefiRequest(
+            **base_kwargs,
+            after_tax_mode=True,
+            marginal_tax_rate=None,
+            filing_status="single",
+        )
+
+    # Rejection 2: missing filing_status (marginal_tax_rate supplied)
+    with pytest.raises(
+        ValidationError,
+        match="after_tax_mode=True requires both marginal_tax_rate and filing_status",
+    ):
+        RateAndTermRefiRequest(
+            **base_kwargs,
+            after_tax_mode=True,
+            marginal_tax_rate=Decimal("0.24"),
+            filing_status=None,
+        )
+
+    # Rejection 3: both missing (after_tax_mode=True with neither)
+    with pytest.raises(
+        ValidationError,
+        match="after_tax_mode=True requires both marginal_tax_rate and filing_status",
+    ):
+        CashOutRefiRequest(
+            **base_kwargs,
+            cash_out_amount=Decimal("50000.00"),
+            after_tax_mode=True,
+            marginal_tax_rate=None,
+            filing_status=None,
+        )
+
+    # Happy path: all three supplied → constructs cleanly (rate-and-term)
+    rate_and_term_ok = RateAndTermRefiRequest(
+        **base_kwargs,
+        after_tax_mode=True,
+        marginal_tax_rate=Decimal("0.24"),
+        filing_status="mfj",
+    )
+    assert rate_and_term_ok.after_tax_mode is True
+    assert rate_and_term_ok.marginal_tax_rate == Decimal("0.24")
+    assert rate_and_term_ok.filing_status == "mfj"
+    assert rate_and_term_ok.refi_kind == "rate_and_term"
+
+    # Happy path: all three supplied → constructs cleanly (cash-out)
+    cash_out_ok = CashOutRefiRequest(
+        **base_kwargs,
+        cash_out_amount=Decimal("50000.00"),
+        after_tax_mode=True,
+        marginal_tax_rate=Decimal("0.32"),
+        filing_status="single",
+    )
+    assert cash_out_ok.after_tax_mode is True
+    assert cash_out_ok.marginal_tax_rate == Decimal("0.32")
+    assert cash_out_ok.filing_status == "single"
+    assert cash_out_ok.refi_kind == "cash_out"
+
+    # Happy path: after_tax_mode=False → tax fields can be None (default carry-through)
+    rate_and_term_off = RateAndTermRefiRequest(**base_kwargs)
+    assert rate_and_term_off.after_tax_mode is False
+    assert rate_and_term_off.marginal_tax_rate is None
+    assert rate_and_term_off.filing_status is None

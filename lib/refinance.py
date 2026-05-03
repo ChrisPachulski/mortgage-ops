@@ -360,10 +360,9 @@ def _validate_common(req: _CommonRefiFields) -> _CommonRefiFields:
     """
     if req.after_tax_mode and (req.marginal_tax_rate is None or req.filing_status is None):
         raise ValueError(
-            "after_tax_mode=True requires both marginal_tax_rate AND filing_status "
-            "(D-09; lib.rules.irs_pub936.qualified_loan_limit needs filing_status to "
-            "select the $750k post-2017 vs $1M grandfathered cap; "
-            f"see {SIGN_CONVENTION_CITATION})"
+            "after_tax_mode=True requires both marginal_tax_rate and filing_status "
+            "(D-09; cites lib.rules.irs_pub936.qualified_loan_limit / RUL-11; "
+            "see references/refi-npv.md §'After-Tax Optional Mode')"
         )
     return req
 
