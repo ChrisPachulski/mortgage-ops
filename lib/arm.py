@@ -13,6 +13,7 @@ on ARMTerms (ROADMAP SC-5).
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Literal
 
@@ -335,6 +336,13 @@ def build_arm_schedule(req: ARMRequest) -> ARMSchedule:
     loan = req.loan
     terms = req.arm_terms
 
+    # WR-01: Synthesize the origination anchor ONCE per build_arm_schedule call so every
+    # per-epoch row's payment_date offsets from the same date. Mirrors lib.amortize._build_fixed_monthly's
+    # `datetime.now(UTC).date()` fallback (D-12 idiom). Without this single anchor, each per-epoch
+    # synthetic Loan would call datetime.now(UTC).date() independently — producing duplicate /
+    # non-monotonic payment_date values across epochs and cross-midnight drift between epochs.
+    origination_anchor = loan.origination_date or datetime.now(UTC).date()
+
     # Compute reset triggers + epoch boundaries.
     triggers = _compute_reset_triggers(terms, loan.term_months)
     # boundaries: list of (start_period, end_period_exclusive) per epoch.
@@ -399,9 +407,7 @@ def build_arm_schedule(req: ARMRequest) -> ARMSchedule:
             arm_payments.append(
                 ARMPayment(
                     period=absolute_period,
-                    payment_date=loan.origination_date + relativedelta(months=absolute_period)
-                    if loan.origination_date is not None
-                    else p.payment_date,
+                    payment_date=origination_anchor + relativedelta(months=absolute_period),
                     payment=p.payment,
                     principal=p.principal,
                     interest=p.interest,
