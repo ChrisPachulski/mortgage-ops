@@ -539,7 +539,7 @@ class RefiResponse(BaseModel):
 
 def _build_old_loan_residual(
     balance_remaining: Decimal,
-    annual_rate: Decimal,
+    annual_rate: Decimal,  # already at-quantum from Pydantic Rate validation
     remaining_months: int,
 ) -> Loan:
     """Construct a synthetic Loan representing the OLD loan as it stands today
@@ -547,10 +547,16 @@ def _build_old_loan_residual(
 
     Uses the OLD rate over the REMAINING term — NOT the original term.
     Documented in references/refi-npv.md §"Cashflow Inventory".
+
+    WR-08: annual_rate is passed through unchanged. The caller supplies a
+    Pydantic-validated Rate (already at 6dp quantum); re-quantizing here
+    violated 'quantize once at the boundary' discipline (CLAUDE.md FND-01,
+    lib/money.py). Engine-entry quantize_rate(req.discount_rate_annual)
+    remains the single quantize point for the rate axis.
     """
     return Loan(
         principal=quantize_cents(balance_remaining),
-        annual_rate=quantize_rate(annual_rate),
+        annual_rate=annual_rate,  # already validated to 6dp by Rate Annotated type
         term_months=remaining_months,
         origination_date=None,  # synthesized at engine time per Phase 3 D-12
         loan_type="fixed",
@@ -559,14 +565,19 @@ def _build_old_loan_residual(
 
 def _build_new_loan(
     new_principal: Decimal,
-    new_annual_rate: Decimal,
+    new_annual_rate: Decimal,  # already at-quantum from Pydantic Rate validation
     new_term_months: int,
 ) -> Loan:
     """Construct the NEW loan post-refi (rate-and-term: new_principal == old_balance;
-    cash-out: new_principal == old_balance + cash_out_amount per D-15)."""
+    cash-out: new_principal == old_balance + cash_out_amount per D-15).
+
+    WR-08: new_annual_rate is passed through unchanged (already at-quantum
+    from the Pydantic Rate validation at request boundary). See
+    _build_old_loan_residual docstring for the 'quantize once' rationale.
+    """
     return Loan(
         principal=quantize_cents(new_principal),
-        annual_rate=quantize_rate(new_annual_rate),
+        annual_rate=new_annual_rate,  # already validated to 6dp by Rate Annotated type
         term_months=new_term_months,
         origination_date=None,
         loan_type="fixed",
