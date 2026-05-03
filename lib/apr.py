@@ -193,6 +193,30 @@ def _derivative(
         return adv_d - pmt_d
 
 
+class APRConvergenceError(ValueError):
+    """Newton-Raphson failed to converge within the 50-iteration cap (SC-3).
+
+    Surfaced via scripts/apr_reg_z.py 6-key envelope as type='value_error',
+    loc=['solver'], ctx={'class': 'APRConvergenceError', 'iterations': 50,
+    'last_residual': str(...)} - Phase 4 D-13 inheritance.
+
+    Attributes:
+        iterations: How many Newton iterations ran before bailing (== MAX_ITER
+                    when the cap is exceeded; smaller when f'(i) hit zero).
+        last_residual: abs(f(i)) at the final iteration (Decimal dollars).
+        last_i: The last periodic-rate guess before bailing.
+    """
+
+    def __init__(self, iterations: int, last_residual: Decimal, last_i: Decimal) -> None:
+        self.iterations = iterations
+        self.last_residual = last_residual
+        self.last_i = last_i
+        super().__init__(
+            f"Newton-Raphson did not converge within {iterations} iterations "
+            f"(ROADMAP SC-3 cap=50); last_residual={last_residual}, last_i={last_i}"
+        )
+
+
 def _seed_apr(
     advance_schedule: list[AdvanceScheduleEntry],
     payment_schedule: list[PaymentScheduleEntry],
