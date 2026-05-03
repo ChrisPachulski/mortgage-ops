@@ -85,13 +85,13 @@ User selected "all" scope; everything below is in v1.
 
 ### Refinance
 
-- [ ] **REFI-01**: `lib/refinance.py` calculates rate-and-term refi NPV (borrower perspective: outflows negative, savings positive)
-- [ ] **REFI-02**: Cash-out refi modeling (new principal > old balance)
-- [ ] **REFI-03**: Breakeven months: `closing_costs / monthly_savings` (simple) and NPV-based (proper)
+- [x] **REFI-01**: `lib/refinance.py` calculates rate-and-term refi NPV (borrower perspective: outflows negative, savings positive)
+- [x] **REFI-02**: Cash-out refi modeling (new principal > old balance)
+- [x] **REFI-03**: Breakeven months: `closing_costs / monthly_savings` (simple) and NPV-based (proper)
 - [ ] **REFI-04**: Optional `pyxirr` integration for batch NPV across many refi offers
 - [ ] **REFI-05**: Tests with positive-NPV fixture (rate drop, low closing costs)
 - [ ] **REFI-06**: Tests with negative-NPV fixture (same rate, high closing costs)
-- [ ] **REFI-07**: Tests with cash-out fixture (proceeds, new balance, total interest comparison)
+- [x] **REFI-07**: Tests with cash-out fixture (proceeds, new balance, total interest comparison)
 - [ ] **REFI-08**: `scripts/refi_npv.py` provides JSON-in / JSON-out CLI
 - [ ] **REFI-09**: `references/refi-npv.md` documents sign convention explicitly
 
@@ -269,13 +269,13 @@ Mapped 2026-04-26 by gsd-roadmapper. Every v1 requirement is assigned to exactly
 | ARM-07 | Phase 5 | Pending |
 | ARM-08 | Phase 5 | Pending |
 | ARM-09 | Phase 5 | Pending |
-| REFI-01 | Phase 6 | Pending |
-| REFI-02 | Phase 6 | Pending |
-| REFI-03 | Phase 6 | Pending |
-| REFI-04 | Phase 6 | Pending |
+| REFI-01 | Phase 6 | Implemented (Plan 06-02 — engine layer; CLI surface ships at Plan 06-04 + fixture flips at Plan 06-05) |
+| REFI-02 | Phase 6 | Implemented (Plan 06-03 — engine layer; CLI surface ships at Plan 06-04 + fixture flips at Plan 06-05) |
+| REFI-03 | Phase 6 | Implemented (Plan 06-02 — _compute_breakeven_simple + _compute_breakeven_npv helpers shipped; D-06 cumulative-NPV scan; CLI + fixture flips ship at Plans 06-04/06-05) |
+| REFI-04 | Phase 6 | Pending (Phase 11 SUBA-02 deferral per D-07; REFI-04 says "Optional pyxirr integration" — Phase 6 ships docstring deferral + lib/refinance.py module-docstring "Phase 11 migration note" marker) |
 | REFI-05 | Phase 6 | Pending |
 | REFI-06 | Phase 6 | Pending |
-| REFI-07 | Phase 6 | Pending |
+| REFI-07 | Phase 6 | Implemented (Plan 06-03 — Oracle 3 cash-out engine-derived values pinned end-to-end; Plan 06-05 will pin in fixture file via Decimal equality) |
 | REFI-08 | Phase 6 | Pending |
 | REFI-09 | Phase 6 | Pending |
 | APR-01 | Phase 7 | Pending |
