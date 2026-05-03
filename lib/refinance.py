@@ -915,9 +915,20 @@ def evaluate_rate_and_term(req: RateAndTermRefiRequest) -> RefiResponse:
     captured_warnings: list[str] = []
     audit_cashflows = cashflows
     if req.after_tax_mode:
-        # validator (_validate_common D-09) guarantees both fields present
-        assert req.marginal_tax_rate is not None
-        assert req.filing_status is not None
+        # WR-09: explicit runtime check (survives python -O bytecode
+        # stripping). _CommonRefiFields._validate_after_tax_fields_present
+        # (D-09) is supposed to guarantee both fields are present when
+        # after_tax_mode=True, so this should never fire — but if it does,
+        # surface a clear RuntimeError instead of letting the helper raise
+        # an obscure 'unsupported operand type' from Decimal arithmetic.
+        if req.marginal_tax_rate is None or req.filing_status is None:
+            raise RuntimeError(
+                "internal invariant violated: after_tax_mode=True but "
+                "marginal_tax_rate/filing_status is None; "
+                "_CommonRefiFields._validate_after_tax_fields_present (D-09) "
+                "should have rejected this construction. (WR-09 fix: explicit "
+                "runtime check, not assert — survives python -O.)"
+            )
         with warnings.catch_warnings(record=True) as captured:
             warnings.simplefilter("always", StaleReferenceWarning)
             tax_shield_cashflows = _compute_tax_shield_cashflows(
@@ -1070,9 +1081,20 @@ def evaluate_cash_out(req: CashOutRefiRequest) -> RefiResponse:
     audit_cashflows = cashflows
     discount_rate = quantize_rate(req.discount_rate_annual)
     if req.after_tax_mode:
-        # validator (_validate_common D-09) guarantees both fields present
-        assert req.marginal_tax_rate is not None
-        assert req.filing_status is not None
+        # WR-09: explicit runtime check (survives python -O bytecode
+        # stripping). _CommonRefiFields._validate_after_tax_fields_present
+        # (D-09) is supposed to guarantee both fields are present when
+        # after_tax_mode=True, so this should never fire — but if it does,
+        # surface a clear RuntimeError instead of letting the helper raise
+        # an obscure 'unsupported operand type' from Decimal arithmetic.
+        if req.marginal_tax_rate is None or req.filing_status is None:
+            raise RuntimeError(
+                "internal invariant violated: after_tax_mode=True but "
+                "marginal_tax_rate/filing_status is None; "
+                "_CommonRefiFields._validate_after_tax_fields_present (D-09) "
+                "should have rejected this construction. (WR-09 fix: explicit "
+                "runtime check, not assert — survives python -O.)"
+            )
         with warnings.catch_warnings(record=True) as captured:
             warnings.simplefilter("always", StaleReferenceWarning)
             tax_shield_cashflows = _compute_tax_shield_cashflows(
