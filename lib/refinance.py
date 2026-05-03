@@ -495,8 +495,16 @@ class RefiResponse(BaseModel):
     cash-out larger principal raises the payment."""
 
     total_interest_delta: Decimal | None = None
-    """SC-3: signed Decimal; new_total_remaining_interest - old_total_remaining_interest.
-    Positive when the cash-out + extension increases lifetime interest."""
+    """SC-3: signed Decimal. NEW loan total lifetime interest (from refi
+    origination forward, over the full new term) minus OLD loan residual
+    total interest (from refi date forward, over remaining_months only). Both
+    legs are 'from refi date forward' but over each loan's own term length;
+    'remaining' on the OLD side is the residual schedule synthesized from
+    balance_remaining + remaining_months. Positive when the cash-out +
+    extension increases lifetime interest paid (typical for cash-out refis
+    that lengthen the term). WR-05: this docstring previously used
+    'remaining' loosely, which a careful reader could interpret as 'new
+    loan's interest remaining at some unspecified later date'."""
 
     # After-tax mode only (None unless after_tax_mode=True)
     after_tax_npv: Decimal | None = None
