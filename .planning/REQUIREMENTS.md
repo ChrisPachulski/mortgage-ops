@@ -89,8 +89,8 @@ User selected "all" scope; everything below is in v1.
 - [x] **REFI-02**: Cash-out refi modeling (new principal > old balance)
 - [x] **REFI-03**: Breakeven months: `closing_costs / monthly_savings` (simple) and NPV-based (proper)
 - [ ] **REFI-04**: Optional `pyxirr` integration for batch NPV across many refi offers
-- [ ] **REFI-05**: Tests with positive-NPV fixture (rate drop, low closing costs)
-- [ ] **REFI-06**: Tests with negative-NPV fixture (same rate, high closing costs)
+- [x] **REFI-05**: Tests with positive-NPV fixture (rate drop, low closing costs)
+- [x] **REFI-06**: Tests with negative-NPV fixture (same rate, high closing costs)
 - [x] **REFI-07**: Tests with cash-out fixture (proceeds, new balance, total interest comparison)
 - [x] **REFI-08**: `scripts/refi_npv.py` provides JSON-in / JSON-out CLI
 - [ ] **REFI-09**: `references/refi-npv.md` documents sign convention explicitly
@@ -269,14 +269,14 @@ Mapped 2026-04-26 by gsd-roadmapper. Every v1 requirement is assigned to exactly
 | ARM-07 | Phase 5 | Pending |
 | ARM-08 | Phase 5 | Pending |
 | ARM-09 | Phase 5 | Pending |
-| REFI-01 | Phase 6 | Implemented (Plan 06-02 — engine layer; CLI surface ships at Plan 06-04 + fixture flips at Plan 06-05) |
-| REFI-02 | Phase 6 | Implemented (Plan 06-03 — engine layer; CLI surface ships at Plan 06-04 + fixture flips at Plan 06-05) |
-| REFI-03 | Phase 6 | Implemented (Plan 06-02 — _compute_breakeven_simple + _compute_breakeven_npv helpers shipped; D-06 cumulative-NPV scan; CLI + fixture flips ship at Plans 06-04/06-05) |
-| REFI-04 | Phase 6 | Pending (Phase 11 SUBA-02 deferral per D-07; REFI-04 says "Optional pyxirr integration" — Phase 6 ships docstring deferral + lib/refinance.py module-docstring "Phase 11 migration note" marker) |
-| REFI-05 | Phase 6 | Pending |
-| REFI-06 | Phase 6 | Pending |
-| REFI-07 | Phase 6 | Implemented (Plan 06-03 — Oracle 3 cash-out engine-derived values pinned end-to-end; Plan 06-05 will pin in fixture file via Decimal equality) |
-| REFI-08 | Phase 6 | Implemented (Plan 06-04 — scripts/refi_npv.py CLI shipped 253 lines; --help fast 25ms with literal SC-5 cite "see references/refi-npv.md" + "outflows negative, savings positive"; 6 Wave-4 stub flips PASS; mypy --strict + ruff clean) |
+| REFI-01 | Phase 6 | Implemented (Plan 06-02 + 06-05 — engine layer + 3 fixture-driven test flips: test_refi_rate_and_term_positive_npv + test_refi_rate_and_term_negative_npv + test_refi_npv_decimal_exact all PASS) |
+| REFI-02 | Phase 6 | Implemented (Plan 06-03 + 06-05 — engine layer + 3 fixture-driven test flips: test_refi_cash_out_proceeds + test_refi_cash_out_new_monthly_pi + test_refi_cash_out_total_interest_delta all PASS) |
+| REFI-03 | Phase 6 | Implemented (Plan 06-02 + 06-05 — _compute_breakeven_simple + _compute_breakeven_npv helpers + 3 fixture-driven test flips: test_refi_breakeven_simple_labeled + test_refi_breakeven_npv_labeled + test_refi_breakeven_divergence_documented all PASS; D-06 cumulative-NPV scan correctly returns 'never_breaks_even' when horizon truncation prevents cumulative >= 0) |
+| REFI-04 | Phase 6 | Pending (Phase 11 SUBA-02 deferral per D-07; REFI-04 says "Optional pyxirr integration" — Phase 6 ships docstring deferral + lib/refinance.py module-docstring "Phase 11 migration note" marker; Plan 06-05 ships test_pyxirr_deferred_to_phase11_documented PASS asserting the docstring deferral) |
+| REFI-05 | Phase 6 | Implemented (Plan 06-05 — tests/fixtures/refinance/positive_npv_200bps_drop_2k_costs.json shipped with engine-derived expected values pinned via Decimal equality; Oracle 1 NPV=60705.48; test_refi_rate_and_term_positive_npv PASS) |
+| REFI-06 | Phase 6 | Implemented (Plan 06-05 — tests/fixtures/refinance/negative_npv_short_horizon.json shipped with engine-derived expected values pinned via Decimal equality; Oracle 2 NPV=-718.01 via D-13 horizon=12 truncation; test_refi_rate_and_term_negative_npv PASS) |
+| REFI-07 | Phase 6 | Implemented (Plan 06-03 + 06-05 — Oracle 3 cash-out engine-derived values pinned end-to-end + tests/fixtures/refinance/cash_out_proceeds_50k.json shipped with cash_proceeds=47000.00, npv=36996.30, total_interest_delta=145706.07 pinned via Decimal equality; 3 SC-3 surface tests PASS) |
+| REFI-08 | Phase 6 | Implemented (Plan 06-04 + 06-05 — scripts/refi_npv.py CLI shipped 253 lines + sign_validator_outflow_positive.json fixture exercises CLI round-trip rejection via discount_rate_annual='1.5' above Pydantic Rate le=1 → exit 2 + 6-key WR-02 envelope; 6 Wave-4 CLI stub flips + 1 Wave-5 fixture-side coverage PASS) |
 | REFI-09 | Phase 6 | Pending |
 | APR-01 | Phase 7 | Pending |
 | APR-02 | Phase 7 | Pending |
