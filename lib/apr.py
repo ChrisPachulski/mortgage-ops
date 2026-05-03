@@ -462,9 +462,11 @@ class PaymentScheduleEntry(BaseModel):
 class APRRequest(BaseModel):
     """Reg Z Appendix J APR-solve request (boundary model).
 
-    See `references/apr-reg-z.md` for the unit-period model + day-count
-    conventions. Pydantic v2 strict + frozen + forbid per Phase 1 D-08
-    (mortgage-ops project-wide convention; D-01 above).
+    See `references/apr-reg-z.md` for the unit-period model, day-count
+    conventions, odd-first-period handling, and Newton-Raphson
+    convergence details with regulatory citations (ROADMAP SC-5 / D-29
+    cite-from contract). Pydantic v2 strict + frozen + forbid per Phase
+    1 D-08 (mortgage-ops project-wide convention; D-01 above).
 
     Cross-field invariants (LOCKED, see D-06):
       - advance_schedule MUST contain at least one entry with
