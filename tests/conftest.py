@@ -106,3 +106,24 @@ def refinance_fixture() -> Callable[[str], dict[str, Any]]:
         return json.loads(path.read_text())  # type: ignore[no-any-return]
 
     return _load
+
+
+@pytest.fixture
+def apr_fixture() -> Callable[[str], dict[str, Any]]:
+    """Return a callable that loads a single APR fixture by filename stem
+    from tests/fixtures/apr/. Mirrors arm_fixture / refinance_fixture —
+    one-fixture-per-file shape; loader takes a filename stem like
+    "regz_appendix_j_5000_36_166_07", not an id within an array.
+
+    Per Phase 7 D-00-03: every Phase 7 fixture lives under tests/fixtures/apr/
+    as one .json per scenario. FFIEC oracle captures (Wave 7 human checkpoint
+    per CONTEXT.md D-01: HMDA Platform pivot) live under
+    tests/fixtures/apr/oracle/; callers pass
+    "oracle/ffiec_001_30yr_400k_6_5" as the stem to load those.
+    """
+
+    def _load(stem: str) -> dict[str, Any]:
+        path = FIXTURE_DIR / "apr" / f"{stem}.json"
+        return json.loads(path.read_text())  # type: ignore[no-any-return]
+
+    return _load
