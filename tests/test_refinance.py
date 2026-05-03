@@ -33,7 +33,7 @@ waves rename only via documented Rule-1 deviations in their SUMMARY.md.
 from __future__ import annotations
 
 import json
-import re  # noqa: F401  (reserved for Wave 6 doc-section regex assertions)
+import re
 import subprocess
 import sys
 from decimal import Decimal
@@ -663,20 +663,86 @@ def test_cli_help_cites_references_refi_npv() -> None:
 # =========================================================================
 
 
-@pytest.mark.xfail(
-    strict=True, reason="Wave 0 stub — Plan 06-06 references/refi-npv.md sections present (SC-5)"
-)
 def test_refi_npv_doc_sections_present() -> None:
-    """SC-5: references/refi-npv.md ships ≥250 lines with required sections (sign convention, formula, breakeven, after-tax)."""
-    pytest.fail("Wave 0 stub")
+    """SC-5: references/refi-npv.md ships ≥ 250 lines with required sections.
+
+    Per Plan 06-06 acceptance criteria + 06-PATTERNS §"references/refi-npv.md",
+    the document must mirror references/arm-mechanics.md's section-per-
+    convention discipline with these 7 numbered sections + Citations:
+
+      §1 Sign Convention (SC-5 verbatim phrase headline)
+      §2 Borrower NPV Formula
+      §3 Discount-Rate Selection (D-05)
+      §4 Cashflow Inventory: Rate-and-Term vs. Cash-Out
+      §5 Simple vs. NPV-Based Breakeven (REFI-03)
+      §6 After-Tax Optional Mode (D-09)
+      §7 v1 Carve-Outs (D-08 PMI/MIP + D-12 closing-costs OOP + D-07 pyxirr)
+      §8 Citations (Investopedia + Federal Reserve + IRS Pub 936 + numpy-financial)
+
+    The min_lines: 250 contract is Plan 06-06 frontmatter must_haves.artifacts.
+    """
+    assert REFI_NPV_DOC_PATH.exists(), (
+        f"references/refi-npv.md must exist at {REFI_NPV_DOC_PATH} (REFI-09 / SC-5)"
+    )
+    text = REFI_NPV_DOC_PATH.read_text()
+
+    # ≥ 250 lines per Plan 06-06 frontmatter min_lines contract.
+    line_count = len(text.splitlines())
+    assert line_count >= 250, (
+        f"references/refi-npv.md must be ≥ 250 lines (got {line_count}); "
+        "Plan 06-06 must_haves.artifacts contract"
+    )
+
+    # All 8 numbered H2 section headers present (regex matches '## N. ...').
+    section_headers = re.findall(r"^## (\d+)\.\s", text, flags=re.MULTILINE)
+    expected_section_numbers = ["1", "2", "3", "4", "5", "6", "7", "8"]
+    assert section_headers == expected_section_numbers, (
+        f"references/refi-npv.md must have 8 numbered H2 sections in order "
+        f"(1..8); got {section_headers}. Per Plan 06-06 §1-7 + Citations §8."
+    )
 
 
-@pytest.mark.xfail(
-    strict=True, reason="Wave 0 stub — Plan 06-06 verbatim sign-convention phrase (SC-5)"
-)
 def test_refi_npv_doc_sign_convention_phrase() -> None:
-    """SC-5 verbatim: doc contains literal 'outflows negative, savings positive'."""
-    pytest.fail("Wave 0 stub")
+    """SC-5 verbatim: doc contains literal 'outflows negative, savings positive'.
+
+    Per ROADMAP § Phase 6 SC-5 + Plan 06-06 frontmatter must_haves.truths,
+    the LITERAL phrase 'outflows negative, savings positive' MUST appear in
+    the first H2 section of references/refi-npv.md. This is the load-bearing
+    sign-convention contract — the engine's RefiCashflow validator messages,
+    lib/refinance.py module docstring, and scripts/refi_npv.py --help epilog
+    all cite this doc as the canonical source for the convention (D-16
+    belt-and-suspenders surfaces 1, 2, 4 cite this surface 3).
+    """
+    assert REFI_NPV_DOC_PATH.exists(), (
+        f"references/refi-npv.md must exist at {REFI_NPV_DOC_PATH} (REFI-09 / SC-5)"
+    )
+    text = REFI_NPV_DOC_PATH.read_text()
+
+    # SC-5 verbatim presence anywhere in the doc.
+    assert "outflows negative, savings positive" in text, (
+        "SC-5 violated: references/refi-npv.md must contain literal phrase "
+        "'outflows negative, savings positive' (D-04 borrower-perspective "
+        "sign convention; D-16 belt-and-suspenders surface 3)"
+    )
+
+    # Plan 06-06 must_haves.truths: phrase must appear in the FIRST H2 section.
+    # Slice the doc from the first '## ' header to the second '## ' header
+    # (or end-of-file if only one) and assert the phrase falls inside.
+    first_h2_match = re.search(r"^## ", text, flags=re.MULTILINE)
+    assert first_h2_match is not None, (
+        "references/refi-npv.md must have at least one H2 section header (no '## ' found)"
+    )
+    first_h2_start = first_h2_match.start()
+    second_h2_match = re.search(r"^## ", text[first_h2_start + 3 :], flags=re.MULTILINE)
+    first_section_end = (
+        first_h2_start + 3 + second_h2_match.start() if second_h2_match is not None else len(text)
+    )
+    first_section = text[first_h2_start:first_section_end]
+    assert "outflows negative, savings positive" in first_section, (
+        "SC-5 violated: literal phrase 'outflows negative, savings positive' "
+        "must appear in the FIRST H2 section of references/refi-npv.md "
+        "(Plan 06-06 must_haves.truths). The headline section IS the contract."
+    )
 
 
 def test_lib_refinance_module_docstring_cites() -> None:
