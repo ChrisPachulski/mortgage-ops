@@ -1,0 +1,37 @@
+{
+  "_meta": {
+    "oracle_source": "06-RESEARCH.md §'(d) Divergence' pinned setup (high discount drives simple ≠ NPV breakeven)",
+    "derivation": "engine-derived 2026-05-02 via lib.refinance.evaluate (Phase 5 D-04 [REVISED] hand_calc_check witness pattern); pinned for SC-2 dual-form labeling. RESEARCH predicted 26 vs 28 (2-month divergence at 8% discount); engine-derived matches exactly.",
+    "citation": "ROADMAP Phase 6 SC-2 (breakeven months reported in two forms; both labeled). Setup: $300k @ 7%/30y → $300k @ 6%/30y, $5k closing, 8% discount; simple=26mo, npv=28mo (divergence=2mo)."
+  },
+  "request": {
+    "refi_kind": "rate_and_term",
+    "old_loan_balance": "300000.00",
+    "old_annual_rate": "0.070000",
+    "old_remaining_months": 360,
+    "new_annual_rate": "0.060000",
+    "new_term_months": 360,
+    "closing_costs": "5000.00",
+    "discount_rate_annual": "0.080000",
+    "analysis_horizon_months": null
+  },
+  "expected": {
+    "refi_kind": "rate_and_term",
+    "npv": "21883.28",
+    "old_monthly_pi": "1995.91",
+    "new_monthly_pi": "1798.65",
+    "monthly_savings": "197.26",
+    "breakeven": {
+      "simple_months": 26,
+      "simple_status": "ok",
+      "npv_months": 28,
+      "npv_status": "ok"
+    },
+    "cash_proceeds": null,
+    "monthly_payment_delta": null,
+    "total_interest_delta": null,
+    "after_tax_npv": null,
+    "discount_rate_annual_used": "0.080000",
+    "analysis_horizon_months_used": 360
+  }
+}
