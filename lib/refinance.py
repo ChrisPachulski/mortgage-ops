@@ -138,13 +138,10 @@ Stale-warning expected behavior (inherited from Phase 4):
 from __future__ import annotations
 
 from datetime import date  # noqa: F401  (reserved for Plan 06-02/06-03 schedule date math)
-from decimal import (  # noqa: F401  (ROUND_CEILING reserved for Plan 06-02 Task 2 _compute_breakeven_simple)
-    ROUND_CEILING,
-    Decimal,
-)
+from decimal import ROUND_CEILING, Decimal
 from typing import TYPE_CHECKING, Annotated, Final, Literal
 
-import numpy_financial as npf  # noqa: F401  (reserved for Plan 06-02 Task 2 _compute_npv body)
+import numpy_financial as npf
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from lib.amortize import (
@@ -630,6 +627,85 @@ def _build_refi_cashflows(
                     )
                 )
     return cashflows
+
+
+# ---------------------------------------------------------------------------
+# Private helpers (Plan 06-02 Task 2): NPV + breakeven (per-period flatten,
+# numpy_financial.npv wrapper, simple-divide breakeven, cumulative-NPV scan)
+# ---------------------------------------------------------------------------
+
+
+def _flatten_cashflows_to_per_period(
+    cashflows: list[RefiCashflow],
+    horizon_months: int,
+) -> list[Decimal]:
+    """Collapse cashflow list into a length-(horizon+1) Decimal array indexed by t.
+
+    npf.npv eats `values` starting at t=0 (RESEARCH §"Watch Out For"). Multiple
+    cashflows at the same period (e.g., closing_costs + cash_proceeds at t=0)
+    sum together at that index.
+    """
+    per_period: list[Decimal] = [Decimal("0.00")] * (horizon_months + 1)
+    for cf in cashflows:
+        if cf.period > horizon_months:
+            continue  # truncate per D-11
+        per_period[cf.period] = per_period[cf.period] + cf.amount
+    return per_period
+
+
+def _compute_npv(
+    discount_rate_annual: Decimal,
+    cashflows: list[RefiCashflow],
+    horizon_months: int,
+) -> Decimal:
+    """Wrap numpy_financial.npv (AMRT-01 inheritance: wrap, do not reimplement).
+
+    Per-period rate = discount_rate_annual / 12. quantize_cents AT THE BOUNDARY ONLY
+    (Phase 1 PITFALLS; Phase 4 PITI idiom). Intermediate computation stays at
+    full Decimal precision via lib.money.MONEY_CONTEXT (28 digits).
+    """
+    period_rate = discount_rate_annual / Decimal("12")
+    values = _flatten_cashflows_to_per_period(cashflows, horizon_months)
+    npv = npf.npv(period_rate, values)  # numpy-financial 1.0.0 returns Decimal when fed Decimal
+    return quantize_cents(npv)
+
+
+def _compute_breakeven_simple(
+    closing_costs: Decimal,
+    monthly_savings: Decimal,
+) -> tuple[int | None, Literal["ok", "no_savings", "zero_costs"]]:
+    """REFI-03 first formula: ceil(closing_costs / monthly_savings).
+
+    Edge cases per RESEARCH §"(d) Divergence":
+      monthly_savings <= 0 → (None, 'no_savings')
+      closing_costs == 0  → (0, 'zero_costs')
+      else → (ceil(closing/savings), 'ok')
+    """
+    if closing_costs == Decimal("0"):
+        return 0, "zero_costs"
+    if monthly_savings <= Decimal("0"):
+        return None, "no_savings"
+    # Ceiling divide via Decimal
+    months_d = (closing_costs / monthly_savings).quantize(Decimal("1"), rounding=ROUND_CEILING)
+    return int(months_d), "ok"
+
+
+def _compute_breakeven_npv(
+    discount_rate_annual: Decimal,
+    cashflows: list[RefiCashflow],
+    horizon_months: int,
+) -> tuple[int | None, Literal["ok", "never_breaks_even"]]:
+    """REFI-03 second formula: smallest n where cumulative NPV(0..n) >= 0.
+
+    Per D-06: cumulative-NPV scan, NOT npf.irr (bug #131 — arch-dependent).
+    """
+    period_rate = discount_rate_annual / Decimal("12")
+    per_period = _flatten_cashflows_to_per_period(cashflows, horizon_months)
+    for n in range(0, horizon_months + 1):
+        cumulative = npf.npv(period_rate, per_period[: n + 1])
+        if cumulative >= Decimal("0"):
+            return n, "ok"
+    return None, "never_breaks_even"
 
 
 # ---------------------------------------------------------------------------
