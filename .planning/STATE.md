@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Plan 06-06 complete (Wave 6 references/refi-npv.md doc body + final 2 Wave-0 doc stubs flipped; SC-5 verbatim phrase closed; REFI-09 closed; Phase 6 ALL 25 Wave-0 stubs flipped — phase 6/7 complete)
-last_updated: "2026-05-03T07:10:41Z"
-last_activity: 2026-05-03 -- Plan 06-06 complete (Wave 6 references/refi-npv.md 630-line sign-convention doc + 2 final Wave-0 doc stubs flipped to PASS [test_refi_npv_doc_sections_present + test_refi_npv_doc_sign_convention_phrase]; SC-5 verbatim phrase 'outflows negative, savings positive' surfaced 3× in §1 headline section; D-16 belt-and-suspenders surface 3 closed [surfaces 1+2+4 already shipped Plans 06-01/06-04]; doc has 8 H2 sections (Sign Convention + Borrower NPV Formula + Discount-Rate Selection + Cashflow Inventory + Simple vs NPV Breakeven + After-Tax Mode + v1 Carve-Outs + Citations) + appendix Citation Index; cites Investopedia + Federal Reserve + CFPB + IRS Pub 936 + numpy-financial v1.0.0 + numpy-financial bug #131 + FHFA 2023; D-13 horizon-truncation rationale documented in §5.5; D-08 PMI/MIP carve-out via D-10 override documented in §7.1; D-07 pyxirr Phase 11 deferral documented in §7.3; D-01..D-16 cross-reference table in §8; mirrors references/arm-mechanics.md template per 06-PATTERNS; 461 passed + 4 skipped + 1 xfailed [+2 passed -2 xfailed; ALL 25 Phase 6 Wave-0 stubs flipped — zero remaining Phase 6 XFAIL; only inherited Phase 5 strict xfail remains]; Phase 5 baseline preserved [461 ≥ 432]; pre-commit hooks ruff + ruff-format + mypy all PASSED on changed files; PHASE 6 CLOSES CLEAN — REFI-01..09 + SC-1..SC-5 all satisfied)
+status: completed
+stopped_at: Plan 06-06 complete (Wave 6 references/refi-npv.md 630-line doc + final 2 Wave-0 doc stubs flipped; SC-5 verbatim phrase closed; ALL 25 Phase 6 Wave-0 stubs flipped; 461 passed + 4 skipped + 1 xfailed [+2 net pass; phase 6/7 of plans complete]; PHASE 6 CLOSES CLEAN — REFI-01..09 + SC-1..SC-5 all satisfied)
+last_updated: "2026-05-03T07:31:27.963Z"
+last_activity: 2026-05-03
 progress:
   total_phases: 12
   completed_phases: 6
-  total_plans: 88
+  total_plans: 87
   completed_plans: 41
   percent: 47
 ---
@@ -25,10 +25,10 @@ See: .planning/PROJECT.md (updated 2026-04-26)
 
 ## Current Position
 
-Phase: 06 (refinance-npv) — COMPLETE (7/7)
-Plan: 7 of 7 (ALL Plans 06-00 + 06-01 + 06-02 + 06-03 + 06-04 + 06-05 + 06-06 complete; Phase 6 closes clean)
+Phase: 07
+Plan: Not started
 Status: Phase 06 complete; ready to advance to Phase 07 (Estimated APR)
-Last activity: 2026-05-03 -- Plan 06-06 complete (Wave 6 references/refi-npv.md 630-line sign-convention doc + 2 final Wave-0 doc stubs flipped; SC-5 verbatim phrase 'outflows negative, savings positive' surfaced 3× in §1 headline; D-16 belt-and-suspenders surface 3 closed [surfaces 1/2/4 already shipped]; doc has 8 H2 sections + appendix Citation Index; cites Investopedia + Federal Reserve + CFPB + IRS Pub 936 + numpy-financial v1.0.0 + numpy-financial bug #131 + FHFA 2023 housing-finance survey; D-13 horizon-truncation rationale + D-08 PMI/MIP carve-out via D-10 override + D-07 pyxirr Phase 11 deferral all documented; D-01..D-16 cross-reference table in §8; mirrors references/arm-mechanics.md template per 06-PATTERNS; 461 passed + 4 skipped + 1 xfailed [+2 passed -2 xfailed; ALL 25 Phase 6 Wave-0 stubs flipped — zero remaining Phase 6 XFAIL; only inherited Phase 5 strict xfail remains]; Phase 5 baseline preserved [461 ≥ 432]; pre-commit hooks all clean; REFI-01..09 + SC-1..SC-5 all satisfied — PHASE 6 CLOSES CLEAN)
+Last activity: 2026-05-03
 
 Progress: [█████░░░░░] 46.6% (41/88 plans complete; 48 plans drafted, awaiting execution; Phase 6 complete 7/7)
 
@@ -87,7 +87,7 @@ Resume file (next): `.planning/phases/07-estimated-apr/07-00-*-PLAN.md` (Phase 6
 
 **Velocity:**
 
-- Total plans completed: 36
+- Total plans completed: 43
 - Phase 1 wall time: ~1.5 hours (orchestrated, sequential)
 - Phase 2 plan 01 wall time: ~35 min (sequential, single executor)
 - Phase 2 plan 02 wall time: ~7 min (sequential, single executor — fastest plan to date thanks to 02-01 foundation pattern)
