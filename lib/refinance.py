@@ -867,6 +867,7 @@ def evaluate_rate_and_term(req: RateAndTermRefiRequest) -> RefiResponse:
     # per module-docstring "Stale-warning expected behavior" contract.
     after_tax_npv: Decimal | None = None
     captured_warnings: list[str] = []
+    audit_cashflows = cashflows
     if req.after_tax_mode:
         # validator (_validate_common D-09) guarantees both fields present
         assert req.marginal_tax_rate is not None
@@ -888,6 +889,10 @@ def evaluate_rate_and_term(req: RateAndTermRefiRequest) -> RefiResponse:
         for w in captured:
             if issubclass(w.category, StaleReferenceWarning):
                 captured_warnings.append(str(w.message))
+        # WR-01 fix: surface tax_shield cashflows in the audit trail so
+        # downstream consumers (kind-coverage tests, audit reconstructions)
+        # can see the per-period shield stream that produced after_tax_npv.
+        audit_cashflows = cashflows + tax_shield_cashflows
 
     # 10: response
     return RefiResponse(
@@ -908,7 +913,7 @@ def evaluate_rate_and_term(req: RateAndTermRefiRequest) -> RefiResponse:
         after_tax_npv=after_tax_npv,
         discount_rate_annual_used=discount_rate,
         analysis_horizon_months_used=horizon,
-        cashflows=cashflows,
+        cashflows=audit_cashflows,
         warnings=captured_warnings,
     )
 
@@ -1012,6 +1017,7 @@ def evaluate_cash_out(req: CashOutRefiRequest) -> RefiResponse:
     # predicate per module docstring "Stale-warning expected behavior" contract.
     after_tax_npv: Decimal | None = None
     captured_warnings: list[str] = []
+    audit_cashflows = cashflows
     discount_rate = quantize_rate(req.discount_rate_annual)
     if req.after_tax_mode:
         # validator (_validate_common D-09) guarantees both fields present
@@ -1034,6 +1040,10 @@ def evaluate_cash_out(req: CashOutRefiRequest) -> RefiResponse:
         for w in captured:
             if issubclass(w.category, StaleReferenceWarning):
                 captured_warnings.append(str(w.message))
+        # WR-01 fix: surface tax_shield cashflows in the audit trail so
+        # downstream consumers (kind-coverage tests, audit reconstructions)
+        # can see the per-period shield stream that produced after_tax_npv.
+        audit_cashflows = cashflows + tax_shield_cashflows
 
     # 7: NPV (pre-tax)
     npv = _compute_npv(discount_rate, cashflows, horizon)
@@ -1069,7 +1079,7 @@ def evaluate_cash_out(req: CashOutRefiRequest) -> RefiResponse:
         after_tax_npv=after_tax_npv,
         discount_rate_annual_used=discount_rate,
         analysis_horizon_months_used=horizon,
-        cashflows=cashflows,
+        cashflows=audit_cashflows,
         warnings=captured_warnings,
     )
 

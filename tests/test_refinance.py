@@ -961,6 +961,66 @@ def test_refi_cashflow_kind_citation_coverage() -> None:
     )
 
 
+def test_refi_after_tax_mode_engine(
+    refinance_fixture: Callable[[str], dict[str, Any]],
+) -> None:
+    """WR-01 (REVIEW.md fix): exercise the after_tax_mode_smoke.json fixture's
+    pinned engine outputs at the engine layer (not just the kind-citation
+    coverage scan).
+
+    Pre-fix: the only test that touched after_tax_mode_smoke.json was
+    test_refi_cashflow_kind_citation_coverage, which globs *.json and asserts
+    expected.cashflows_kinds contains the required Literals — it does NOT call
+    evaluate(). The pinned numerical contract (npv='60705.48',
+    after_tax_npv='96584.52', tax_shield_sample.amount='300.00') was therefore
+    unprotected at engine-output level. A regression in
+    _compute_tax_shield_cashflows (wrong period indexing, wrong
+    qualified_loan_limit branch, wrong marginal_tax_rate multiplication) would
+    not be caught.
+
+    This test invokes evaluate() on the fixture and asserts strict Decimal
+    equality on npv, after_tax_npv, and the first-period tax_shield cashflow
+    (D-04 money-discipline: never pytest.approx for money).
+    """
+    fx = refinance_fixture("after_tax_mode_smoke")
+    req = RateAndTermRefiRequest.model_validate_json(json.dumps(fx["request"]))
+    from lib.refinance import evaluate
+
+    resp = evaluate(req)
+    expected = fx["expected"]
+
+    # Pre-tax NPV pinned (cross-check against Oracle 1; same scenario)
+    assert Decimal(resp.npv) == Decimal(expected["npv"]), (
+        f"after-tax-mode pre-tax NPV drift: got {resp.npv} != expected {expected['npv']}"
+    )
+
+    # After-tax NPV: D-09 contract — tax_shield cashflows added before NPV recompute
+    assert resp.after_tax_npv is not None, (
+        "D-09 violated: after_tax_npv must be populated when after_tax_mode=True"
+    )
+    assert Decimal(resp.after_tax_npv) == Decimal(expected["after_tax_npv"]), (
+        f"after_tax_npv drift: got {resp.after_tax_npv} != expected {expected['after_tax_npv']}"
+    )
+    # Tax shield strictly improves PV (more money in borrower's pocket)
+    assert Decimal(resp.after_tax_npv) > Decimal(resp.npv), (
+        "after_tax_npv should exceed pre-tax npv (tax shield is an inflow stream)"
+    )
+
+    # First-period tax_shield cashflow pinned (D-03 kind coverage anchor)
+    sample = expected["tax_shield_sample"]
+    tax_shield_cashflows = [cf for cf in resp.cashflows if cf.kind == "tax_shield"]
+    assert len(tax_shield_cashflows) > 0, (
+        "WR-01: after_tax_mode=True must emit tax_shield cashflows into the audit trail"
+    )
+    first_shield = next(cf for cf in tax_shield_cashflows if cf.period == sample["period"])
+    assert first_shield.direction == sample["direction"]
+    assert Decimal(first_shield.amount) == Decimal(sample["amount"]), (
+        f"first tax_shield amount drift: got {first_shield.amount} != expected "
+        f"{sample['amount']} (would catch _compute_tax_shield_cashflows regressions)"
+    )
+    assert first_shield.kind == sample["kind"]
+
+
 def test_after_tax_mode_validator_requires_all() -> None:
     """D-09: when after_tax_mode=True, both marginal_tax_rate AND filing_status are required (else ValidationError).
 
