@@ -241,8 +241,11 @@ class ARMSchedule(BaseModel):
 # =========================================================================
 
 
-def _compute_reset_triggers(arm_terms: ARMTerms, term_months: int) -> list[int]:
+def compute_reset_triggers(arm_terms: ARMTerms, term_months: int) -> list[int]:
     """Return the list of reset trigger periods for an ARM.
+
+    Public per Phase 8 D-02-01 (08-02 plan): lib/stress.py imports this for
+    ARM-reset path synthesis. Was private until Phase 8.
 
     Per RESEARCH §Q5: triggers = [initial_period_months + 1, +reset_period_months, ...]
     up to and including term_months. The +1 implements the "rate change applies at
@@ -257,6 +260,10 @@ def _compute_reset_triggers(arm_terms: ARMTerms, term_months: int) -> list[int]:
         triggers.append(period)
         period += arm_terms.reset_period_months
     return triggers
+
+
+# Backward compat: keep the underscore-prefixed name as an alias for in-module callers.
+_compute_reset_triggers = compute_reset_triggers
 
 
 def _compute_new_rate(
@@ -377,7 +384,7 @@ def build_arm_schedule(req: ARMRequest) -> ARMSchedule:
     origination_anchor = loan.origination_date or datetime.now(UTC).date()
 
     # Compute reset triggers + epoch boundaries.
-    triggers = _compute_reset_triggers(terms, loan.term_months)
+    triggers = compute_reset_triggers(terms, loan.term_months)
     # boundaries: list of (start_period, end_period_exclusive) per epoch.
     boundaries: list[tuple[int, int]] = [(1, terms.initial_period_months + 1)]
     for i, t in enumerate(triggers):
