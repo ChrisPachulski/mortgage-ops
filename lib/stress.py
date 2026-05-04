@@ -52,8 +52,9 @@ from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from lib.affordability import AffordabilityRequest
 from lib.affordability import (
-    AffordabilityRequest,  # noqa: TC001  # Pydantic resolves field annotations at runtime
+    evaluate as affordability_evaluate,
 )
 from lib.amortize import build_schedule
 from lib.arm import ARMRequest  # noqa: TC001  # Pydantic resolves field annotations at runtime
@@ -329,6 +330,70 @@ def rate_shock(
         stress_invariant_violations=violations,
     )
     return enriched, summary
+
+
+def income_shock(
+    base_request: AffordabilityRequest,
+    reductions: Sequence[Rate],
+    dti_threshold: Rate,
+) -> tuple[list[StressRow], ScenarioSummary]:
+    """STRS-02 + ROADMAP SC-2: recompute back-end DTI for each reduction.
+
+    Per 08-RESEARCH §3.3: scale each applicant's ``gross_monthly_income`` by
+    ``(1 - reduction)``; call ``lib.affordability.evaluate``; capture
+    ``dti_back`` + breach flag (``dti_back > dti_threshold``).
+
+    The reduction is applied per-applicant (D-02-03): Phase 4 D-06 sum
+    aggregation means proportional cuts per applicant produce a
+    proportionally-cut total. Belt-and-braces re-validation happens via
+    Pydantic's per-call ``model_copy``-induced revalidation in
+    ``affordability_evaluate`` (Phase 4 forward-mode validators).
+    """
+    rows: list[StressRow] = []
+    for reduction in reductions:
+        multiplier = Decimal("1") - reduction
+        shocked_household = base_request.household.model_copy(
+            update={
+                "applicants": [
+                    a.model_copy(
+                        update={
+                            "gross_monthly_income": quantize_cents(
+                                a.gross_monthly_income * multiplier
+                            )
+                        }
+                    )
+                    for a in base_request.household.applicants
+                ]
+            }
+        )
+        shocked = base_request.model_copy(update={"household": shocked_household})
+        response = affordability_evaluate(shocked)
+        dti_back = response.dti_back  # Rate | None
+        breaches = (dti_back is not None) and (dti_back > dti_threshold)
+        rows.append(
+            StressRow(
+                label=f"-{int(reduction * 100)}%",
+                dti_back=dti_back,
+                breaches_threshold=breaches,
+                blocked_by=response.blocked_by,
+            )
+        )
+
+    # Worst case = highest dti_back (None treated as 0 to keep max() total).
+    def _row_dti(r: StressRow) -> Rate:
+        return r.dti_back if r.dti_back is not None else Decimal("0")
+
+    worst_label = max(rows, key=_row_dti).label if rows else None
+
+    summary = ScenarioSummary(
+        table=rows,
+        baseline_label=rows[0].label if rows else None,
+        worst_case_label=worst_label,
+        # Per D-02-05: stress_invariant_violations populated only for rate-shock
+        # in v1; income-shock dti monotone invariant noted for Phase 11+.
+        stress_invariant_violations=[],
+    )
+    return rows, summary
 
 
 # ---------------------------------------------------------------------------
