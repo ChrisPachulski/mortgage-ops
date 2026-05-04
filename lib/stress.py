@@ -57,7 +57,13 @@ from lib.affordability import (
     evaluate as affordability_evaluate,
 )
 from lib.amortize import build_schedule
-from lib.arm import ARMRequest  # noqa: TC001  # Pydantic resolves field annotations at runtime
+from lib.arm import (
+    ARMRequest,
+    ARMTerms,
+    IndexPathEntry,
+    build_arm_schedule,
+    compute_reset_triggers,
+)
 from lib.models import (  # noqa: TC001  # Pydantic resolves field annotations at runtime
     Loan,
     Money,
@@ -391,6 +397,114 @@ def income_shock(
         worst_case_label=worst_label,
         # Per D-02-05: stress_invariant_violations populated only for rate-shock
         # in v1; income-shock dti monotone invariant noted for Phase 11+.
+        stress_invariant_violations=[],
+    )
+    return rows, summary
+
+
+def _synthesize_index_path(
+    arm_terms: ARMTerms,
+    term_months: int,
+    base_index: Rate,
+    path: RatePath,
+) -> list[IndexPathEntry]:
+    """08-RESEARCH §4.2 algorithm. Returns one IndexPathEntry per reset trigger.
+
+    Three named paths (D-02-04 closed-set per ROADMAP SC-3):
+      parallel-shift: every trigger receives ``base_index + shift_bps/10000``
+      gradual-rise:   trigger ``k`` receives ``base_index + k * step_bps/10000``
+      fall-then-rise: first half receives ``base_index - drop_bps/10000``;
+                      second half receives ``base_index + rise_bps/10000``
+
+    Every reset trigger MUST be covered (alignment-validator on ARMRequest
+    enforces this; misalignment would be a Plan-08-02 bug, not a runtime issue).
+    """
+    triggers = compute_reset_triggers(arm_terms, term_months)
+    if path.name == "parallel-shift":
+        shift = path.params["shift_bps"]
+        return [
+            IndexPathEntry(
+                period=t,
+                value=quantize_rate(base_index + Decimal(shift) / Decimal("10000")),
+            )
+            for t in triggers
+        ]
+    if path.name == "gradual-rise":
+        step = path.params["step_bps"]
+        return [
+            IndexPathEntry(
+                period=t,
+                value=quantize_rate(base_index + Decimal(k * step) / Decimal("10000")),
+            )
+            for k, t in enumerate(triggers)
+        ]
+    # fall-then-rise (closed-set; mypy exhaustiveness narrowed via Literal)
+    drop = path.params["drop_bps"]
+    rise = path.params["rise_bps"]
+    half = len(triggers) // 2
+    out: list[IndexPathEntry] = []
+    for i, t in enumerate(triggers):
+        if i < half:
+            v = quantize_rate(base_index - Decimal(drop) / Decimal("10000"))
+        else:
+            v = quantize_rate(base_index + Decimal(rise) / Decimal("10000"))
+        out.append(IndexPathEntry(period=t, value=v))
+    return out
+
+
+def arm_path(
+    base_arm_request: ARMRequest,
+    paths: Sequence[RatePath],
+) -> tuple[list[StressRow], ScenarioSummary]:
+    """STRS-03 + ROADMAP SC-3: simulate each named rate-path.
+
+    Returns ``(rows, summary)``. Each row carries ``total_interest`` +
+    ``max_payment`` + ``reset_count`` + ``highest_rate`` per path.
+
+    Per D-02-04, ``_synthesize_index_path`` generates one IndexPathEntry per
+    reset trigger so the ARMRequest alignment-validator passes
+    (lib/arm.py:107-145).
+    """
+    rows: list[StressRow] = []
+    for path in paths:
+        index_path = _synthesize_index_path(
+            base_arm_request.arm_terms,
+            base_arm_request.loan.term_months,
+            base_arm_request.assumed_index_rate,
+            path,
+        )
+        syn = base_arm_request.model_copy(update={"index_path": index_path})
+        schedule = build_arm_schedule(syn)
+        highest_rate = max(
+            (e.new_rate for e in schedule.reset_events),
+            default=base_arm_request.loan.annual_rate,
+        )
+        max_payment = max(
+            (p.payment for p in schedule.payments),
+            default=Decimal("0.00"),
+        )
+        rows.append(
+            StressRow(
+                label=path.name,
+                total_interest=schedule.total_interest,
+                max_payment=max_payment,
+                reset_count=len(schedule.reset_events),
+                highest_rate=highest_rate,
+            )
+        )
+
+    # Worst case = highest total_interest (None treated as 0 for total ordering).
+    def _row_total(r: StressRow) -> Money:
+        return r.total_interest if r.total_interest is not None else Decimal("0")
+
+    worst_label = max(rows, key=_row_total).label if rows else None
+
+    summary = ScenarioSummary(
+        table=rows,
+        baseline_label=rows[0].label if rows else None,
+        worst_case_label=worst_label,
+        # Per D-02-05: arm-reset parallel-shift dominance invariant noted for
+        # Phase 11+; v1 ships empty.
         stress_invariant_violations=[],
     )
     return rows, summary
