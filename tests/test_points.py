@@ -12,8 +12,6 @@ from decimal import Decimal
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-import pytest
-
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -233,12 +231,50 @@ def test_pnts_03_cli_help_does_not_import_lib_points_and_rejects_float(
     assert err["ctx"]["class"] == "Decimal"
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Wave 0 stub — Plan 08-05 ships points_simple_lt_npv_seven_pct_discount.json",
-)
 def test_sc4_simple_vs_npv_diverge_at_seven_pct_discount_pin(
     points_fixture: Callable[[str], dict[str, Any]],
 ) -> None:
-    """ROADMAP SC-4: simple==123, npv==215 at 7% discount; diverge=true; gap=92 months."""
-    pytest.fail("Wave 0 stub")
+    """ROADMAP SC-4: simple==123, npv==215 at 7% discount; diverge=true; gap=92 months.
+
+    Plan 08-05 Task 5 flip — fixture-driven assertion for the SC-4 divergence
+    pin. CRITICAL: pinned at engine-actual npv=215 (gap=+92 months), NOT
+    planner-claimed npv=160 (gap=+37 months). Plan 08-03 deviation #1
+    cross-validated the 215-month value three independent ways:
+      1. numpy_financial.nper(0.07/12, 65.40, -8000) -> 214.9476 -> ceil=215
+      2. closed-form n = -ln(1 - 8000*r/65.40) / ln(1+r) at r=0.07/12 -> 214.95
+      3. engine §5.2 cumulative-NPV walk first crosses zero at m=215
+    All three agree. The planner's 160 was mathematically inconsistent with
+    the §5.2 formula it purported to compute. D-05-05 LOCKED: SC-4 numerical
+    pins are HARD; future Phase 6 discount-rate convention changes that shift
+    these by ±1 month require an explicit retire/update plan in Phase 6.
+    """
+    import json as _json
+
+    from lib.points import PointsRequest, evaluate
+    from pydantic import TypeAdapter
+
+    fx = points_fixture("points_simple_lt_npv_seven_pct_discount")
+    adapter: TypeAdapter[Any] = TypeAdapter(PointsRequest)
+    # validate_json coerces Decimal strings (Phase 4 fixture idiom) — strict-mode
+    # validate_python rejects "0.070000" because it's not Decimal-typed in Python.
+    request = adapter.validate_json(_json.dumps(fx["request"]))
+    response = evaluate(request)
+
+    assert response.simple_breakeven_months == 123
+    assert response.npv_breakeven_months == 215
+    assert response.diverge is True
+    assert response.decision == "buy_points"
+    assert response.discount_rate_used == Decimal("0.070000")
+    assert response.hold_period_months == 240
+    assert response.diverge_explanation is not None
+    assert "0.070000" in response.diverge_explanation
+    # cum_npv at hold is positive (240 > 215; decision=buy_points)
+    assert response.cumulative_npv_at_hold > Decimal("0")
+    # Engine emits +$435.46 at hold per Plan 08-03 cross-validation
+    assert response.cumulative_npv_at_hold == Decimal("435.46")
+    # Gap = npv - simple = 215 - 123 = 92 months (engine-actual)
+    # Split for ruff PT018 (mirrors Plan 08-02 deviation #1 third sub-bullet
+    # and Plan 08-03 deviation #3 — the compound-assert PT018 hygiene class).
+    assert response.npv_breakeven_months is not None
+    assert response.simple_breakeven_months is not None
+    assert response.npv_breakeven_months - response.simple_breakeven_months == 92

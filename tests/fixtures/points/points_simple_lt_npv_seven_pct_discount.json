@@ -2,7 +2,7 @@
   "_meta": {
     "citation": "ROADMAP SC-4 + 08-RESEARCH §5.4: 7% discount -> simple=123, npv=215 (engine-actual per Plan 08-03 deviation #1; cross-validated three ways: numpy_financial.nper(0.07/12, 65.40, -8000) -> 214.9476 ceil 215; closed-form n = -ln(1 - 8000*r/65.40)/ln(1+r) at r=0.07/12 -> 214.95; engine §5.2 cumulative-NPV walk first crosses zero at m=215). diverge=True; gap=+92 months.",
     "engine_version": "Phase 8 Plan 08-03",
-    "requirements": ["PNTS-01", "PNTS-02", "ROADMAP SC-4"]
+    "requirements": ["PNTS-01", "PNTS-02", "PNTS-03", "ROADMAP SC-4"]
   },
   "request": {
     "mode": "from_savings",

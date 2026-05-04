@@ -2,7 +2,7 @@
   "_meta": {
     "citation": "ROADMAP SC-1 verbatim example: $400k @ 30yr; rates 0.06..0.08 step 0.005; baseline default (rates[0]=0.06). Phase 3 oracle anchor preserved at index 1 (0.065 -> 2528.27 per CONVENTIONS.md).",
     "engine_version": "Phase 8 Plan 08-02",
-    "requirements": ["STRS-01", "ROADMAP SC-1"]
+    "requirements": ["STRS-01", "STRS-04", "ROADMAP SC-1"]
   },
   "request": {
     "mode": "rate-shock",

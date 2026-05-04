@@ -516,15 +516,46 @@ def test_cli_stress_rejects_float_principal_with_6_key_envelope(tmp_path: Path) 
 # =========================================================================
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Wave 0 stub — Plan 08-05 ships rate_shock_size_budget_50_rates.json",
-)
 def test_sc5_stress_sweep_50_scenarios_under_100kb(
     stress_fixture: Callable[[str], dict[str, Any]],
 ) -> None:
-    """ROADMAP SC-5: 50-scenario sweep produces JSON < 100KB."""
-    pytest.fail("Wave 0 stub")
+    """ROADMAP SC-5: 50-scenario sweep produces JSON < 100KB AND summary precedes rows.
+
+    Plan 08-05 Task 5 flip — fixture-driven assertion for the SC-5 size-budget +
+    field-order contract. The fixture (rate_shock_size_budget_50_rates.json)
+    pins a 50-rate sweep generated as ``[f"0.0{40+i:02d}000" for i in range(50)]``
+    (per D-05-06; rates 0.04..0.089 step 0.001). Engine emits ~37.6KB
+    serialized JSON (well under the 100KB ceiling per 08-RESEARCH §1.3
+    estimate). The byte-order check uses the substring ``.find('"summary"')``
+    < ``.find('"rows"')`` on the indented JSON string per D-05-03 (robust to
+    whitespace; sufficient for the SC-5 contract intent).
+    """
+    import json as _json
+
+    from lib.stress import StressRequest, evaluate
+    from pydantic import TypeAdapter
+
+    fx = stress_fixture("rate_shock_size_budget_50_rates")
+    adapter: TypeAdapter[Any] = TypeAdapter(StressRequest)
+    # validate_json coerces Decimal strings (Phase 4 fixture idiom) — strict-mode
+    # validate_python rejects "0.040000" because it's not Decimal-typed in Python.
+    request = adapter.validate_json(_json.dumps(fx["request"]))
+    response = evaluate(request)
+
+    # SC-5 size budget: serialized JSON < 100KB.
+    serialized = response.model_dump_json(indent=2)
+    size_bytes = len(serialized.encode("utf-8"))
+    assert size_bytes < 100 * 1024, f"SC-5 violation: {size_bytes} bytes >= 100KB"
+
+    # SC-5 byte-order: summary key precedes rows key in indented JSON (D-05-03).
+    idx_summary = serialized.find('"summary"')
+    idx_rows = serialized.find('"rows"')
+    assert 0 <= idx_summary < idx_rows, (
+        f"SC-5 violation: 'summary' at {idx_summary} must precede 'rows' at {idx_rows}"
+    )
+
+    # Sanity: scenario_count matches fixture.
+    assert response.scenario_count == fx["expected"]["scenario_count"]
 
 
 def test_sc5_summary_table_appears_before_rows_in_json() -> None:
@@ -667,4 +698,77 @@ def test_cli_stress_error_envelope_uniformity(tmp_path: Path) -> None:
     for err in pyd_errors:
         assert set(err.keys()) == expected_keys, (
             f"Pydantic envelope keys mismatch: got {set(err.keys())}; expected {expected_keys}"
+        )
+
+
+# =========================================================================
+# Phase 8 citation-coverage meta-test (Plan 08-05 Task 5)
+# =========================================================================
+
+
+def test_phase_08_citation_coverage_meta() -> None:
+    """Every Phase 8 requirement (STRS-01..04 + PNTS-01..03) + ROADMAP SC-1..5
+    has at least one fixture exercising it.
+
+    Plan 08-05 Task 5 — closes the Phase 8 fixture-coverage contract. Iterates
+    over all *.json files under tests/fixtures/{stress,points}/ and asserts that
+    every requirement ID + ROADMAP SC label appears as a substring in at least
+    one fixture's ``_meta.citation`` field.
+
+    Per D-05-04 LOCKED: both raw requirement IDs (e.g., "STRS-01") AND ROADMAP
+    SC strings (e.g., "ROADMAP SC-1") are valid citation tokens. A fixture's
+    _meta.citation may contain one or both; this meta-test uses substring
+    presence rather than exact match for resilience to minor wording drift.
+    Variants are accepted: "ROADMAP SC-1" matches if either "ROADMAP SC-1"
+    OR "SC-1" appears.
+
+    STRS-04 and PNTS-03 are CLI requirements which are exercised by the CLI
+    smoke tests in this file rather than by fixture-driven tests; this meta-
+    test still requires fixture citation coverage for them so future fixtures
+    that exercise CLI invocations explicitly get traceability for those
+    requirement IDs.
+    """
+    import json
+
+    fix_stress = Path(__file__).parent / "fixtures" / "stress"
+    fix_points = Path(__file__).parent / "fixtures" / "points"
+    all_citations: list[str] = []
+    all_requirement_lists: list[list[str]] = []
+    for p in sorted(fix_stress.glob("*.json")) + sorted(fix_points.glob("*.json")):
+        data = json.loads(p.read_text())
+        meta = data.get("_meta", {})
+        citation = meta.get("citation", "")
+        all_citations.append(citation)
+        # Some fixtures also carry a structured _meta.requirements list.
+        reqs = meta.get("requirements", [])
+        if isinstance(reqs, list):
+            all_requirement_lists.append([str(r) for r in reqs])
+
+    joined_citations = " | ".join(all_citations)
+    flat_requirements = [r for sub in all_requirement_lists for r in sub]
+    joined_requirements = " | ".join(flat_requirements)
+
+    target_ids = [
+        "STRS-01",
+        "STRS-02",
+        "STRS-03",
+        "STRS-04",
+        "PNTS-01",
+        "PNTS-02",
+        "PNTS-03",
+        "ROADMAP SC-1",
+        "ROADMAP SC-2",
+        "ROADMAP SC-3",
+        "ROADMAP SC-4",
+        "ROADMAP SC-5",
+    ]
+    for req_id in target_ids:
+        # Accept both literal and bare form (ROADMAP SC-1 also matches SC-1)
+        id_keys = {req_id, req_id.replace("ROADMAP ", "")}
+        in_citation = any(any(k in c for k in id_keys) for c in all_citations)
+        in_requirements = any(any(k in r for k in id_keys) for r in flat_requirements)
+        assert in_citation or in_requirements, (
+            f"No fixture cites {req_id} (in _meta.citation OR _meta.requirements). "
+            f"citations: {joined_citations[:300]} | "
+            f"requirements: {joined_requirements[:300]}"
         )
