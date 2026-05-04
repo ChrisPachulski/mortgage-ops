@@ -43,6 +43,7 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from lib.amortize import build_schedule
 from lib.models import (  # noqa: TC001  # Pydantic resolves field annotations at runtime
     Loan,
     Money,
@@ -64,7 +65,9 @@ class PointsRequestFromSavings(BaseModel):
     model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
     mode: Literal["from_savings"] = "from_savings"
     points_cost: Money = Field(strict=True, gt=Decimal("0"))
-    monthly_savings: Money  # may be negative for rate-up scenarios; engine warns
+    # Signed Decimal (NOT Money — Money's ge=0 would block rate-up scenarios per
+    # the docstring above). Mirrors Phase 6 D-03 RefiCashflow.amount precedent.
+    monthly_savings: Decimal = Field(strict=True, max_digits=14, decimal_places=2)
     hold_period_months: int = Field(ge=1, le=600)
     discount_rate_annual: Rate  # D-02: REQUIRED; no module default
 
@@ -119,8 +122,14 @@ class PointsResponse(BaseModel):
     decision: Literal["buy_points", "skip_points"]
     discount_rate_used: Rate
     hold_period_months: int
-    monthly_savings: Money  # echoed; useful when caller used from_loans
-    cumulative_npv_at_hold: Money  # cum_npv(hold_period_months); decision driver
+    # Signed Decimals (NOT Money) — both can legitimately be negative:
+    # - monthly_savings: rate-up scenario in from_loans mode (with-points rate
+    #   is HIGHER than without-points rate; negative savings = points cost more).
+    # - cumulative_npv_at_hold: the walk strictly decreases for negative savings;
+    #   non-crossing happy-path scenarios at high discount rates also stay
+    #   negative through hold_period_months. Mirrors Phase 6 D-03 RefiCashflow.amount.
+    monthly_savings: Decimal = Field(strict=True, max_digits=14, decimal_places=2)
+    cumulative_npv_at_hold: Decimal = Field(strict=True, max_digits=14, decimal_places=2)
     warnings: list[str] = Field(default_factory=list)
 
 
@@ -148,10 +157,10 @@ def simple_breakeven(points_cost: Money, monthly_savings: Money) -> int | None:
 
 def npv_breakeven(
     points_cost: Money,
-    monthly_savings: Money,
+    monthly_savings: Decimal,
     hold_months: int,
     discount_rate_annual: Rate,
-) -> tuple[Money, int | None]:
+) -> tuple[Decimal, int | None]:
     """PNTS-02 + ROADMAP SC-4: cumulative-NPV walk over months 1..hold_months.
 
     Per 08-RESEARCH §5.2::
@@ -203,18 +212,80 @@ def npv_breakeven(
     return quantize_cents(cum_npv), months_to_zero
 
 
-def evaluate(req: PointsRequest) -> PointsResponse:
-    """Dispatch on ``req.mode`` and run the matching breakeven analysis.
+def _derive_monthly_savings(loan_with_points: Loan, loan_without_points: Loan) -> Money:
+    """Run two ``build_schedule`` calls and diff ``monthly_pi`` (D-03-05).
 
-    Wave 1 (Plan 08-01 — this file) ships the type contract only. Wave 3
-    (Plan 08-03) replaces this body with two branches:
-      from_savings: pass (points_cost, monthly_savings, hold, discount_rate)
-                    directly to simple_breakeven + npv_breakeven helpers
-      from_loans:   call build_schedule on each Loan, derive monthly_savings,
-                    route to the same helpers
-
-    Cross-plan stub idiom: Phase 4 D-08 (lib.affordability Wave 1 → Wave 2
-    pattern). Stubbing here lets Plan 08-03 fill the body without re-importing
-    the surface across the wave boundary.
+    Used by the from_loans branch of ``evaluate``. Returns the difference
+    ``no_points.monthly_pi - with_points.monthly_pi`` quantized to cents.
+    Phase 3 ``Schedule.monthly_pi`` is already quantized, so the subtraction
+    is exact-to-cent; the explicit ``quantize_cents`` is defensive.
     """
-    raise NotImplementedError("lib.points.evaluate body lives in Plan 08-03")
+    s_with = build_schedule(loan_with_points, frequency="monthly")
+    s_without = build_schedule(loan_without_points, frequency="monthly")
+    return quantize_cents(s_without.monthly_pi - s_with.monthly_pi)
+
+
+def evaluate(req: PointsRequest) -> PointsResponse:
+    """PNTS-01 + PNTS-02 + ROADMAP SC-4: report simple AND npv side-by-side.
+
+    Dispatch on ``req.mode``:
+      ``from_savings`` -> use the caller-supplied ``monthly_savings`` directly.
+      ``from_loans``   -> derive ``monthly_savings`` via two ``build_schedule``
+                          calls (one per Loan) and diff ``monthly_pi``.
+
+    Always reports BOTH ``simple_breakeven_months`` AND ``npv_breakeven_months``
+    side-by-side (D-04 LOCKED). ``diverge`` is True iff both are non-None and
+    unequal (D-01-07 + D-04). Decision = ``buy_points`` iff
+    ``cumulative_npv_at_hold >= 0``; forced to ``skip_points`` when
+    ``simple_breakeven`` is None (negative savings — D-03-04 defensive force).
+    Negative or zero monthly_savings emits a structured warning rather than
+    raising (D-03-01 mirrors Phase 4 D-11).
+    """
+    if isinstance(req, PointsRequestFromLoans):
+        monthly_savings = _derive_monthly_savings(req.loan_with_points, req.loan_without_points)
+    else:
+        monthly_savings = req.monthly_savings
+
+    warnings: list[str] = []
+    if monthly_savings <= Decimal("0"):
+        warnings.append(f"NEGATIVE_OR_ZERO_SAVINGS_{monthly_savings}")
+
+    simple_m = simple_breakeven(req.points_cost, monthly_savings)
+    cum_npv, npv_m = npv_breakeven(
+        req.points_cost,
+        monthly_savings,
+        req.hold_period_months,
+        req.discount_rate_annual,
+    )
+
+    diverge = simple_m is not None and npv_m is not None and simple_m != npv_m
+    diverge_explanation: str | None = None
+    if diverge:
+        # Split assertions for ruff PT018 + mypy narrowing
+        assert simple_m is not None
+        assert npv_m is not None
+        gap = npv_m - simple_m
+        diverge_explanation = (
+            f"NPV breakeven {gap:+d} months relative to simple due to "
+            f"{req.discount_rate_annual} annual discount rate eroding present "
+            f"value of late savings"
+        )
+
+    decision: Literal["buy_points", "skip_points"] = (
+        "buy_points" if cum_npv >= Decimal("0") else "skip_points"
+    )
+    if simple_m is None:
+        decision = "skip_points"
+
+    return PointsResponse(
+        simple_breakeven_months=simple_m,
+        npv_breakeven_months=npv_m,
+        diverge=diverge,
+        diverge_explanation=diverge_explanation,
+        decision=decision,
+        discount_rate_used=req.discount_rate_annual,
+        hold_period_months=req.hold_period_months,
+        monthly_savings=quantize_cents(monthly_savings),
+        cumulative_npv_at_hold=cum_npv,
+        warnings=warnings,
+    )
