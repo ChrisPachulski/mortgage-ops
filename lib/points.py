@@ -48,7 +48,7 @@ from lib.models import (  # noqa: TC001  # Pydantic resolves field annotations a
     Money,
     Rate,
 )
-from lib.money import MONEY_CONTEXT
+from lib.money import MONEY_CONTEXT, quantize_cents
 
 
 class PointsRequestFromSavings(BaseModel):
@@ -144,6 +144,63 @@ def simple_breakeven(points_cost: Money, monthly_savings: Money) -> int | None:
         quotient = points_cost / monthly_savings
         ceiled = quotient.to_integral_value(rounding=ROUND_CEILING)
     return int(ceiled)
+
+
+def npv_breakeven(
+    points_cost: Money,
+    monthly_savings: Money,
+    hold_months: int,
+    discount_rate_annual: Rate,
+) -> tuple[Money, int | None]:
+    """PNTS-02 + ROADMAP SC-4: cumulative-NPV walk over months 1..hold_months.
+
+    Per 08-RESEARCH §5.2::
+
+        r_monthly = discount_rate_annual / 12
+        cum_npv(m) = sum_{k=1..m} (monthly_savings / (1 + r_monthly)^k) - points_cost
+
+    Walks month-by-month from 1 to ``hold_months`` and returns
+    ``(cum_npv_at_hold, months_to_zero)`` where ``months_to_zero`` is the FIRST
+    month ``m`` such that ``cum_npv(m) >= 0`` (or ``None`` if it never crosses
+    within ``hold_months``).
+
+    Discount rate of ZERO collapses to simple breakeven (no time-value
+    adjustment): every discount factor stays at 1, so the walk is just an
+    accumulation of ``monthly_savings`` against ``-points_cost`` and crosses
+    zero at the same month as ``simple_breakeven``. Mathematical identity
+    verified by Plan 08-05 fixture ``points_simple_eq_npv_zero_discount.json``.
+
+    Negative ``monthly_savings`` -> ``cum_npv`` strictly decreases ->
+    ``months_to_zero = None``; the discount-rate has no effect on the
+    break-detection in this branch (the caller's ``simple_breakeven`` also
+    returns ``None`` and the dispatcher surfaces the warning at the response
+    level — D-03-04).
+
+    The final ``cum_npv_at_hold`` is returned (quantized to cents) so the
+    dispatcher can drive the buy/skip decision (``buy_points`` iff
+    ``cum_npv_at_hold >= 0``; D-03-04). Note this is the **unquantized**
+    accumulator's value rounded once at the boundary — never quantize
+    mid-walk.
+    """
+    r_monthly = discount_rate_annual / Decimal("12")
+    months_to_zero: int | None = None
+    with localcontext(MONEY_CONTEXT):
+        cum_npv = -points_cost
+        if r_monthly > Decimal("0"):
+            multiplier = Decimal("1") / (Decimal("1") + r_monthly)
+            discount_factor = Decimal("1")
+            for m in range(1, hold_months + 1):
+                discount_factor = discount_factor * multiplier
+                cum_npv = cum_npv + monthly_savings * discount_factor
+                if months_to_zero is None and cum_npv >= Decimal("0"):
+                    months_to_zero = m
+        else:
+            # Zero discount: collapses to undiscounted accumulation
+            for m in range(1, hold_months + 1):
+                cum_npv = cum_npv + monthly_savings
+                if months_to_zero is None and cum_npv >= Decimal("0"):
+                    months_to_zero = m
+    return quantize_cents(cum_npv), months_to_zero
 
 
 def evaluate(req: PointsRequest) -> PointsResponse:
