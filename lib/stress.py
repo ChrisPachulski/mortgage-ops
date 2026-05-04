@@ -5,9 +5,21 @@ Composition over Phase 3 (lib.amortize.build_schedule), Phase 4
 Phase 8 invents NO new mathematical primitive; every stress sweep is a
 loop over an existing engine.
 
-Wave 1 (this plan, 08-01) ships ONLY the Pydantic v2 type contract +
+See ``references/stress-tests.md`` for the sweep-mode conventions, the
+SC-5 top-table-summary output-schema contract, the Phase 11
+``stress-test-agent`` consumption hint (verbatim-lift target per locked
+decision D-06-04), and the regulatory citations (CFPB ATR/QM
+1026.43(c)(5) for ARM-reset, March 2021 General QM Final Rule for the
+DTI heuristic, CFPB §1951 for ARM rate caps). Plan 08-06 D-06-01
+inherits the section structure from ``references/arm-mechanics.md``
+(Phase 5 D-08 [REVISED]); Phase 7 D-29 cite-from-doc idiom anchors this
+docstring back to the reference.
+
+Wave 1 (Plan 08-01) ships ONLY the Pydantic v2 type contract +
 documented stubs for evaluate(). Wave 2 (Plan 08-02) adds the body to
 evaluate() and ships rate_shock(), income_shock(), arm_path() helpers.
+Wave 6 (Plan 08-06) ships ``references/stress-tests.md`` and adds this
+cite-from contract.
 
 LOCKED DECISION - D-01 (mode discriminator):
   StressRequest is a Pydantic v2 discriminated union via Field(discriminator='mode')
