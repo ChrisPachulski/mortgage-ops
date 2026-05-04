@@ -1,0 +1,65 @@
+{
+  "_meta": {
+    "citation": "08-RESEARCH §3.4 #2: same baseline + reductions, threshold=0.50 -> none breach. Engine emits all three breaches_threshold=false (dti_back values 0.380191/0.401313/0.451477 all below 0.50 threshold).",
+    "engine_version": "Phase 8 Plan 08-02",
+    "requirements": ["STRS-02"]
+  },
+  "request": {
+    "mode": "income-shock",
+    "base_request": {
+      "household": {
+        "location": {
+          "state_fips": "53",
+          "county_fips": "033",
+          "county_name": "King",
+          "state": "WA",
+          "zip": "98101"
+        },
+        "applicants": [
+          {
+            "name": "A",
+            "gross_monthly_income": "7000.00",
+            "credit_score": 720
+          }
+        ],
+        "size": 1,
+        "monthly_debts": {
+          "auto": "0.00",
+          "student_loans": "0.00",
+          "credit_cards": "0.00",
+          "other": "0.00"
+        },
+        "escrow": {
+          "property_tax_monthly": "0.00",
+          "insurance_monthly": "0.00",
+          "hoa_monthly": "0.00"
+        },
+        "va": null,
+        "current_housing_payment": "0.00"
+      },
+      "max_dti": "0.430000",
+      "target_loan_type": "conventional",
+      "term_months": 360,
+      "annual_rate": "0.065000",
+      "apr": null,
+      "apor": null,
+      "monthly_pmi": null,
+      "endorsement_date_override": null,
+      "junior_liens": [],
+      "mode": "forward",
+      "loan_amount": "400000.00",
+      "property_value": "500000.00"
+    },
+    "reductions": ["0.050000", "0.100000", "0.200000"],
+    "dti_threshold": "0.500000"
+  },
+  "expected": {
+    "scenario_count": 3,
+    "all_breaches_threshold_false": true,
+    "row_breaches_threshold_at_index_0": false,
+    "row_breaches_threshold_at_index_1": false,
+    "row_breaches_threshold_at_index_2": false,
+    "row_dti_back_at_index_2": "0.451477"
+  },
+  "notes": "Caller-supplied higher threshold (0.50) demonstrates dti_threshold is fail-loud-required (D-04 LOCKED per Plan 08-01) but flexibly chosen by caller. Same dti_back values as income_shock_5_10_20_pct.json since base_request and reductions are identical; only the breach flags change."
+}

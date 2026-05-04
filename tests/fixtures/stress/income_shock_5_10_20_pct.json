@@ -1,0 +1,71 @@
+{
+  "_meta": {
+    "citation": "ROADMAP SC-2 verbatim: --reductions 0.05,0.10,0.20 over a baseline AffordabilityRequest. Engine emits breaches_threshold=true at the -20% reduction (dti_back=0.451477 > 0.43 threshold) and false at -5%/-10% (dti_back=0.380191/0.401313 below the threshold). 20% reduction also hits Phase 4 D-11 DTI-CAP-CONVENTIONAL blocker.",
+    "engine_version": "Phase 8 Plan 08-02",
+    "requirements": ["STRS-02", "ROADMAP SC-2"]
+  },
+  "request": {
+    "mode": "income-shock",
+    "base_request": {
+      "household": {
+        "location": {
+          "state_fips": "53",
+          "county_fips": "033",
+          "county_name": "King",
+          "state": "WA",
+          "zip": "98101"
+        },
+        "applicants": [
+          {
+            "name": "A",
+            "gross_monthly_income": "7000.00",
+            "credit_score": 720
+          }
+        ],
+        "size": 1,
+        "monthly_debts": {
+          "auto": "0.00",
+          "student_loans": "0.00",
+          "credit_cards": "0.00",
+          "other": "0.00"
+        },
+        "escrow": {
+          "property_tax_monthly": "0.00",
+          "insurance_monthly": "0.00",
+          "hoa_monthly": "0.00"
+        },
+        "va": null,
+        "current_housing_payment": "0.00"
+      },
+      "max_dti": "0.430000",
+      "target_loan_type": "conventional",
+      "term_months": 360,
+      "annual_rate": "0.065000",
+      "apr": null,
+      "apor": null,
+      "monthly_pmi": null,
+      "endorsement_date_override": null,
+      "junior_liens": [],
+      "mode": "forward",
+      "loan_amount": "400000.00",
+      "property_value": "500000.00"
+    },
+    "reductions": ["0.050000", "0.100000", "0.200000"],
+    "dti_threshold": "0.430000"
+  },
+  "expected": {
+    "scenario_count": 3,
+    "row_label_at_index_0": "-5%",
+    "row_label_at_index_1": "-10%",
+    "row_label_at_index_2": "-20%",
+    "row_dti_back_at_index_0": "0.380191",
+    "row_dti_back_at_index_1": "0.401313",
+    "row_dti_back_at_index_2": "0.451477",
+    "row_breaches_threshold_at_index_0": false,
+    "row_breaches_threshold_at_index_1": false,
+    "row_breaches_threshold_at_index_2": true,
+    "summary_worst_case_label": "-20%",
+    "stress_invariant_violations": []
+  },
+  "notes": "Income $7000/mo + $400k loan @ 6.5% / 30yr produces baseline dti_back=0.361181 (Phase 4 D-06 sum aggregation; single applicant). At -20% reduction the 0.43 cap is breached, matching SC-2 verbatim narrative ('flags which rows breach a configured affordability threshold'). Per Plan 08-05 deviation Rule 2 hand-tuning: $10k income would put baseline at 0.252 with NO reduction breaching at 0.43, so $7k chosen to land near the threshold. Engine-emitted values per D-05-01."
+}
