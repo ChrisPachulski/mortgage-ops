@@ -1,0 +1,43 @@
+{
+  "_meta": {
+    "citation": "08-RESEARCH §4.5: ROADMAP SC-3 over a 30-year horizon -> 5/1 ARM term_months=360 yields exactly 25 reset triggers ([61, 73, ..., 349]). _synthesize_index_path covers all triggers; build_arm_schedule emits one ResetEvent per trigger; therefore reset_count==25 for every path on a 5/1 ARM 30yr base.",
+    "engine_version": "Phase 8 Plan 08-02",
+    "requirements": ["STRS-03", "ROADMAP SC-3"]
+  },
+  "request": {
+    "mode": "arm-reset",
+    "base_arm_request": {
+      "loan": {
+        "principal": "400000.00",
+        "annual_rate": "0.060000",
+        "term_months": 360,
+        "origination_date": "2026-01-01",
+        "loan_type": "arm"
+      },
+      "arm_terms": {
+        "initial_period_months": 60,
+        "reset_period_months": 12,
+        "initial_cap_bps": 500,
+        "periodic_cap_bps": 200,
+        "lifetime_cap_bps": 500,
+        "floor_rate": "0.030000",
+        "margin_bps": 250,
+        "index_series_id": "MORTGAGE30US",
+        "note_rate": null
+      },
+      "assumed_index_rate": "0.050000",
+      "index_path": []
+    },
+    "paths": [
+      {"name": "parallel-shift", "params": {"shift_bps": 200}}
+    ]
+  },
+  "expected": {
+    "scenario_count": 1,
+    "row_label_at_index_0": "parallel-shift",
+    "row_reset_count_at_index_0": 25,
+    "row_total_interest_at_index_0": "719508.17",
+    "row_highest_rate_at_index_0": "0.095000"
+  },
+  "notes": "30-year horizon invariant pin: 5/1 ARM with initial=60, reset=12, term=360 produces lib.arm.compute_reset_triggers => [61, 73, 85, 97, ..., 349] = 25 triggers. _synthesize_index_path generates 25 IndexPathEntry rows; ARMRequest.index_path alignment-validator (lib/arm.py:107-145) confirms each trigger has a matching path entry; build_arm_schedule emits 25 ResetEvent rows. Per D-05-01 engine-emitted values."
+}
