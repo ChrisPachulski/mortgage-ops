@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
 status: executing
-stopped_at: Plan 08-05 complete (Wave 5 fixtures + tests; 14 hand-calc fixtures shipped 11 stress + 3 points; 2 final xfails flipped + citation-coverage meta-test added; full suite 521/4/1 zero-regression; Phase 8 closed at the test layer with 0 xfails in Phase-8 test files; 3 deviations 2 Rule-1 plan-spec validate_python->validate_json + meta-test scope extension for STRS-04/PNTS-03 CLI requirements + 1 Rule-3 hygiene PT018 split + unused-pytest-import; D-05-01..D-05-07 LOCKED honored verbatim; SC-1..SC-5 all verifiable verbatim by tests; STRS-01..04 + PNTS-01..03 closed; only Plan 08-06 references doc remains for Phase 8 closure)
-last_updated: "2026-05-04T01:22:07.538Z"
+stopped_at: Plan 08-06 complete (Wave 6 references docs; references/stress-tests.md 316 lines + references/points-breakeven.md 363 lines shipped following references/arm-mechanics.md six-section template per D-06-01 LOCKED; lib/stress.py + lib/points.py module docstrings carry D-29-style cite-from-doc paragraphs mirroring Phase 7 lib.apr → references/apr-reg-z.md idiom; scripts/stress_test.py + scripts/points_breakeven.py --help epilogs cross-reference the doc paths; Phase 6 deferred discount-rate coupling AUTHORITATIVELY documented in references/points-breakeven.md §Discount-Rate Convention per D-06-02 LOCKED Phase 6 planner authorized to edit on landing; Phase 11 stress-test-agent verbatim-lift target paragraph DOCUMENTED in references/stress-tests.md §Subagent Consumption Hint per D-06-04 LOCKED; SC-4 divergence pin reproduced 123 simple / 215 NPV at 7% discount +92 month gap with Plan 08-03 cross-validation history; full suite 521/4/1 zero-regression; 1 deviation Rule-1 acceptance-criterion forecast issue points_breakeven.py --help grep returns 2 not 1 because Plan 08-04 already added an inline reference to the doc on the discount_rate_annual line success_criteria fully met no code change needed; D-06-01..D-06-05 LOCKED honored verbatim; PHASE 8 COMPLETE 7/7 plans STRS-01..04 + PNTS-01..03 all closed at test + CLI + documentation layers ROADMAP SC-1..SC-5 all closed)
+last_updated: "2026-05-04T02:00:00.000Z"
 last_activity: 2026-05-04
 progress:
   total_phases: 12
-  completed_phases: 7
+  completed_phases: 8
   total_plans: 87
-  completed_plans: 55
-  percent: 63
+  completed_plans: 56
+  percent: 64
 ---
 
 # Project State
@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-26)
 
 **Core value:** Math correctness first — every dollar figure traces to a tested, deterministic Python function; the LLM is a router and narrator that never owns numbers.
-**Current focus:** Phase 06 — refinance-npv
+**Current focus:** Phase 09 — duckdb-orchestration (NEXT; Phase 8 closed at 7/7)
 
 ## Current Position
 
-Phase: 08 in-progress 5/7 plans (next: /gsd-execute-phase 08 to continue with Plan 08-05 fixtures-and-tests)
-Plan: 9-04 complete (Wave 4 Phase 8 stress-points CLIs; scripts/stress_test.py 193 lines + scripts/points_breakeven.py 131 lines created mirroring scripts/arm_simulate.py + scripts/apr_reg_z.py shape verbatim with lazy-import after argparse + sys.path-insert + scripts._cli_helpers reuse + 6-key envelope discipline; --rates 0.06,0.065,... and --reductions 0.05,0.10,... overlay shortcuts ship for ROADMAP SC-1/SC-2 verbatim invocation per D-04-02 with _parse_decimal_list keeping strings so float-gate semantics unchanged; tests/test_stress.py 5 Wave-0 xfails flipped + tests/test_points.py 2 Wave-0 xfails flipped = 7 total flipped; full suite 518/4/3 zero-regression to Plan 08-03 baseline of 511/4/10 [+7 net pass / -7 xfailed exactly per plan]; STRS-04 + PNTS-03 closed at the CLI layer; 3 deviations [1 Rule-1 plan-spec envelope-uniformity surface choice corrected from 'missing' (5 keys) to 'too_short' (6 keys) mirroring Phase 5/6/7 precedent + 1 Rule-1 plan-spec npv-pin value corrected from 160 to 215 inheriting Plan 08-03 deviation #1 cross-validation + 1 Rule-3 hygiene TypeAdapter[Any] annotation + import-order reorder; all auto-fixed inline]; D-04-01..D-04-07 LOCKED decisions honored verbatim; ROADMAP SC-1 verbatim invocation operational [--mode rate-shock --rates 0.06,0.065,0.07,0.075,0.08 --input <file> returns 5 rows with verbatim labels]; ROADMAP SC-2 verbatim invocation operational [--mode income-shock --reductions 0.05,0.10,0.20 --input <file> returns 3 rows with breach flags populated]; mypy --strict + ruff check + ruff format --check all clean across both new scripts; Wave 5 [Plan 08-05 fixtures + tests] unblocked at CLI surface; Wave 6 [Plan 08-06 references doc] unblocked at citation level)
-Status: Ready to execute
+Phase: 08 COMPLETE 7/7 plans; next entry point /gsd-execute-phase 09 (DuckDB; 3 BLOCKERS pending — lockfile path contradiction, known-loans field name, .gitignore dup)
+Plan: 08-06 complete (Wave 6 Phase 8 references docs; references/stress-tests.md 316 lines + references/points-breakeven.md 363 lines shipped following references/arm-mechanics.md six-section template per D-06-01 LOCKED; lib/stress.py + lib/points.py module docstrings carry D-29-style cite-from-doc paragraphs mirroring Phase 7 lib.apr → references/apr-reg-z.md idiom; scripts/stress_test.py + scripts/points_breakeven.py --help epilogs cross-reference the doc paths; Phase 6 deferred discount-rate coupling AUTHORITATIVELY documented in references/points-breakeven.md §Discount-Rate Convention per D-06-02 LOCKED — Phase 6 planner explicitly authorized to edit this section when shipping its project-wide borrower-perspective discount-rate convention; Phase 11 stress-test-agent verbatim-lift target paragraph DOCUMENTED in references/stress-tests.md §Subagent Consumption Hint per D-06-04 LOCKED — Phase 11 inherits the structural read-summary-first / drill-into-rows-on-demand discipline; SC-4 divergence example reproduced verbatim from Plan 08-05 SC-4 fixture (123 simple / 215 NPV at 7% discount + 92 month gap; cum_npv_at_hold=435.46; engine truth NOT planner-claimed 160 per Plan 08-03 deviation #1 three-way cross-validation); all citations real and verified 2026-05-03 (CFPB §1026.43(c)(5) for STRS-03 ATR/QM ARM max-payment + March 2021 General QM Final Rule for income-shock heuristic context + IRS Pub 936 + Reg Z §1026.18 + CFPB §136 consumer-explainer); 3 commits c5ff926 (Task 1 stress doc + lib/stress citation) + d6a5023 (Task 2 points doc + lib/points citation) + 4dbb18e (Task 3 CLI epilog cross-references); 1 deviation Rule-1 acceptance-criterion forecast issue — points_breakeven.py --help grep returns 2 not 1 because Plan 08-04 already added an inline reference to the doc on the discount_rate_annual line; success_criteria fully met no code change needed documented in SUMMARY; full suite 521 passed + 4 skipped + 1 xfailed zero-regression to Plan 08-05 baseline; mypy --strict + ruff check + ruff format --check all clean across modified files; D-06-01..D-06-05 LOCKED decisions honored verbatim; PHASE 8 COMPLETE 7/7 plans — STRS-01..04 + PNTS-01..03 all closed at test + CLI + documentation layers; ROADMAP SC-1..SC-5 all closed; cross-phase contracts shipped: Phase 6 deferred discount-rate coupling authoritatively documented + Phase 11 subagent verbatim-lift paragraph ready for .claude/agents/stress-test-agent.md inheritance)
+Status: Ready to execute Phase 9 (after blocker resolution)
 Last activity: 2026-05-04
 
-Progress: [██████░░░░] 62.5% (55/88 plans complete; 43 plans drafted awaiting execution; Phase 6 complete 7/7; Phase 7 COMPLETE 8/8; Phase 8 in-progress 5/7)
+Progress: [██████▌░░░] 63.6% (56/88 plans complete; 42 plans drafted awaiting execution; Phase 6 complete 7/7; Phase 7 COMPLETE 8/8; Phase 8 COMPLETE 7/7)
 
 ### Parallel Planning Sweep — 2026-05-02
 
