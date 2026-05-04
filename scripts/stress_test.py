@@ -97,6 +97,9 @@ def main() -> int:
             "All money/rate fields MUST be JSON strings (D-19; never JSON floats).\n"
             "ATR/QM threshold default (income-shock) is 0.43 — caller must specify\n"
             "in JSON; no module-level default (Phase 4 D-12 max_dti discipline).\n"
+            "\n"
+            "See references/stress-tests.md for sweep mechanics, output-schema\n"
+            "details, and Phase 11 subagent consumption contract.\n"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )

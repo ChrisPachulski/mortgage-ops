@@ -69,6 +69,9 @@ def main() -> int:
             "Negative monthly_savings (rate-up scenario) is allowed at construction;\n"
             "engine returns simple/npv = None with a NEGATIVE_OR_ZERO_SAVINGS warning\n"
             "and decision = skip_points (D-03-01 + D-03-04 mirrors Phase 4 D-11).\n"
+            "\n"
+            "See references/points-breakeven.md for formula details, discount-rate\n"
+            "guidance, and the SC-4 divergence example.\n"
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
