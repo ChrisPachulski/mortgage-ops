@@ -5,9 +5,19 @@ Two modes:
   from_loans   — caller supplies two Loans (with-points + without-points);
                  engine derives monthly_savings via two build_schedule calls.
 
-Wave 1 (this plan, 08-01) ships only the type contract + cross-plan stub.
+See ``references/points-breakeven.md`` for the simple-vs-NPV formulas, the
+discount-rate convention (REQUIRED caller-supplied per D-02; Phase 6 deferred
+coupling per D-06-02 LOCKED), the SC-4 divergence pin (123 simple / 215 NPV at
+7% discount; +92 month gap from the Plan 08-05 fixture), and the regulatory
+citations (IRS Pub 936 + Reg Z §1026.18 + CFPB consumer-explainer §136). Plan
+08-06 D-06-01 inherits the section structure from
+``references/arm-mechanics.md`` (Phase 5 D-08 [REVISED]); Phase 7 D-29
+cite-from-doc idiom anchors this docstring back to the reference.
+
+Wave 1 (Plan 08-01) ships only the type contract + cross-plan stub.
 Wave 3 (Plan 08-03) ships simple_breakeven, npv_breakeven, and the body of
-evaluate().
+evaluate(). Wave 6 (Plan 08-06) ships ``references/points-breakeven.md`` and
+adds this cite-from contract.
 
 LOCKED DECISION - D-01 (mode discriminator):
   PointsRequest is a Pydantic v2 discriminated union over PointsRequestFromSavings
