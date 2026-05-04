@@ -1,0 +1,25 @@
+{
+  "_meta": {
+    "citation": "08-RESEARCH §5.4: zero discount -> NPV breakeven == simple breakeven; diverge=False (mathematical identity D-03-03 verified empirically). Engine emits simple=123, npv=123, decision=buy_points (cum_npv at hold=7696.00 > 0).",
+    "engine_version": "Phase 8 Plan 08-03",
+    "requirements": ["PNTS-01", "PNTS-02"]
+  },
+  "request": {
+    "mode": "from_savings",
+    "points_cost": "8000.00",
+    "monthly_savings": "65.40",
+    "hold_period_months": 240,
+    "discount_rate_annual": "0.000000"
+  },
+  "expected": {
+    "simple_breakeven_months": 123,
+    "npv_breakeven_months": 123,
+    "diverge": false,
+    "diverge_explanation": null,
+    "decision": "buy_points",
+    "cumulative_npv_at_hold": "7696.00",
+    "monthly_savings": "65.40",
+    "warnings": []
+  },
+  "notes": "Zero-discount branch in lib.points.npv_breakeven collapses to undiscounted accumulation (mathematical identity D-03-03); the cumulative-savings sum crosses zero at the same month as simple_breakeven (123). cum_npv at hold=240 is 240*65.40 - 8000.00 = 15696.00 - 8000.00 = 7696.00. No divergence. Per D-05-01 engine-emitted values."
+}

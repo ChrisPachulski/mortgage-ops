@@ -1,0 +1,25 @@
+{
+  "_meta": {
+    "citation": "PNTS-01 edge case: negative monthly_savings (rate-up scenario; points cost MORE than they save) -> simple_breakeven returns None (D-03-01); npv walk strictly decreases so npv_breakeven also None; warning emitted at PointsResponse layer (D-03-01 mirrors Phase 4 D-11). decision forced to 'skip_points' per D-03-04 defensive force.",
+    "engine_version": "Phase 8 Plan 08-03",
+    "requirements": ["PNTS-01", "PNTS-02"]
+  },
+  "request": {
+    "mode": "from_savings",
+    "points_cost": "8000.00",
+    "monthly_savings": "-10.00",
+    "hold_period_months": 120,
+    "discount_rate_annual": "0.070000"
+  },
+  "expected": {
+    "simple_breakeven_months": null,
+    "npv_breakeven_months": null,
+    "diverge": false,
+    "decision": "skip_points",
+    "cumulative_npv_at_hold": "-8861.26",
+    "monthly_savings": "-10.00",
+    "warnings_contains_negative_savings": true,
+    "expected_warning_token": "NEGATIVE_OR_ZERO_SAVINGS_-10.00"
+  },
+  "notes": "Rate-up scenario: caller-supplied monthly_savings=-10.00 round-trips through the relaxed signed-Decimal field (D-03-07 mirrors Phase 6 D-03 RefiCashflow.amount precedent — Money's ge=0 would block this construction). cum_npv at hold = -8000 + 120*(discounted -10) ~ -8861.26. Both breakeven outputs are None; decision is forced to 'skip_points' per D-03-04. Per D-05-01 engine-emitted values."
+}

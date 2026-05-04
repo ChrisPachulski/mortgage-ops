@@ -1,0 +1,27 @@
+{
+  "_meta": {
+    "citation": "ROADMAP SC-4 + 08-RESEARCH §5.4: 7% discount -> simple=123, npv=215 (engine-actual per Plan 08-03 deviation #1; cross-validated three ways: numpy_financial.nper(0.07/12, 65.40, -8000) -> 214.9476 ceil 215; closed-form n = -ln(1 - 8000*r/65.40)/ln(1+r) at r=0.07/12 -> 214.95; engine §5.2 cumulative-NPV walk first crosses zero at m=215). diverge=True; gap=+92 months.",
+    "engine_version": "Phase 8 Plan 08-03",
+    "requirements": ["PNTS-01", "PNTS-02", "ROADMAP SC-4"]
+  },
+  "request": {
+    "mode": "from_savings",
+    "points_cost": "8000.00",
+    "monthly_savings": "65.40",
+    "hold_period_months": 240,
+    "discount_rate_annual": "0.070000"
+  },
+  "expected": {
+    "simple_breakeven_months": 123,
+    "npv_breakeven_months": 215,
+    "diverge": true,
+    "diverge_explanation_substring_discount_rate": "0.070000",
+    "decision": "buy_points",
+    "cumulative_npv_at_hold": "435.46",
+    "monthly_savings": "65.40",
+    "discount_rate_used": "0.070000",
+    "hold_period_months": 240,
+    "gap_months": 92
+  },
+  "notes": "ROADMAP SC-4 divergence-pin fixture. CRITICAL: pinned at engine-actual npv=215 (gap=+92 months), NOT planner-claimed npv=160 (gap=+37 months). Plan 08-03 deviation #1 cross-validated the 215-month value three independent ways (numpy_financial.nper, closed-form annuity, engine §5.2 cumulative-NPV walk); the planner's 160 was mathematically inconsistent with the §5.2 formula it purported to compute. Plan 08-05 honors the engine truth per Plan 08-03 SUMMARY's pre-emptive flag. Decision remains 'buy_points' because hold_period_months=240 > 215 yields positive cum_npv at hold (435.46). Per D-05-01 engine-emitted values + D-05-05 SC-4 numerical pins are HARD."
+}
