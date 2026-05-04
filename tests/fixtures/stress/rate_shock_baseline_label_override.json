@@ -1,0 +1,25 @@
+{
+  "_meta": {
+    "citation": "08-RESEARCH §2.4 #3: explicit baseline_label='0.050000' on a 0.04/0.05/0.06 grid. Verifies delta_vs_baseline_monthly==0 at the explicit-baseline row (index 1).",
+    "engine_version": "Phase 8 Plan 08-02",
+    "requirements": ["STRS-01"]
+  },
+  "request": {
+    "mode": "rate-shock",
+    "loan": {
+      "principal": "300000.00",
+      "annual_rate": "0.040000",
+      "term_months": 180,
+      "origination_date": "2026-01-01",
+      "loan_type": "fixed"
+    },
+    "rates": ["0.040000", "0.050000", "0.060000"],
+    "baseline_label": "0.050000"
+  },
+  "expected": {
+    "summary_baseline_label": "0.050000",
+    "row_delta_vs_baseline_monthly_at_index_1": "0.00",
+    "row_monthly_pi_at_index_1": "2372.38"
+  },
+  "notes": "Explicit baseline_label='0.050000' wins over the default-of-rates[0]; the baseline row's delta is exactly 0.00 (the row IS the baseline). Engine-emitted values captured via lib.stress.evaluate per D-05-01."
+}

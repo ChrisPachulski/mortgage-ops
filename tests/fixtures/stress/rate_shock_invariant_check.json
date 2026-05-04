@@ -1,0 +1,27 @@
+{
+  "_meta": {
+    "citation": "AMRT-07 invariant: sum of principal_paid across schedule.payments per cell == loan.principal exactly. Verified at fixture-authoring time across all 3 cells (rate in {0.05, 0.065, 0.08}). Rate-shock per-cell schedules inherit Phase 3 D-04 final-payment-adjustment so the principal sum is exact-to-cent.",
+    "engine_version": "Phase 8 Plan 08-02",
+    "requirements": ["STRS-01"]
+  },
+  "request": {
+    "mode": "rate-shock",
+    "loan": {
+      "principal": "400000.00",
+      "annual_rate": "0.050000",
+      "term_months": 360,
+      "origination_date": "2026-01-01",
+      "loan_type": "fixed"
+    },
+    "rates": ["0.050000", "0.065000", "0.080000"]
+  },
+  "expected": {
+    "scenario_count": 3,
+    "invariant_amrt_07_per_cell_principal_sum_equals_loan_principal": true,
+    "row_monthly_pi_at_label_0_050000": "2147.29",
+    "row_monthly_pi_at_label_0_065000": "2528.27",
+    "row_monthly_pi_at_label_0_080000": "2935.06",
+    "stress_invariant_violations": []
+  },
+  "notes": "AMRT-07 carry-through: each per-cell build_schedule call (driven by rate_shock's loan.model_copy(update={'annual_rate': rate})) preserves the Phase 3 invariant 'sum(payment.principal) == loan.principal' exactly. Engine-emitted monthly_pi values pinned per cell."
+}
