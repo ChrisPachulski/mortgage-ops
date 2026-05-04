@@ -47,19 +47,25 @@ fail-loud-via-list, not a raise):
 
 from __future__ import annotations
 
-from typing import Annotated, Literal
+from decimal import Decimal
+from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from lib.affordability import (
     AffordabilityRequest,  # noqa: TC001  # Pydantic resolves field annotations at runtime
 )
+from lib.amortize import build_schedule
 from lib.arm import ARMRequest  # noqa: TC001  # Pydantic resolves field annotations at runtime
 from lib.models import (  # noqa: TC001  # Pydantic resolves field annotations at runtime
     Loan,
     Money,
     Rate,
 )
+from lib.money import quantize_cents, quantize_rate
+
+if TYPE_CHECKING:
+    from collections.abc import Sequence
 
 # ---------------------------------------------------------------------------
 # Leaf models
@@ -237,21 +243,104 @@ class StressResponse(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Engine — cross-plan stub (Plan 08-02 fills body)
+# Engine — per-mode helpers (Plan 08-02)
+# ---------------------------------------------------------------------------
+
+
+def rate_shock(
+    loan: Loan,
+    rates: Sequence[Rate],
+    baseline_label: str | None = None,
+) -> tuple[list[StressRow], ScenarioSummary]:
+    """STRS-01 + ROADMAP SC-1: re-solve PMT for each rate in the grid.
+
+    Returns ``(rows, summary)``. Each row carries ``monthly_pi`` +
+    ``total_interest`` + ``delta_vs_baseline_monthly`` +
+    ``delta_vs_baseline_pct`` (the last two computed relative to the
+    ``baseline_label`` cell, defaulting to ``rates[0]``).
+
+    ``stress_invariant_violations`` appends ``"RATE_SHOCK_MONOTONE_PI"`` if
+    ``monthly_pi`` does NOT strictly increase as rate strictly increases
+    (Phase 3 engine bug signal per 08-RESEARCH §6.4).
+    """
+    # Phase 1: build base rows by re-solving PMT per rate via Phase 3 engine.
+    rows: list[StressRow] = []
+    for rate in rates:
+        syn_loan = loan.model_copy(update={"annual_rate": rate})
+        schedule = build_schedule(syn_loan, frequency="monthly")
+        rows.append(
+            StressRow(
+                label=str(rate),
+                monthly_pi=schedule.monthly_pi,
+                total_interest=schedule.total_interest,
+            )
+        )
+
+    # Resolve baseline label + payment.
+    if baseline_label is None:
+        baseline_label = rows[0].label
+    baseline_row = next((r for r in rows if r.label == baseline_label), rows[0])
+    baseline_pi = baseline_row.monthly_pi
+    assert baseline_pi is not None  # mypy narrow; constructed non-None above
+
+    # Phase 2: enrich rows with delta_vs_baseline_monthly + delta_vs_baseline_pct.
+    enriched: list[StressRow] = []
+    for r in rows:
+        assert r.monthly_pi is not None  # mypy narrow
+        delta_m = quantize_cents(r.monthly_pi - baseline_pi)
+        if baseline_pi > Decimal("0"):
+            delta_pct = quantize_rate((r.monthly_pi - baseline_pi) / baseline_pi)
+        else:
+            delta_pct = Decimal("0.000000")
+        enriched.append(
+            r.model_copy(
+                update={
+                    "delta_vs_baseline_monthly": delta_m,
+                    "delta_vs_baseline_pct": delta_pct,
+                }
+            )
+        )
+
+    # Invariants: monotone monthly_pi as rate increases (08-RESEARCH §6.4).
+    violations: list[str] = []
+    rate_pi_pairs: list[tuple[Rate, Money]] = []
+    for rate, r in zip(rates, rows, strict=True):
+        assert r.monthly_pi is not None  # mypy narrow
+        rate_pi_pairs.append((rate, r.monthly_pi))
+    sorted_pairs = sorted(rate_pi_pairs, key=lambda p: p[0])
+    for i in range(1, len(sorted_pairs)):
+        r_lo, pi_lo = sorted_pairs[i - 1]
+        r_hi, pi_hi = sorted_pairs[i]
+        if r_hi > r_lo and pi_hi <= pi_lo:
+            violations.append("RATE_SHOCK_MONOTONE_PI")
+            break
+
+    # Worst case = highest monthly_pi (rows just constructed, all non-None).
+    def _row_pi(r: StressRow) -> Money:
+        assert r.monthly_pi is not None
+        return r.monthly_pi
+
+    worst = max(enriched, key=_row_pi)
+
+    summary = ScenarioSummary(
+        table=enriched,
+        baseline_label=baseline_label,
+        worst_case_label=worst.label,
+        stress_invariant_violations=violations,
+    )
+    return enriched, summary
+
+
+# ---------------------------------------------------------------------------
+# Engine — top-level dispatcher (cross-plan stub; replaced in later tasks)
 # ---------------------------------------------------------------------------
 
 
 def evaluate(req: StressRequest) -> StressResponse:
     """Dispatch on ``req.mode`` and run the matching sweep.
 
-    Wave 1 (Plan 08-01 — this file) ships the type contract only. Wave 2
-    (Plan 08-02) replaces this body with three branches over
-    ``isinstance(req, RateShockRequest|IncomeShockRequest|ArmResetRequest)``,
-    each calling the matching Phase 3/4/5 engine in a per-cell loop and
-    assembling a ``StressResponse``.
-
-    Cross-plan stub idiom: Phase 4 D-08 (lib.affordability Wave 1 → Wave 2
-    pattern). Stubbing here lets Plans 08-02 and 08-03 fill bodies without
-    re-importing the surface across the wave boundary.
+    Wave 1 (Plan 08-01) shipped the type contract; Plan 08-02 fills the
+    bodies. Tasks 2-5 of Plan 08-02 add ``rate_shock``, ``income_shock``,
+    ``arm_path``, and the dispatcher itself.
     """
     raise NotImplementedError("lib.stress.evaluate body lives in Plan 08-02")
