@@ -516,10 +516,34 @@ def arm_path(
 
 
 def evaluate(req: StressRequest) -> StressResponse:
-    """Dispatch on ``req.mode`` and run the matching sweep.
+    """Dispatch on ``req.mode``; build StressResponse with summary BEFORE rows (D-02).
 
-    Wave 1 (Plan 08-01) shipped the type contract; Plan 08-02 fills the
-    bodies. Tasks 2-5 of Plan 08-02 add ``rate_shock``, ``income_shock``,
-    ``arm_path``, and the dispatcher itself.
+    The discriminated union ``StressRequest`` narrows the type at validation
+    time; here we ``isinstance``-narrow to route to the matching helper. The
+    response always carries ``summary`` first then ``rows`` (Pydantic v2
+    preserves field-declaration order — D-01-02 SC-5 contract).
     """
-    raise NotImplementedError("lib.stress.evaluate body lives in Plan 08-02")
+    if isinstance(req, RateShockRequest):
+        rows, summary = rate_shock(req.loan, req.rates, req.baseline_label)
+        return StressResponse(
+            mode="rate-shock",
+            scenario_count=len(rows),
+            summary=summary,
+            rows=rows,
+        )
+    if isinstance(req, IncomeShockRequest):
+        rows, summary = income_shock(req.base_request, req.reductions, req.dti_threshold)
+        return StressResponse(
+            mode="income-shock",
+            scenario_count=len(rows),
+            summary=summary,
+            rows=rows,
+        )
+    # ArmResetRequest (closed-set discriminator; mypy exhausts via isinstance chain)
+    rows, summary = arm_path(req.base_arm_request, req.paths)
+    return StressResponse(
+        mode="arm-reset",
+        scenario_count=len(rows),
+        summary=summary,
+        rows=rows,
+    )
