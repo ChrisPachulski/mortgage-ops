@@ -38,7 +38,7 @@ LOCKED DECISION - D-04 (decision dispatcher reports BOTH outputs):
 
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import ROUND_CEILING, Decimal, localcontext
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -48,6 +48,7 @@ from lib.models import (  # noqa: TC001  # Pydantic resolves field annotations a
     Money,
     Rate,
 )
+from lib.money import MONEY_CONTEXT
 
 
 class PointsRequestFromSavings(BaseModel):
@@ -121,6 +122,28 @@ class PointsResponse(BaseModel):
     monthly_savings: Money  # echoed; useful when caller used from_loans
     cumulative_npv_at_hold: Money  # cum_npv(hold_period_months); decision driver
     warnings: list[str] = Field(default_factory=list)
+
+
+def simple_breakeven(points_cost: Money, monthly_savings: Money) -> int | None:
+    """PNTS-01: ``months_to_breakeven = ceil(points_cost / monthly_savings)``.
+
+    Returns ``None`` when ``monthly_savings <= 0`` (rate-up scenario; points cost
+    MORE than they save). The caller surfaces a structured warning in
+    ``PointsResponse.warnings`` rather than raising — D-03-01 mirrors Phase 4
+    D-11 blocked_by-via-field-not-raise convention.
+
+    Both inputs are ``Money`` (Decimal). Decimal-safe ceil is performed under
+    ``localcontext(MONEY_CONTEXT)`` so the project-wide ROUND_HALF_UP context
+    is not mutated; the quotient is rounded toward +inf via
+    ``to_integral_value(rounding=ROUND_CEILING)`` and converted to ``int`` at
+    the boundary.
+    """
+    if monthly_savings <= Decimal("0"):
+        return None
+    with localcontext(MONEY_CONTEXT):
+        quotient = points_cost / monthly_savings
+        ceiled = quotient.to_integral_value(rounding=ROUND_CEILING)
+    return int(ceiled)
 
 
 def evaluate(req: PointsRequest) -> PointsResponse:
