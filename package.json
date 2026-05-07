@@ -1,0 +1,18 @@
+{
+  "name": "mortgage-ops",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Personal-use mortgage analysis: deterministic Python calc engine + Claude skill orchestration with DuckDB persistence (Phase 9)",
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "init-db": "node orchestration/init-db.mjs",
+    "db-write": "node orchestration/db-write.mjs"
+  },
+  "dependencies": {
+    "duckdb-async": "1.4.2",
+    "js-yaml": "4.1.1"
+  }
+}
