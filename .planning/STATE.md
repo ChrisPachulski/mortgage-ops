@@ -21,16 +21,16 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-26)
 
 **Core value:** Math correctness first — every dollar figure traces to a tested, deterministic Python function; the LLM is a router and narrator that never owns numbers.
-**Current focus:** Phase 09 — duckdb-orchestration (NEXT; Phase 8 closed at 7/7)
+**Current focus:** Phase 10 — claude-skill (NEXT; Phase 9 closed at 8/8)
 
 ## Current Position
 
-Phase: 08 COMPLETE 7/7 plans; next entry point /gsd-execute-phase 09 (DuckDB; 3 BLOCKERS pending — lockfile path contradiction, known-loans field name, .gitignore dup)
-Plan: 08-06 complete (Wave 6 Phase 8 references docs; references/stress-tests.md 316 lines + references/points-breakeven.md 363 lines shipped following references/arm-mechanics.md six-section template per D-06-01 LOCKED; lib/stress.py + lib/points.py module docstrings carry D-29-style cite-from-doc paragraphs mirroring Phase 7 lib.apr → references/apr-reg-z.md idiom; scripts/stress_test.py + scripts/points_breakeven.py --help epilogs cross-reference the doc paths; Phase 6 deferred discount-rate coupling AUTHORITATIVELY documented in references/points-breakeven.md §Discount-Rate Convention per D-06-02 LOCKED — Phase 6 planner explicitly authorized to edit this section when shipping its project-wide borrower-perspective discount-rate convention; Phase 11 stress-test-agent verbatim-lift target paragraph DOCUMENTED in references/stress-tests.md §Subagent Consumption Hint per D-06-04 LOCKED — Phase 11 inherits the structural read-summary-first / drill-into-rows-on-demand discipline; SC-4 divergence example reproduced verbatim from Plan 08-05 SC-4 fixture (123 simple / 215 NPV at 7% discount + 92 month gap; cum_npv_at_hold=435.46; engine truth NOT planner-claimed 160 per Plan 08-03 deviation #1 three-way cross-validation); all citations real and verified 2026-05-03 (CFPB §1026.43(c)(5) for STRS-03 ATR/QM ARM max-payment + March 2021 General QM Final Rule for income-shock heuristic context + IRS Pub 936 + Reg Z §1026.18 + CFPB §136 consumer-explainer); 3 commits c5ff926 (Task 1 stress doc + lib/stress citation) + d6a5023 (Task 2 points doc + lib/points citation) + 4dbb18e (Task 3 CLI epilog cross-references); 1 deviation Rule-1 acceptance-criterion forecast issue — points_breakeven.py --help grep returns 2 not 1 because Plan 08-04 already added an inline reference to the doc on the discount_rate_annual line; success_criteria fully met no code change needed documented in SUMMARY; full suite 521 passed + 4 skipped + 1 xfailed zero-regression to Plan 08-05 baseline; mypy --strict + ruff check + ruff format --check all clean across modified files; D-06-01..D-06-05 LOCKED decisions honored verbatim; PHASE 8 COMPLETE 7/7 plans — STRS-01..04 + PNTS-01..03 all closed at test + CLI + documentation layers; ROADMAP SC-1..SC-5 all closed; cross-phase contracts shipped: Phase 6 deferred discount-rate coupling authoritatively documented + Phase 11 subagent verbatim-lift paragraph ready for .claude/agents/stress-test-agent.md inheritance)
-Status: Ready to execute Phase 9 (after blocker resolution)
-Last activity: 2026-05-04
+Phase: 09 COMPLETE 8/8 plans; next entry point /gsd-execute-phase 10 (Claude Skill Frontend) or /gsd-discuss-phase 10
+Plan: 09-07 complete (Wave 7 Phase 9 references and gitignore; references/data-layer.md 358 lines shipped following references/arm-mechanics.md / refi-npv.md / apr-reg-z.md / stress-tests.md / points-breakeven.md six-section template; DATA_CONTRACT.md Phase 9 Layer Examples section added with User/System/Data/Reference layer rules from CLAUDE.md made authoritative; .gitignore data/.mortgage-ops.duckdb.lock defensive secondary lockfile name added under Plan 09-07 comment header; 6 .gitignore regression tests pinning data/*.duckdb / data/.lock / data/loans.md / data/scenarios.md / node_modules/ patterns and rejecting bare data/* wildcard per D-07-02 LOCKED; 5 commits 93510b8 (references/data-layer.md) + feec3be (gitignore defensive name) + 6fa549d (DATA_CONTRACT.md) + a8559a1 (gitignore regression tests) + bca3a73 (final SUMMARY metadata); 3 deviations all hygiene-only [Rule-3 section header numbering stripped to satisfy literal regex / Rule-3 data/.lock duplicate avoided by adding only the truly-new defensive name / Rule-6 length 358 vs 150-250 target driven by content-density 10-row layer table + 8-step walkthrough + 7-row symptom-fix table]; full suite 549 passed + 4 skipped + 1 xfailed zero-regression from Wave 6 baseline of 543; the 1 xfailed is the inherited Phase 5 ARM oracle Bankrate/Vertex42 deferral outside Phase 9 scope; mypy --strict + ruff check + ruff format --check all clean across modified files; PHASE 9 COMPLETE 8/8 plans — PERS-01..PERS-07 all closed at test layer; ROADMAP SC-1..SC-5 all pinned by passing tests verified by gsd-verifier 5/5 must-haves PASSED; cross-phase contracts shipped for Phase 10 (skill frontend) and Phase 11 (subagents) consumption: orchestration/lockfile.mjs withLock/acquireLock/releaseLock/isStale/readLock + orchestration/init-db.mjs idempotent 6-table schema + orchestration/db-write.mjs cmdInsertLoan/Scenario/Report/Query/RenderMarkdown + data/known-loans.yml 7-product catalog with loan_type field aligned to lib/models.py:Loan Literal + references/data-layer.md onboarding doc)
+Status: Ready to start Phase 10 (Claude Skill Frontend)
+Last activity: 2026-05-07
 
-Progress: [██████▌░░░] 63.6% (56/88 plans complete; 42 plans drafted awaiting execution; Phase 6 complete 7/7; Phase 7 COMPLETE 8/8; Phase 8 COMPLETE 7/7)
+Progress: [███████▎░░] 72.7% (64/88 plans complete; 34 plans drafted awaiting execution; Phase 6 complete 7/7; Phase 7 COMPLETE 8/8; Phase 8 COMPLETE 7/7; Phase 9 COMPLETE 8/8)
 
 ### Parallel Planning Sweep — 2026-05-02
 
@@ -50,11 +50,7 @@ User requested orchestrated parallel planning of all remaining phases (6-12). 7 
 
 ### Blockers requiring user attention before execution
 
-**Phase 9 (DuckDB)**: 3 BLOCKERS — see .planning/phases/09-duckdb-orchestration/09-PLAN-CHECK.md
-
-1. Lockfile path contradiction across plans 09-01 / 09-06 / 09-07 (single global vs sibling-of-DB vs named-after-DB)
-2. known-loans.yml field name `type:` violates `lib.models.Loan.loan_type` contract
-3. .gitignore additions duplicated across 09-02 + 09-07
+**Phase 9 (DuckDB)**: RESOLVED 2026-05-04 / 2026-05-07. 3 prior BLOCKERS were superseded by iter-2 plan-check (4 BLOCKERS + 4 WARNINGS, all resolved); phase shipped 8/8 plans + verifier-PASS 5/5 must-haves. See `.planning/phases/09-duckdb-orchestration/09-PLAN-CHECK.md` and `09-VERIFICATION.md`.
 
 **Phase 12 (FRED + Eval)**: 4 BLOCKERS — see .planning/phases/12-fred-eval/12-PLAN-CHECK.md
 
