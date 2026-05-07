@@ -1,7 +1,6 @@
 // orchestration/db-write.mjs
-// Central writer CLI for mortgage-ops Phase 9 (PERS-03 + PERS-05).
-// Subcommands: insert-loan, insert-scenario, insert-report, query
-//              (render-markdown ships in Plan 09-04)
+// Central writer CLI for mortgage-ops Phase 9 (PERS-03 + PERS-05 + PERS-06).
+// Subcommands: insert-loan, insert-scenario, insert-report, render-markdown, query
 //
 // Every WRITE subcommand:
 //   1. Acquires the cross-process lock via withLock() from lockfile.mjs
@@ -19,11 +18,15 @@
 //   INSERT subcommand (career-ops parallel; future-proofs multi-row inserts).
 // Plan 09-03 D-03-05: insert-scenario stores request_json + response_json as
 //   DuckDB native JSON columns (RESEARCH §c table 3).
-// Plan 09-03 D-03-06: render-markdown is RESERVED but not implemented in this
-//   plan (Wave 4 owns it end-to-end including byte-identical contract).
+// Plan 09-04 D-04-01: Mandatory '<!-- Generated from data/mortgage-ops.duckdb
+//   - edit via scripts, not directly -->' header on rendered markdown.
+// Plan 09-04 D-04-03: Every render SELECT uses explicit ORDER BY id ASC
+//   (RESEARCH Pitfall 3: byte-equality contract).
+// Plan 09-04 D-04-04: NO generated_at = NOW() embedded in render output
+//   (Pitfall 3: would break byte-equality across runs).
 
 import { Database } from 'duckdb-async';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { withLock } from './lockfile.mjs';
@@ -32,6 +35,8 @@ const ORCH_DIR = dirname(fileURLToPath(import.meta.url));
 const MORTGAGE_OPS = dirname(ORCH_DIR);
 const DB_PATH = process.env.MORTGAGE_OPS_DB_PATH ||
                 join(MORTGAGE_OPS, 'data', 'mortgage-ops.duckdb');
+const LOANS_MD = join(MORTGAGE_OPS, 'data', 'loans.md');
+const SCENARIOS_MD = join(MORTGAGE_OPS, 'data', 'scenarios.md');
 
 // ===== Arg parser (ported from career-ops/scripts/db-write.mjs:55-83) =====
 
@@ -208,11 +213,73 @@ async function cmdQuery(db, flags) {
   console.log(JSON.stringify(rows, replacer));
 }
 
-async function cmdRenderMarkdown(_db, _flags) {
-  throw new Error(
-    'Not yet implemented (--render-markdown ships in Plan 09-04). ' +
-    'Per Phase 9 plan sequence, this slot is reserved.'
-  );
+async function cmdRenderMarkdown(db, _flags, positional) {
+  // Default to 'all' if no target specified
+  const target = positional[0] || 'all';
+  const validTargets = new Set(['loans', 'scenarios', 'all']);
+  if (!validTargets.has(target)) {
+    throw new Error(`Invalid render target: ${target}. Must be one of: loans, scenarios, all`);
+  }
+
+  const results = {};
+
+  if (target === 'loans' || target === 'all') {
+    // Plan 09-04 D-04-02: every DECIMAL column CAST AS VARCHAR (PATTERNS Critical Issue 2)
+    // Plan 09-04 D-04-03: explicit ORDER BY id ASC (Pitfall 3: byte-equality contract)
+    const rows = await db.all(`
+      SELECT id,
+             CAST(principal AS VARCHAR) AS principal,
+             CAST(annual_rate AS VARCHAR) AS annual_rate,
+             term_months,
+             COALESCE(strftime(origination_date, '%Y-%m-%d'), '') AS origination_date,
+             loan_type,
+             frequency
+      FROM loans
+      ORDER BY id ASC
+    `);
+    const header = [
+      '<!-- Generated from data/mortgage-ops.duckdb - edit via scripts, not directly -->',
+      '# Loans',
+      '',
+      '| ID | Principal | Annual Rate | Term (mo) | Origination | Type | Frequency |',
+      '|----|-----------|-------------|-----------|-------------|------|-----------|',
+    ];
+    const body = rows.map(r =>
+      `| ${Number(r.id)} | ${r.principal} | ${r.annual_rate} | ${r.term_months} | ${r.origination_date} | ${r.loan_type} | ${r.frequency} |`
+    );
+    const content = header.concat(body).join('\n') + '\n';
+    writeFileSync(LOANS_MD, content, 'utf-8');
+    results.loans_md = { path: LOANS_MD, rows: rows.length, bytes: content.length };
+  }
+
+  if (target === 'scenarios' || target === 'all') {
+    // computed_at IS render-deterministic: it's data-captured-at-insert, not NOW().
+    // strftime serializes the stored TIMESTAMP into the markdown body verbatim.
+    const rows = await db.all(`
+      SELECT id,
+             COALESCE(CAST(loan_id AS VARCHAR), '') AS loan_id,
+             kind,
+             strftime(computed_at, '%Y-%m-%d %H:%M:%S') AS computed_at,
+             COALESCE(notes, '') AS notes
+      FROM scenarios
+      ORDER BY id ASC
+    `);
+    const header = [
+      '<!-- Generated from data/mortgage-ops.duckdb - edit via scripts, not directly -->',
+      '# Scenarios',
+      '',
+      '| ID | Loan ID | Kind | Computed At | Notes |',
+      '|----|---------|------|-------------|-------|',
+    ];
+    const body = rows.map(r =>
+      `| ${Number(r.id)} | ${r.loan_id} | ${r.kind} | ${r.computed_at} | ${r.notes} |`
+    );
+    const content = header.concat(body).join('\n') + '\n';
+    writeFileSync(SCENARIOS_MD, content, 'utf-8');
+    results.scenarios_md = { path: SCENARIOS_MD, rows: rows.length, bytes: content.length };
+  }
+
+  console.log(JSON.stringify({ ok: true, target, ...results }));
 }
 
 // ===== Dispatcher =====
@@ -251,7 +318,7 @@ async function run() {
     return;
   }
 
-  const { command, flags } = parseArgs(argv);
+  const { command, flags, positional } = parseArgs(argv);
   const handler = HANDLERS[command];
   if (!handler) {
     console.error(`Unknown subcommand: ${command}`);
@@ -262,7 +329,7 @@ async function run() {
   const action = async () => {
     const db = await Database.create(DB_PATH);
     try {
-      await handler(db, flags);
+      await handler(db, flags, positional);
     } finally {
       await db.close();
     }
