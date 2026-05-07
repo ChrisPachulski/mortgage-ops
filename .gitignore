@@ -42,3 +42,8 @@ data/.lock
 # Phase 9: Generated markdown views (regenerated from DuckDB; never hand-edited)
 data/loans.md
 data/scenarios.md
+
+# Phase 9 (Plan 09-07): DuckDB writer lockfile defensive name (RESEARCH Pitfall 5)
+# Production lockfile is the short name above; this entry catches any future
+# rename to the longer per-DB convention without breaking Reference Layer commits.
+data/.mortgage-ops.duckdb.lock
