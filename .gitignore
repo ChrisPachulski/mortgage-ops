@@ -31,3 +31,14 @@ reports/*
 .DS_Store
 .idea/
 .vscode/
+
+# Phase 9: Node orchestration artifacts
+node_modules/
+package-lock.json.bak
+
+# Phase 9: DuckDB writer lockfile (ephemeral; per PATTERNS Critical Issue 1)
+data/.lock
+
+# Phase 9: Generated markdown views (regenerated from DuckDB; never hand-edited)
+data/loans.md
+data/scenarios.md
