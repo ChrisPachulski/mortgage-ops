@@ -26,7 +26,6 @@ REPO_ROOT: Path = Path(__file__).resolve().parent.parent.parent
 """Repo root for resolving orchestration/ paths in test bodies."""
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub - Plan 09-02 ships orchestration/init-db.mjs")
 def test_init_db_idempotent(tmp_path: Path) -> None:
     """PERS-01 + PERS-02 + ROADMAP SC-1: running init-db.mjs twice on a fresh
     checkout produces the same schema with no errors. Verified by:
@@ -35,7 +34,63 @@ def test_init_db_idempotent(tmp_path: Path) -> None:
     3. Schema introspection: all 6 tables (loans, scenarios, reports,
        payments, applicants, properties) plus schema_version present.
     """
-    pytest.fail("Wave 0 stub")
+    import json as _json
+    import os
+    import subprocess
+
+    from tests.conftest import node_orchestration_run
+
+    db_path = tmp_path / "test.duckdb"
+
+    # First run: creates schema
+    result_a = node_orchestration_run("orchestration/init-db.mjs", db_path=db_path)
+    assert result_a.returncode == 0, f"first run failed: stderr={result_a.stderr}"
+    assert db_path.exists(), f"DB file not created at {db_path}"
+
+    # Second run: idempotent
+    result_b = node_orchestration_run("orchestration/init-db.mjs", db_path=db_path)
+    assert result_b.returncode == 0, (
+        f"second run failed (idempotency violation): stderr={result_b.stderr}"
+    )
+
+    # Schema introspection: list all tables; assert 7 expected names present
+    # (6 mortgage tables + schema_version)
+    introspect_script = """
+    import { Database } from 'duckdb-async';
+    const db = await Database.create(process.env.MORTGAGE_OPS_DB_PATH);
+    try {
+      const rows = await db.all(
+        "SELECT table_name FROM information_schema.tables " +
+        "WHERE table_schema='main' ORDER BY table_name"
+      );
+      console.log(JSON.stringify(rows.map(r => r.table_name)));
+    } finally {
+      await db.close();
+    }
+    """
+    env = os.environ.copy()
+    env["MORTGAGE_OPS_DB_PATH"] = str(db_path)
+    introspect = subprocess.run(
+        ["node", "--input-type=module", "-e", introspect_script],
+        cwd=str(Path(__file__).resolve().parent.parent.parent),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert introspect.returncode == 0, f"introspect failed: stderr={introspect.stderr}"
+    tables = set(_json.loads(introspect.stdout.strip()))
+    expected = {
+        "schema_version",
+        "loans",
+        "scenarios",
+        "reports",
+        "payments",
+        "applicants",
+        "properties",
+    }
+    assert expected.issubset(tables), f"missing tables: {expected - tables}; got {tables}"
 
 
 @pytest.mark.xfail(strict=True, reason="Wave 0 stub - Plan 09-03 ships db-write.mjs --insert-loan")
