@@ -8,6 +8,8 @@ shape; Phase 3+ uses the same loader to compute and assert against the values.
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -158,3 +160,48 @@ def points_fixture() -> Callable[[str], dict[str, Any]]:
         return json.loads(path.read_text())  # type: ignore[no-any-return]
 
     return _load
+
+
+REPO_ROOT: Path = Path(__file__).resolve().parent.parent
+"""Project root for cwd of Node subprocesses (parallel to FIXTURE_DIR)."""
+
+
+def node_orchestration_run(
+    *args: str,
+    db_path: Path | None = None,
+    timeout: int = 30,
+    check: bool = False,
+) -> subprocess.CompletedProcess[str]:
+    """Shell out to `node` with cwd=REPO_ROOT and capture stdout/stderr as text.
+
+    Mirrors tests/test_amortize.py subprocess.run idiom but for the Node
+    orchestration scripts shipped in Phase 9. Each call is independent: no
+    Database handle is shared; each Node process opens, transacts, closes.
+
+    Args:
+        *args: argv for the Node process, e.g. ("orchestration/init-db.mjs",)
+               or ("orchestration/db-write.mjs", "insert-loan", "--json", "fx.json").
+        db_path: When provided, sets MORTGAGE_OPS_DB_PATH env var so the .mjs
+                 scripts target a throwaway tmp DB. When None, scripts use the
+                 default data/mortgage-ops.duckdb (Phase 9 init-db.mjs honors
+                 this env-var override per Plan 09-02).
+        timeout: subprocess timeout in seconds (default 30; parallel-write
+                 test in Plan 09-06 overrides to 60).
+        check: When True, raises CalledProcessError on non-zero exit. Default
+               False so tests can assert on the failure envelope themselves.
+
+    Returns:
+        subprocess.CompletedProcess with text=True (stdout / stderr as str).
+    """
+    env = os.environ.copy()
+    if db_path is not None:
+        env["MORTGAGE_OPS_DB_PATH"] = str(db_path)
+    return subprocess.run(
+        ["node", *args],
+        cwd=str(REPO_ROOT),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=timeout,
+        check=check,
+    )
