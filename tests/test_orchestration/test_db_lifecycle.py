@@ -22,8 +22,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 REPO_ROOT: Path = Path(__file__).resolve().parent.parent.parent
 """Repo root for resolving orchestration/ paths in test bodies."""
 
@@ -427,11 +425,13 @@ def test_decimal_string_round_trip_preserves_cents(tmp_path: Path) -> None:
     )
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub - Plan 09-06 ships parallel-invocation test")
 def test_concurrent_writes_serialize(tmp_path: Path) -> None:
-    """PERS-05 + ROADMAP SC-2 (concurrency half): two parallel
-    `db-write.mjs --insert-loan` processes either both succeed (lock waiter
-    path) or one fails fast with a lock-timeout error. Final loan count
-    equals baseline + 2 (atomicity preserved; no corruption).
-    """
-    pytest.fail("Wave 0 stub")
+    """PERS-05 + ROADMAP SC-2: parallel writers serialize via lockfile.
+    This is the Wave 0 stub flipped by Plan 09-06; the full implementation
+    lives in tests/test_orchestration/test_parallel_invocation.py
+    (test_parallel_inserts_serialize_via_lockfile)."""
+    from tests.test_orchestration.test_parallel_invocation import (
+        test_parallel_inserts_serialize_via_lockfile,
+    )
+
+    test_parallel_inserts_serialize_via_lockfile(tmp_path)
