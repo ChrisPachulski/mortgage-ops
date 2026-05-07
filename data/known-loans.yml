@@ -1,0 +1,79 @@
+# data/known-loans.yml
+# mortgage-ops product catalog. Reference Layer (committed; manually refreshed).
+# Each entry is a representative product, not a live offer; rates from FRED PMMS week
+# of 2026-04-24 (MORTGAGE30US 6.81%, MORTGAGE15US 6.05%) for the conforming products,
+# and from agency rate-sheet samples for FHA/VA/jumbo/ARM.
+
+source: https://www.freddiemac.com/pmms
+effective: 2026-04-24
+
+products:
+  - id: conv-30yr-fixed
+    label: "Conventional 30-year fixed"
+    loan_type: fixed
+    principal: "400000.00"
+    apr: "0.068100"             # FRED MORTGAGE30US 2026-04-24
+    term_months: 360
+    frequency: monthly
+    origination_date: 2026-05-01
+    citation_url: https://fred.stlouisfed.org/series/MORTGAGE30US
+
+  - id: conv-15yr-fixed
+    label: "Conventional 15-year fixed"
+    loan_type: fixed
+    principal: "400000.00"
+    apr: "0.060500"             # FRED MORTGAGE15US 2026-04-24
+    term_months: 180
+    frequency: monthly
+    origination_date: 2026-05-01
+    citation_url: https://fred.stlouisfed.org/series/MORTGAGE15US
+
+  - id: arm-5-1
+    label: "5/1 ARM (5-year initial fixed, annual reset thereafter)"
+    loan_type: arm
+    principal: "400000.00"
+    apr: "0.062500"             # initial 5yr fixed rate (representative)
+    term_months: 360
+    frequency: monthly
+    origination_date: 2026-05-01
+    citation_url: https://www.consumerfinance.gov/owning-a-home/loan-options/adjustable-rate-mortgages/
+
+  - id: arm-7-1
+    label: "7/1 ARM (7-year initial fixed, annual reset thereafter)"
+    loan_type: arm
+    principal: "400000.00"
+    apr: "0.064000"             # initial 7yr fixed rate (representative)
+    term_months: 360
+    frequency: monthly
+    origination_date: 2026-05-01
+    citation_url: https://www.consumerfinance.gov/owning-a-home/loan-options/adjustable-rate-mortgages/
+
+  - id: fha-30yr
+    label: "FHA 30-year fixed"
+    loan_type: fha
+    principal: "400000.00"
+    apr: "0.066500"             # representative; FHA typically slightly below conv
+    term_months: 360
+    frequency: monthly
+    origination_date: 2026-05-01
+    citation_url: https://www.hud.gov/program_offices/housing/sfh/ins/sfh203b
+
+  - id: va-30yr
+    label: "VA 30-year fixed"
+    loan_type: va
+    principal: "400000.00"
+    apr: "0.063500"             # representative; VA often lowest
+    term_months: 360
+    frequency: monthly
+    origination_date: 2026-05-01
+    citation_url: https://www.benefits.va.gov/HOMELOANS/
+
+  - id: jumbo-30yr-fixed
+    label: "Jumbo 30-year fixed (above 2026 conforming limit)"
+    loan_type: jumbo
+    principal: "1000000.00"     # > 2026 conforming baseline ($806,500)
+    apr: "0.069500"             # representative; jumbo varies widely
+    term_months: 360
+    frequency: monthly
+    origination_date: 2026-05-01
+    citation_url: https://www.fhfa.gov/news/news-release/conforming-loan-limit-values-2026
