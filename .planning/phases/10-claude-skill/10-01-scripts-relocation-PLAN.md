@@ -38,7 +38,7 @@ must_haves:
     - "All 7 user-facing calc CLIs (amortize.py, affordability.py, arm_simulate.py, refi_npv.py, apr_reg_z.py, stress_test.py, points_breakeven.py) PLUS _cli_helpers.py live ONLY at .claude/skills/mortgage-ops/scripts/, NOT at scripts/ project root"
     - "scripts/_generate_arm_fixtures.py + scripts/_generate_apr_oracle_fixtures.py + scripts/hooks/* STAY at project root per LOCKED DECISION D-06 (dev tooling, not user-facing CLIs)"
     - "Full pre-existing test suite (≥ 549 passed Phase 9 baseline) remains green AFTER relocation — zero regression"
-    - "test_seven_scripts_in_skill_folder_only xfail flips to PASS in this wave (asserts all 7 calc scripts inside skill folder, fully closing SC-3 / SKLL-10)"
+    - "test_seven_scripts_in_skill_folder_only xfail flips to PASS in this wave (asserts all 7 calc scripts inside skill folder, fully closing SC-3 / SKLL-10), and resolves the repo root via the `repo_root` fixture (Round-2 codex HIGH 1: NOT `skill_root.parent.parent.parent.parent` which overshoots by one level)"
     - "git mv was used (not rm + cp) so file history is preserved per Phase 3 D-17 / Phase 7 D-17 / Phase 8 D-XX portability comment expectation"
     - "pyproject.toml [tool.ruff].src + [tool.mypy].files include both 'scripts' AND '.claude/skills/mortgage-ops/scripts' so the surviving scripts/ tooling AND the relocated CLIs are both linted"
     - "Cross-phase contract D-08 (RETIRED at Phase 10 ship): all 7 scripts now physically reside in skill folder. Phase 11/12 may reference relative paths inside skill folder; no future-script-to-root pattern remains"
@@ -78,12 +78,12 @@ must_haves:
       pattern: "sys.path.insert"
     - from: "test_seven_scripts_in_skill_folder_only"
       to: "Plan 10-01 file moves"
-      via: "Wave 0 stub flip — first test to retire its xfail decorator; asserts ALL 7 scripts present"
+      via: "Wave 0 stub flip — first test to retire its xfail decorator; asserts ALL 7 scripts present; consumes repo_root fixture (Round-2 codex HIGH 1)"
       pattern: "@pytest.mark.xfail"
 ---
 
 <objective>
-Execute LOCKED DECISION D-01 + D-08 cross-phase contract closure: physically relocate ALL SEVEN user-facing CLI scripts (`amortize.py`, `affordability.py`, `arm_simulate.py`, `refi_npv.py`, `apr_reg_z.py`, `stress_test.py`, `points_breakeven.py`) plus `_cli_helpers.py` from project-root `scripts/` into `.claude/skills/mortgage-ops/scripts/` via `git mv` (history preservation). Update each relocated script's `sys.path` injection block to point 4 levels up to the repo root + 1 level up to the skill root. Update `SCRIPT_PATH` constants in 7 test files. Update `pyproject.toml` ruff/mypy/pytest config. Flip the SKLL-10 xfail stub to PASS — and assert ALL SEVEN scripts present (full SC-3 closure, not partial).
+Execute LOCKED DECISION D-01 + D-08 cross-phase contract closure: physically relocate ALL SEVEN user-facing CLI scripts (`amortize.py`, `affordability.py`, `arm_simulate.py`, `refi_npv.py`, `apr_reg_z.py`, `stress_test.py`, `points_breakeven.py`) plus `_cli_helpers.py` from project-root `scripts/` into `.claude/skills/mortgage-ops/scripts/` via `git mv` (history preservation). Update each relocated script's `sys.path` injection block to point 4 levels up to the repo root + 1 level up to the skill root. Update `SCRIPT_PATH` constants in 7 test files. Update `pyproject.toml` ruff/mypy/pytest config. Flip the SKLL-10 xfail stub to PASS — and assert ALL SEVEN scripts present (full SC-3 closure, not partial), using the `repo_root` fixture from Plan 10-00 Task 3 (Round-2 codex HIGH 1: do NOT use `skill_root.parent.parent.parent.parent` which overshoots the repo root).
 
 This is the HIGHEST-RISK plan in Phase 10: it relocates already-shipped + already-tested code that 549+ tests depend on (per STATE.md Phase 9 baseline). The full pre-existing test suite MUST remain green AFTER relocation. Phase 11 SUBA-05 hard-depends on the skill-folder scripts existing. SKLL-10 / SC-3 close FULLY at Phase 10 ship.
 
@@ -93,7 +93,7 @@ Closes SKLL-10 ("All 7 calc scripts INSIDE `.claude/skills/mortgage-ops/scripts/
 
 Purpose: Without this wave the skill folder cannot host its bundled scripts; SKILL.md routing in Wave 2 would have nothing to dispatch to. Per D-01 rationale, MOVE is the only option that survives Phase 11 contract — symlink breaks portability, shim doubles indirection cost.
 
-Output: 8 files (7 calc scripts + 1 helper) in their new location with updated sys.path; 7 test files with updated SCRIPT_PATH constants; pyproject.toml with extended ruff/mypy/pytest `src`/`files`/`pythonpath` lists; Wave 0 stub `test_seven_scripts_in_skill_folder_only` flipped to PASS asserting all 7.
+Output: 8 files (7 calc scripts + 1 helper) in their new location with updated sys.path; 7 test files with updated SCRIPT_PATH constants; pyproject.toml with extended ruff/mypy/pytest `src`/`files`/`pythonpath` lists; Wave 0 stub `test_seven_scripts_in_skill_folder_only` flipped to PASS asserting all 7 (using `repo_root` fixture; no `parent.parent.parent.parent` overshoot).
 </objective>
 
 <execution_context>
@@ -140,6 +140,8 @@ STATE.md baseline (Phase 9 close): 549 passed + 4 skipped + 1 xfailed. Wave 0 ad
 
 Phase 3 D-17 + Phase 6 D-17 + Phase 7 D-17 + Phase 8 D-XX portability seams: every existing user-facing CLI carries a docstring noting "Phase 10 will physically relocate". This plan satisfies that contract.
 
+**Round-2 codex HIGH 1 — repo_root path arithmetic:** Plan 10-00 Task 3 ships a `repo_root` pytest fixture returning `Path(__file__).resolve().parents[1]` (from `tests/conftest.py` → repo root). The flipped SKLL-10 test in Task 6 below MUST consume this fixture. Equivalent inline form: `skill_root.parents[2]`. The literal `skill_root.parent.parent.parent.parent` (4 chained `.parent` calls) goes ONE LEVEL TOO FAR (`.claude/skills/mortgage-ops/.parent[3]` lands above the repo root) and is forbidden.
+
 Current sys.path injection block (lift verbatim from scripts/amortize.py:92-100; Phase 6/7/8 scripts use the same idiom):
 ```python
 # When invoked as a script (`python scripts/amortize.py ...`), Python puts
@@ -165,6 +167,8 @@ for _p in (_project_root, _skill_root):
     if _p not in sys.path:
         sys.path.insert(0, _p)
 ```
+
+Note that `parents[4]` is correct **for a file at `.claude/skills/mortgage-ops/scripts/<name>.py`** (5 levels deep: scripts/ → mortgage-ops/ → skills/ → .claude/ → repo). For tests living at `tests/<test>.py` (2 levels deep), the equivalent is `parents[1]`, which is what Plan 10-00 Task 3's `repo_root` fixture computes. The Wave 5/6 plans use the test-file form.
 
 Test SCRIPT_PATH constant edits — 7 test files (verify exact line numbers when reading each file, the precise positions vary by phase):
 - tests/test_amortize.py — `parent.parent / "scripts" / "amortize.py"` → `parent.parent / ".claude" / "skills" / "mortgage-ops" / "scripts" / "amortize.py"`
@@ -533,10 +537,11 @@ ALL three MUST exit 0 (relocated scripts must pass strict typecheck + lint immed
 </task>
 
 <task type="auto">
-  <name>Task 6: Run full test suite + flip SKLL-10 xfail (asserts ALL 7) + commit relocation atomically</name>
+  <name>Task 6: Run full test suite + flip SKLL-10 xfail (asserts ALL 7; uses repo_root fixture per Round-2 codex HIGH 1) + commit relocation atomically</name>
   <files>tests/test_skill.py</files>
   <read_first>
-    tests/test_skill.py — find `def test_seven_scripts_in_skill_folder_only` (Wave 0 stub from Plan 10-00 Task 4)
+    tests/test_skill.py — find `def test_seven_scripts_in_skill_folder_only` (Wave 0 stub from Plan 10-00 Task 4);
+    tests/conftest.py — confirm `repo_root` fixture exists (Plan 10-00 Task 3 ships it)
   </read_first>
   <action>
 PART A — Full suite verification (the moment of truth for relocation safety):
@@ -557,10 +562,10 @@ def test_seven_scripts_in_skill_folder_only(skill_root: Path) -> None:
     pytest.fail("Wave 0 stub")
 ```
 
-REPLACE with the real assertion (REMOVE the @pytest.mark.xfail decorator entirely):
+REPLACE with the real assertion. Note the function signature now consumes BOTH the `skill_root` AND the new `repo_root` fixture (Round-2 codex HIGH 1 — `skill_root.parent.parent.parent.parent` overshoots by one level; use `repo_root` instead). REMOVE the @pytest.mark.xfail decorator entirely:
 
 ```python
-def test_seven_scripts_in_skill_folder_only(skill_root: Path) -> None:
+def test_seven_scripts_in_skill_folder_only(skill_root: Path, repo_root: Path) -> None:
     """SKLL-10 + ROADMAP SC-3 + D-01 + D-06 + D-08: ALL SEVEN calc CLIs —
     amortize.py, affordability.py, arm_simulate.py, refi_npv.py, apr_reg_z.py,
     stress_test.py, points_breakeven.py — live ONLY in
@@ -572,9 +577,24 @@ def test_seven_scripts_in_skill_folder_only(skill_root: Path) -> None:
 
     SC-3 / SKLL-10 close FULLY in Phase 10 (all 7 scripts relocated together;
     Phase 6/7/8 COMPLETE per STATE.md so all 7 scripts existed at root pre-move).
+
+    Round-2 codex HIGH 1: this test consumes the `repo_root` fixture from
+    Plan 10-00 Task 3. The literal `skill_root.parent.parent.parent.parent`
+    (4 chained .parent calls) overshoots the repo root by one level —
+    .claude/skills/mortgage-ops is only 3 levels deep, so .parents[3] lands
+    above the repo. The correct equivalents are `repo_root` (this fixture)
+    or `skill_root.parents[2]`.
     """
-    project_scripts = skill_root.parent.parent.parent.parent / "scripts"
+    project_scripts = repo_root / "scripts"
     skill_scripts = skill_root / "scripts"
+
+    # Sanity: confirm repo_root fixture resolves correctly. If it doesn't,
+    # everything below produces meaningless "missing file" errors instead of
+    # surfacing the real bug.
+    assert (repo_root / "pyproject.toml").is_file(), (
+        f"repo_root fixture broken: pyproject.toml not at {repo_root}; "
+        f"path arithmetic in tests/conftest.py needs review"
+    )
 
     relocated = [
         "amortize.py",
@@ -644,7 +664,9 @@ Per LOCKED DECISION D-01 + D-08 retirement:
 - Updated tests/test_cli_helpers.py sys.path inject for the relocated helper
 - Extended pyproject.toml ruff src + mypy files + pytest pythonpath
 - Flipped Wave 0 xfail test_seven_scripts_in_skill_folder_only to PASS asserting
-  all 7 scripts present (full SC-3 closure, not partial)
+  all 7 scripts present (full SC-3 closure, not partial). Test consumes the
+  `repo_root` pytest fixture (Plan 10-00 Task 3) — NOT
+  `skill_root.parent.parent.parent.parent` which overshoots repo root.
 
 Phase 6/7/8/9 are COMPLETE per STATE.md, so all 7 calc scripts existed at root
 pre-move and are relocated together in one atomic git mv. The earlier "ship to
@@ -667,6 +689,8 @@ EOF
 - `pytest -q` shows ≥ 14 xfailed (Wave 0 ≥ 15 minus the 1 flipped)
 - `pytest -q` shows 0 failed, 0 errored
 - `pytest tests/test_skill.py::test_seven_scripts_in_skill_folder_only` exits 0 PASS
+- Test signature consumes BOTH `skill_root` AND `repo_root` fixtures (Round-2 codex HIGH 1)
+- `grep -c 'skill_root.parent.parent.parent.parent' tests/test_skill.py` returns 0 in this test (the overshoot pattern is forbidden)
 - Test docstring asserts all 7 calc scripts (not "4 of 7")
 - Commit exists with subject "phase 10/wave 1: relocate 7 calc CLIs ..."
 - Commit body contains "D-01", "D-06", "SKLL-10", "all 7"
@@ -674,7 +698,7 @@ EOF
 - `git log -1 --stat` shows ≥ 16 files changed (8 renames + ≥ 7 test files + pyproject + test_skill)
   </acceptance_criteria>
   <done>
-    Full suite green; SKLL-10 / SC-3 fully closed (all 7 scripts asserted in skill folder); relocation committed atomically without AI attribution.
+    Full suite green; SKLL-10 / SC-3 fully closed (all 7 scripts asserted in skill folder); flipped test consumes `repo_root` fixture (no `parent.parent.parent.parent` overshoot); relocation committed atomically without AI attribution.
   </done>
 </task>
 
@@ -690,6 +714,7 @@ EOF
 | pyproject.toml pythonpath → pytest collection | If skill root not on pytest pythonpath, test_cli_helpers.py import fails at COLLECTION time (ERROR not FAIL) |
 | Phase 9 baseline (549 tests) → relocated codebase | If any test breaks, the wave is invalid; entire test surface depends on the relocated scripts behaving identically |
 | 7-script atomicity | Splitting the relocation into multiple commits leaves a window where SKILL.md routing can dispatch to scripts that don't yet live where SKILL.md says they do |
+| Path arithmetic from tests (Round-2 codex HIGH 1) | `skill_root.parent.parent.parent.parent` overshoots repo root by one level; flipped test uses `repo_root` fixture from Plan 10-00 Task 3 instead |
 
 ## STRIDE Threat Register
 
@@ -701,6 +726,7 @@ EOF
 | T-10-09 | Information Disclosure (CLAUDE.md global rule violation in commit) | commit message | mitigate | Task 6 PART D HEREDOC explicitly omits Co-Authored-By; acceptance criteria asserts no AI attribution |
 | T-10-10 | DoS (--help slowdown after sys.path edit) | D-18 fast --help | mitigate | Task 3 verify runs --help on all 7 scripts; acceptance criteria allows < 500ms tolerance for cold-cache run |
 | T-10-37 | Tampering (false partial closure of SC-3) | SKLL-10 test docstring | mitigate | Task 6 PART B asserts ALL 7 scripts; no "4 of 7" loophole. Wave 0 stub revised to anticipate the full assertion. |
+| T-10-49 | Tampering (path arithmetic overshoot) | flipped SKLL-10 test | mitigate | Task 6 PART B uses `repo_root` fixture from Plan 10-00; acceptance forbids `skill_root.parent.parent.parent.parent` substring (Round-2 codex HIGH 1) |
 </threat_model>
 
 <verification>
@@ -712,7 +738,7 @@ EOF
 - pyproject.toml `src` + `files` extended; pytest `pythonpath` added
 - mypy --strict + ruff + pytest --collect-only ALL clean across relocated files
 - Full pytest: ≥ 549 passed + ≥ 14 xfailed + 0 failed + 0 errored
-- SKLL-10 xfail flipped to PASS asserting all 7 scripts
+- SKLL-10 xfail flipped to PASS asserting all 7 scripts (using `repo_root` fixture; no `parent.parent.parent.parent` overshoot per Round-2 codex HIGH 1)
 - Atomic commit with no AI attribution
 </verification>
 
@@ -721,7 +747,7 @@ EOF
 - All 8 affected test files (7 SCRIPT_PATH + 1 sys.path) updated
 - pyproject.toml extended for ruff/mypy/pytest
 - Phase 9 baseline (≥ 549 passed) preserved end-to-end
-- SKLL-10 closed FULLY (all 7 scripts asserted; SC-3 closes without "partial" qualifier)
+- SKLL-10 closed FULLY (all 7 scripts asserted; SC-3 closes without "partial" qualifier; uses `repo_root` fixture per Round-2 codex HIGH 1)
 - mypy --strict + ruff format clean across all touched files
 - Atomic commit with no AI attribution
 </success_criteria>
@@ -733,5 +759,8 @@ After completion, create `.planning/phases/10-claude-skill/10-01-SUMMARY.md` doc
 - xfail count BEFORE (≥ 15) vs AFTER (≥ 14 — one less because SKLL-10 flipped)
 - mypy + ruff status (must be clean across `.claude/skills/mortgage-ops/scripts/` + 8 modified test files)
 - D-08 retirement note: with all 7 scripts now in skill folder, the "ship to root then relocate" pattern carries no further work
+- Confirmation that flipped test uses `repo_root` fixture (Round-2 codex HIGH 1)
 - Any deviation from the plan, rationale, and code-review touchpoint
 </output>
+</content>
+</invoke>

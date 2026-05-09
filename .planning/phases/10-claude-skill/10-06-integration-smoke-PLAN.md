@@ -25,21 +25,21 @@ tags:
 must_haves:
   truths:
     - "tests/test_skill_integration.py exists and runs end-to-end portability smoke + SKLL-13 end-to-end smoke (Plan 10-06 contributes the SKLL-13 end-to-end coverage on top of Plan 10-05's unit-level assertions per CONTEXT.md D-13-01..D-13-05)"
-    - "Portability test: rsync-copy .claude/skills/mortgage-ops/ into a tmp dir + verify each of the 7 relocated calc scripts still --help-runs from the copy (proves skill is self-contained per Anthropic spec; symlinks would fail this check, validating Plan 10-01 D-01 MOVE choice)"
-    - "Portability test ALSO invokes one full script run from the copied folder (e.g., amortize.py --principal 200000 --rate 0.065 --term 360 against an in-tmp tmp dir) to make the 'self-contained' claim honest — not just a --help check (codex MEDIUM concern 12)"
+    - "Skill artifact COPYABILITY test: rsync-copy .claude/skills/mortgage-ops/ into a tmp dir + verify each of the 7 relocated calc scripts still --help-runs from the copy AND amortize.py runs end-to-end from the copy when PYTHONPATH points at the repo root. Round-2 codex MEDIUM 9: renamed from `test_skill_folder_self_contained_portability` to `test_skill_artifact_copyability_with_repo_pythonpath` because the skill folder is NOT bundle-self-contained for full execution (lib/* lives at repo root and the copied scripts inject parents[4] to find it). The honest claim: skill artifacts are copyable AND symlink-free (validating D-01 MOVE choice over symlink/shim) AND scripts are runnable from the copy WITH the repo lib/ on PYTHONPATH. A future bundled deploy would lift the PYTHONPATH dependency."
+    - "Copyability test ALSO invokes one full script run from the copied folder (amortize.py against an in-tmp sample input) with PYTHONPATH=<repo_root> so lib.* resolves — not just a --help check (codex MEDIUM 12; Round-2 codex MEDIUM 9 honest naming)"
     - "Runtime SKILL.md token budget: re-run count_tokens at end of phase. Hard cap is the official ≤ 4500 from CONTEXT.md / SKLL-01 / D-02 (5000 Anthropic spec − 10% margin). NO stricter sub-cap is enforced unless explicitly tied to a documented decision (codex MEDIUM concern 13)."
-    - "SKLL-13 end-to-end smoke: actually invokes the Save Report path (writes a temp report file, runs `node orchestration/db-write.mjs --insert-report --json {meta}`, queries DuckDB with `SELECT COUNT(*) FROM reports WHERE filename = ?` returning 1)"
+    - "SKLL-13 end-to-end smoke: walks the 7-step flow against an isolated tmp DuckDB (init-db → insert-loan → insert-scenario → write report file at D-13-02 path → insert-report --scenario-id <id> --file <path> → query --sql to verify scenario_id+markdown_blob round-trip). Uses the REAL Phase 9 CLI from orchestration/db-write.mjs:296-310 (Round-2 codex HIGH 2: NOT the fictional `--insert-report --json` form). Schema has no `filename` column — verification is by `scenario_id` plus markdown_blob byte-equality with the file contents."
     - "Full pytest suite green: ≥ 549 passed (Phase 9 baseline) + Phase 10 additions; 0 Phase 10 xfails (SKLL-13 closes via Wave 5 + Wave 6 end-to-end); ≤ 1 xfail acceptable for Phase 5 ARM legacy"
   artifacts:
     - path: "tests/test_skill_integration.py"
-      provides: "Cross-cutting portability + runtime smoke tests + SKLL-13 end-to-end smoke (D-13-01..05). Combines skill-portability enforcement (motivated MOVE-not-symlink in D-01) with Save Report end-to-end coverage."
+      provides: "Cross-cutting copyability + runtime smoke tests + SKLL-13 end-to-end smoke (D-13-01..05). Combines skill-folder copyability/symlink-freedom enforcement (motivated MOVE-not-symlink in D-01) with Save Report end-to-end coverage exercising the REAL Phase 9 CLI surface from orchestration/db-write.mjs:296-310 (Round-2 codex HIGH 2)."
       min_lines: 90
-      contains: "def test_skill_folder_self_contained_portability"
+      contains: "def test_skill_artifact_copyability_with_repo_pythonpath"
   key_links:
-    - from: "tests/test_skill_integration.py portability test"
+    - from: "tests/test_skill_integration.py copyability test"
       to: ".claude/skills/mortgage-ops/ entire folder"
-      via: "rsync to tmp dir + invoke scripts in isolation"
-      pattern: "rsync\\|copytree"
+      via: "shutil.copytree to tmp dir + invoke scripts with repo-root on PYTHONPATH (Round-2 codex MEDIUM 9: honest naming; skill folder is copyable + symlink-free, NOT bundle-self-contained for full execution)"
+      pattern: "copytree\\|repo_root"
 ---
 
 <objective>
@@ -110,7 +110,10 @@ What we CAN smoke-test from the copy:
   <read_first>
     tests/test_skill.py — for shape/imports parallel;
     tests/_skill_helpers.py — count_tokens helper;
-    .claude/skills/mortgage-ops/scripts/amortize.py — verify --help works without lib/ (D-18 fast --help)
+    tests/conftest.py — `repo_root` fixture from Plan 10-00 Task 3 (Round-2 codex HIGH 1: consume this fixture, NOT `skill_root.parent.parent.parent.parent`);
+    .claude/skills/mortgage-ops/scripts/amortize.py — verify --help works without lib/ (D-18 fast --help);
+    orchestration/db-write.mjs lines 296-310 — REAL Phase 9 CLI surface for the SKLL-13 end-to-end smoke (insert-loan / insert-scenario / insert-report --scenario-id --file / query --sql); Round-2 codex HIGH 2 forbids the fictional `--insert-report --json` and `--query "..."` flag forms;
+    orchestration/init-db.mjs — schema bootstrapper used in STEP 2 of the SKLL-13 smoke; reports table schema is `(id, scenario_id NOT NULL, markdown_blob TEXT NOT NULL, generated_at TIMESTAMP)` with NO `filename` column
   </read_first>
   <action>
 Create `tests/test_skill_integration.py` (~90 lines):
@@ -139,20 +142,29 @@ import pytest
 from tests._skill_helpers import count_tokens
 
 
-def test_skill_folder_self_contained_portability(skill_root: Path, tmp_path: Path) -> None:
+def test_skill_artifact_copyability_with_repo_pythonpath(
+    skill_root: Path, repo_root: Path, tmp_path: Path
+) -> None:
     """Copy .claude/skills/mortgage-ops/ to tmp_path and verify each relocated
-    script's --help still works from the copy.
+    script's --help still works from the copy. ALSO run amortize.py end-to-end
+    from the copy with `PYTHONPATH` pointing at the repo root so `lib.*` is
+    importable.
 
-    This test passes ONLY because Plan 10-01 chose MOVE (D-01) — a symlink-based
-    scheme would have dangling links in the copy; a shim scheme would have
-    broken relative-path computations. The MOVE scheme keeps every artifact
-    self-contained inside the skill folder.
+    Round-2 codex MEDIUM 9: renamed from `test_skill_folder_self_contained_portability`.
+    The original name overstated the contract — the skill folder is NOT
+    bundle-self-contained for full execution because `lib/*` lives at the
+    repo root and the copied scripts inject `parents[4]` to find it. From a
+    copy under `/tmp`, `parents[4]` no longer points at the repo root, so
+    `from lib.amortize import ...` fails unless `PYTHONPATH` is set to the
+    repo root. This test is honest: it asserts the skill folder is
+    COPYABLE (no symlinks, all artifacts resolved) AND the scripts are
+    RUNNABLE FROM THE COPY when `PYTHONPATH` is set. A future bundle that
+    ships `lib/` inside the skill folder (or installs it as a pip package)
+    would lift the PYTHONPATH dependency, but that is out of scope for
+    Phase 10.
 
-    NOTE: We test --help only (not full --input runs). Phase 3 D-18 ensures
-    --help runs WITHOUT importing lib.* (argparse runs before lazy import),
-    so --help works from any location. Full --input runs require lib/* on
-    sys.path, which a true off-machine copy would need to install separately.
-    """
+    Round-2 codex HIGH 1: consumes `repo_root` fixture from Plan 10-00 Task 3
+    (replacing prior `skill_root.parent.parent.parent.parent` overshoot)."""
     skill_copy = tmp_path / "mortgage-ops"
     shutil.copytree(skill_root, skill_copy)
 
@@ -226,7 +238,7 @@ def test_skill_folder_self_contained_portability(skill_root: Path, tmp_path: Pat
             "--term", "360",
         ],
         capture_output=True, text=True, timeout=30,
-        env={**__import__("os").environ, "PYTHONPATH": str(skill_root.parent.parent.parent.parent)},
+        env={**__import__("os").environ, "PYTHONPATH": str(repo_root)},
     )
     # Either the script supports positional CLI args OR it requires --input
     # JSON file. If --principal isn't recognized, fall back to --input mode.
@@ -245,7 +257,7 @@ def test_skill_folder_self_contained_portability(skill_root: Path, tmp_path: Pat
         result = subprocess.run(
             [sys.executable, str(amortize_script), "--input", str(sample)],
             capture_output=True, text=True, timeout=30,
-            env={**__import__("os").environ, "PYTHONPATH": str(skill_root.parent.parent.parent.parent)},
+            env={**__import__("os").environ, "PYTHONPATH": str(repo_root)},
         )
     assert result.returncode == 0, (
         f"Portability smoke B: amortize.py from COPY exited {result.returncode}.\n"
@@ -273,13 +285,15 @@ def test_skill_md_token_budget_at_phase_end(skill_root: Path) -> None:
     )
 
 
-def test_no_user_layer_files_committed_in_skill_folder(skill_root: Path) -> None:
+def test_no_user_layer_files_committed_in_skill_folder(
+    skill_root: Path, repo_root: Path
+) -> None:
     """DATA_CONTRACT enforcement: modes/_profile.md (User Layer) MUST NOT
     appear in the git index. The file MAY exist on a developer machine
     (User Layer; gitignored), but it must NOT be in the committed tree.
 
     The .gitignore (Plan 10-03 Task 3 PART A) + the pre-commit hook
-    (Plan 10-03 Task 3 PART B) together prevent the file from being committed.
+    (Plan 10-03 Task 3 PART C) together prevent the file from being committed.
     This test is the tertiary backstop in CI: a developer who accidentally
     committed it via `git add -f` would trip both layers; this test catches
     a slip-through.
@@ -288,10 +302,12 @@ def test_no_user_layer_files_committed_in_skill_folder(skill_root: Path) -> None
     `... or True` assertion which made the working-tree existence check
     meaningless. Removed that assertion. The git-index check below is the
     real gate.
+
+    Round-2 codex HIGH 1: consumes `repo_root` fixture from Plan 10-00 Task 3
+    (replacing prior `skill_root.parent.parent.parent.parent` overshoot).
     """
     # The real gate: assert the file is NOT in git's index. Working-tree
     # presence is fine (User Layer may exist locally); only the INDEX matters.
-    repo_root = skill_root.parent.parent.parent.parent
     result = subprocess.run(
         ["git", "ls-files", "--error-unmatch", ".claude/skills/mortgage-ops/modes/_profile.md"],
         cwd=str(repo_root),
@@ -312,131 +328,228 @@ ALSO append the SKLL-13 end-to-end smoke test (codex HIGH concern 1; CONTEXT.md 
 
 ```python
 def test_skll_13_end_to_end_save_report_writes_file_and_db_row(
-    skill_root: Path, tmp_path: Path
+    skill_root: Path, repo_root: Path, tmp_path: Path
 ) -> None:
     """SKLL-13 end-to-end smoke (D-13-01..D-13-05): exercises the Save Report
-    path concretely.
+    path concretely against the REAL Phase 9 CLI from
+    `orchestration/db-write.mjs:296-310` and the REAL `reports` schema from
+    `orchestration/init-db.mjs:76-82`.
 
-    1. Construct a sample report markdown body
-    2. Compute the next sequence number via `node orchestration/db-write.mjs --query`
-    3. Build the filename per D-13-02: reports/{NNN:03d}-{mode}-{YYYY-MM-DD}.md
-    4. Write the file under tmp_path (NOT under repo's reports/ — gitignored
-       there but we keep this test side-effect-free)
-    5. Invoke `node orchestration/db-write.mjs --insert-report --json {meta}`
-       per D-13-04
-    6. Query DuckDB: SELECT COUNT(*) FROM reports WHERE filename = ? — must
-       return 1
-    7. Clean up via try/finally: DELETE the inserted row to keep the DB
-       deterministic for other tests
+    Round-2 codex HIGH 2: prior draft used the fictional `--query "..."` and
+    `--insert-report --json '{...}'` flag forms (neither exists on the real
+    handler) and queried by a `filename` column that does NOT exist on the
+    `reports` table. The reports schema is `(id PK, scenario_id NOT NULL,
+    markdown_blob TEXT NOT NULL, generated_at TIMESTAMP)` — there is no
+    `filename` column; the file on disk IS the durable filename anchor and
+    persistence stores `(scenario_id, markdown_blob)` keyed by scenario_id.
+    Round-2 codex HIGH 1: consumes `repo_root` fixture from Plan 10-00.
 
-    This test confirms the Save Report path is END-TO-END operational at
-    Phase 10 ship — closing SKLL-13 per D-13-01..D-13-05 (Phase 10 closes
-    SKLL-13; NOT deferred to Phase 9). Plan 10-05 has the unit-level
-    assertion (modes/_shared.md documents the invocation); this is the
-    runtime proof.
+    The test runs against an isolated DuckDB under `tmp_path` (via the
+    Phase 9 `MORTGAGE_OPS_DB_PATH` env-var override per Plan 09-00 D-00-04),
+    so it does not pollute the developer's main `data/mortgage-ops.duckdb`
+    nor require try/finally cleanup of rows in the live DB.
+
+    7-step flow (REAL CLI; matches modes/_shared.md Save Report doctrine):
+      1. Allocate a tmp DuckDB path
+      2. `node orchestration/init-db.mjs` — bootstrap schema (idempotent;
+         loans / scenarios / reports tables exist after this)
+      3. `node orchestration/db-write.mjs insert-loan --json <loan.json>` —
+         capture loan_id from stdout `{"ok": true, "loan_id": <int>}`
+      4. `node orchestration/db-write.mjs insert-scenario --loan-id <id>
+         --kind amortize --json <scenario.json>` — capture scenario_id
+         from stdout `{"ok": true, "scenario_id": <int>, ...}`
+      5. Construct filename per D-13-02: `reports/{NNN:03d}-{mode}-{date}.md`
+         (NNN derived from `query --sql "SELECT COUNT(*)+1 ..."` against
+         the temp DB) and write it under tmp_path
+      6. `node orchestration/db-write.mjs insert-report --scenario-id <id>
+         --file <path>` — REAL CLI per orchestration/db-write.mjs:306
+      7. Verify via `node orchestration/db-write.mjs query --sql "SELECT
+         scenario_id, markdown_blob FROM reports WHERE scenario_id = <id>"`
+         — expect 1 row with markdown_blob equal to the file contents.
+         Filename is NOT verified in the DB (no such column); the file on
+         disk is the anchor.
 
     NOTE: this test depends on `node` + `orchestration/db-write.mjs` being
-    operational (Phase 9 PERS-03). If `which node` returns nothing, the
-    test SKIPS rather than fails (Phase 9 contract is the precondition).
+    operational (Phase 9 PERS-03). If `which node` returns nothing or the
+    handler is missing, the test SKIPS rather than fails (Phase 9 contract
+    is the precondition).
     """
     import json as _json
+    import os as _os
     import shutil as _shutil
     from datetime import date as _date
 
     if _shutil.which("node") is None:
         pytest.skip("node not on PATH; SKLL-13 end-to-end smoke requires Phase 9 orchestration")
 
-    repo_root = skill_root.parent.parent.parent.parent
     db_write = repo_root / "orchestration" / "db-write.mjs"
+    init_db = repo_root / "orchestration" / "init-db.mjs"
     if not db_write.is_file():
         pytest.skip(f"orchestration/db-write.mjs not found at {db_write}; Phase 9 prerequisite")
+    if not init_db.is_file():
+        pytest.skip(f"orchestration/init-db.mjs not found at {init_db}; Phase 9 prerequisite")
 
-    # PART A — get next sequence number
-    seq_result = subprocess.run(
-        ["node", str(db_write), "--query", "SELECT COUNT(*)+1 AS next_seq FROM reports"],
+    # ------------------------------------------------------------
+    # STEP 1 — allocate isolated tmp DuckDB; subsequent steps target it
+    # via MORTGAGE_OPS_DB_PATH (Plan 09-00 D-00-04 env-var override).
+    # ------------------------------------------------------------
+    tmp_db = tmp_path / "mortgage-ops-test.duckdb"
+    env = {**_os.environ, "MORTGAGE_OPS_DB_PATH": str(tmp_db)}
+
+    # ------------------------------------------------------------
+    # STEP 2 — bootstrap schema (idempotent per Phase 9 PERS-01)
+    # ------------------------------------------------------------
+    init_result = subprocess.run(
+        ["node", str(init_db)],
         cwd=str(repo_root),
-        capture_output=True, text=True, timeout=15,
+        capture_output=True, text=True, timeout=30, env=env,
     )
-    assert seq_result.returncode == 0, (
-        f"Phase 9 cmdQuery failed: {seq_result.stderr[:500]}"
+    assert init_result.returncode == 0, (
+        f"init-db.mjs failed: {init_result.stderr[:500]}"
     )
-    # parse next_seq; handler returns JSON like {"next_seq": <int>} or [{"next_seq": <int>}]
-    parsed = _json.loads(seq_result.stdout) if seq_result.stdout.strip() else {}
-    if isinstance(parsed, list) and parsed:
-        next_seq = parsed[0].get("next_seq", 1)
-    elif isinstance(parsed, dict):
-        next_seq = parsed.get("next_seq", 1)
-    else:
-        next_seq = 1
-    assert isinstance(next_seq, int) and next_seq >= 1, f"bad next_seq: {next_seq!r}"
+    assert tmp_db.is_file(), f"DB not created at {tmp_db}"
 
-    # PART B — construct the filename per D-13-02
-    today = _date.today().isoformat()  # YYYY-MM-DD
+    # ------------------------------------------------------------
+    # STEP 3 — insert a loan (Phase 9 cmdInsertLoan; required fields per
+    # lib.models.Loan: principal, annual_rate, term_months, loan_type;
+    # money fields MUST be JSON strings per D-03-03)
+    # ------------------------------------------------------------
+    loan_json = tmp_path / "loan.json"
+    loan_json.write_text(_json.dumps({
+        "principal": "200000.00",
+        "annual_rate": "0.065000",
+        "term_months": 360,
+        "origination_date": "2026-05-01",
+        "loan_type": "fixed",
+        "frequency": "monthly",
+    }))
+    loan_result = subprocess.run(
+        ["node", str(db_write), "insert-loan", "--json", str(loan_json)],
+        cwd=str(repo_root),
+        capture_output=True, text=True, timeout=30, env=env,
+    )
+    assert loan_result.returncode == 0, f"insert-loan failed: {loan_result.stderr[:500]}"
+    loan_payload = _json.loads(loan_result.stdout)
+    loan_id = int(loan_payload["loan_id"])
+    assert loan_id >= 1
+
+    # ------------------------------------------------------------
+    # STEP 4 — insert a scenario referencing the loan (Phase 9
+    # cmdInsertScenario; payload must have {request, response} keys per
+    # PERS-05 contract). Capture scenario_id from stdout.
+    # ------------------------------------------------------------
+    scenario_json = tmp_path / "scenario.json"
+    scenario_json.write_text(_json.dumps({
+        "request": {"mode": "amortize", "loan_id": loan_id},
+        "response": {"monthly_payment": "1264.14", "total_interest": "255143.06"},
+    }))
+    scen_result = subprocess.run(
+        [
+            "node", str(db_write), "insert-scenario",
+            "--loan-id", str(loan_id),
+            "--kind", "amortize",
+            "--json", str(scenario_json),
+        ],
+        cwd=str(repo_root),
+        capture_output=True, text=True, timeout=30, env=env,
+    )
+    assert scen_result.returncode == 0, f"insert-scenario failed: {scen_result.stderr[:500]}"
+    scen_payload = _json.loads(scen_result.stdout)
+    scenario_id = int(scen_payload["scenario_id"])
+    assert scenario_id >= 1
+
+    # ------------------------------------------------------------
+    # STEP 5 — derive next sequence number + write the report file at
+    # the D-13-02 path (under tmp_path so we don't pollute repo reports/)
+    # ------------------------------------------------------------
+    seq_result = subprocess.run(
+        [
+            "node", str(db_write), "query",
+            "--sql", "SELECT COUNT(*)+1 AS next_seq FROM reports",
+        ],
+        cwd=str(repo_root),
+        capture_output=True, text=True, timeout=15, env=env,
+    )
+    assert seq_result.returncode == 0, f"query failed: {seq_result.stderr[:500]}"
+    seq_parsed = _json.loads(seq_result.stdout)
+    # cmdQuery returns a JSON array (per orchestration/db-write.mjs cmdQuery)
+    assert isinstance(seq_parsed, list) and seq_parsed, f"query returned no rows: {seq_parsed!r}"
+    next_seq = int(seq_parsed[0]["next_seq"])
+    assert next_seq >= 1
+
+    today = _date.today().isoformat()
     mode = "amortize"
-    filename = f"reports/{next_seq:03d}-{mode}-{today}.md"
+    expected_basename = f"{next_seq:03d}-{mode}-{today}.md"
+    expected_relpath = f"reports/{expected_basename}"
 
-    # Validate the filename matches D-13-02 regex
+    # Validate filename matches D-13-02 regex
     import re as _re
-    pattern = r"^reports/\d{3}-(?:evaluate|compare|refinance|affordability|stress|amortize|arm)-\d{4}-\d{2}-\d{2}\.md$"
-    assert _re.match(pattern, filename), (
-        f"D-13-02 filename violation: {filename!r} does not match {pattern!r}"
+    pattern = (
+        r"^reports/\d{3}-(?:evaluate|compare|refinance|affordability|"
+        r"stress|amortize|arm)-\d{4}-\d{2}-\d{2}\.md$"
+    )
+    assert _re.match(pattern, expected_relpath), (
+        f"D-13-02 filename violation: {expected_relpath!r} does not match {pattern!r}"
     )
 
-    # PART C — write the report to a tmp location (test side-effect-free)
     report_body = "# SKLL-13 End-to-End Smoke\n\nGenerated by Plan 10-06.\n"
-    report_path = tmp_path / "report.md"
+    report_path = tmp_path / expected_basename
     report_path.write_text(report_body)
+    assert report_path.is_file()
 
-    # PART D — invoke INSERT (D-13-04)
-    payload = _json.dumps({
-        "scenario_id": None,
-        "kind": mode,
-        "markdown_blob": report_body,
-        "filename": filename,
-    })
-    inserted = False
-    try:
-        ins_result = subprocess.run(
-            ["node", str(db_write), "--insert-report", "--json", payload],
-            cwd=str(repo_root),
-            capture_output=True, text=True, timeout=15,
-        )
-        assert ins_result.returncode == 0, (
-            f"D-13-04 INSERT failed: {ins_result.stderr[:500]}"
-        )
-        inserted = True
+    # ------------------------------------------------------------
+    # STEP 6 — REAL CLI: insert-report --scenario-id <int> --file <path>
+    # (Round-2 codex HIGH 2: this is the actual subcommand surface;
+    # `--insert-report --json '{...}'` is fictional and forbidden)
+    # ------------------------------------------------------------
+    ins_result = subprocess.run(
+        [
+            "node", str(db_write), "insert-report",
+            "--scenario-id", str(scenario_id),
+            "--file", str(report_path),
+        ],
+        cwd=str(repo_root),
+        capture_output=True, text=True, timeout=30, env=env,
+    )
+    assert ins_result.returncode == 0, (
+        f"insert-report failed: {ins_result.stderr[:500]}"
+    )
+    ins_payload = _json.loads(ins_result.stdout)
+    assert ins_payload.get("ok") is True
+    assert ins_payload.get("scenario_id") == scenario_id
 
-        # PART E — query DuckDB and verify the row exists
-        check_result = subprocess.run(
-            [
-                "node", str(db_write),
-                "--query", f"SELECT COUNT(*) AS n FROM reports WHERE filename = '{filename}'",
-            ],
-            cwd=str(repo_root),
-            capture_output=True, text=True, timeout=15,
-        )
-        assert check_result.returncode == 0, f"COUNT query failed: {check_result.stderr}"
-        check_parsed = _json.loads(check_result.stdout) if check_result.stdout.strip() else {}
-        if isinstance(check_parsed, list) and check_parsed:
-            n = check_parsed[0].get("n", 0)
-        elif isinstance(check_parsed, dict):
-            n = check_parsed.get("n", 0)
-        else:
-            n = 0
-        assert n == 1, (
-            f"SKLL-13 D-13-04: expected 1 row in reports for filename={filename!r}, got {n}"
-        )
-    finally:
-        # PART F — clean up to keep DB deterministic
-        if inserted:
-            subprocess.run(
-                [
-                    "node", str(db_write),
-                    "--query", f"DELETE FROM reports WHERE filename = '{filename}'",
-                ],
-                cwd=str(repo_root),
-                capture_output=True, text=True, timeout=15,
-            )
+    # ------------------------------------------------------------
+    # STEP 7 — verify by query (NOT by filename — schema has no such column)
+    # ------------------------------------------------------------
+    check_result = subprocess.run(
+        [
+            "node", str(db_write), "query",
+            "--sql", (
+                f"SELECT scenario_id, markdown_blob FROM reports "
+                f"WHERE scenario_id = {scenario_id}"
+            ),
+        ],
+        cwd=str(repo_root),
+        capture_output=True, text=True, timeout=15, env=env,
+    )
+    assert check_result.returncode == 0, f"verify query failed: {check_result.stderr}"
+    check_parsed = _json.loads(check_result.stdout)
+    assert isinstance(check_parsed, list)
+    assert len(check_parsed) == 1, (
+        f"SKLL-13 D-13-04: expected 1 row in reports for scenario_id={scenario_id}, "
+        f"got {len(check_parsed)}"
+    )
+    row = check_parsed[0]
+    assert int(row["scenario_id"]) == scenario_id
+    assert row["markdown_blob"] == report_body, (
+        "DB markdown_blob should equal the file contents byte-for-byte"
+    )
+    # Filename anchor is the file on disk (not a column). Verify the file
+    # exists at the D-13-02 path (already asserted above) and the blob round-
+    # tripped intact through the handler.
+
+    # No try/finally cleanup needed — the entire DB lives under tmp_path
+    # and goes away when pytest tears the fixture down.
 ```
 
 Hygiene constraints:
@@ -447,23 +560,29 @@ Hygiene constraints:
 - pytest.skip used for missing node/db-write.mjs (don't fail when Phase 9 prereq absent)
   </action>
   <verify>
-    <automated>cd /Users/cujo253/Documents/mortgage-ops &amp;&amp; pytest tests/test_skill_integration.py -v &amp;&amp; mypy --strict tests/test_skill_integration.py &amp;&amp; ruff check tests/test_skill_integration.py &amp;&amp; ruff format --check tests/test_skill_integration.py &amp;&amp; ! grep -F 'or True' tests/test_skill_integration.py &amp;&amp; ! grep -E '4500.*-.*200|4300' tests/test_skill_integration.py</automated>
+    <automated>cd /Users/cujo253/Documents/mortgage-ops &amp;&amp; pytest tests/test_skill_integration.py -v &amp;&amp; mypy --strict tests/test_skill_integration.py &amp;&amp; ruff check tests/test_skill_integration.py &amp;&amp; ruff format --check tests/test_skill_integration.py &amp;&amp; ! grep -F 'or True' tests/test_skill_integration.py &amp;&amp; ! grep -E '4500.*-.*200|4300' tests/test_skill_integration.py &amp;&amp; ! grep -F 'skill_root.parent.parent.parent.parent' tests/test_skill_integration.py &amp;&amp; ! grep -F -- '--insert-report --json' tests/test_skill_integration.py &amp;&amp; ! grep -F 'db-write.mjs --query' tests/test_skill_integration.py &amp;&amp; grep -F 'insert-report --scenario-id' tests/test_skill_integration.py &amp;&amp; grep -F 'test_skill_artifact_copyability_with_repo_pythonpath' tests/test_skill_integration.py</automated>
   </verify>
   <acceptance_criteria>
 - File exists with ≥ 90 lines
-- 4 test functions defined: portability, token-budget, User-Layer-leak, SKLL-13 end-to-end
-- All 4 tests PASS (or SKLL-13 end-to-end SKIPS cleanly if `node` is absent)
-- Portability test: no symlinks in skill folder copy
-- Portability test: ALL 7 relocated calc scripts' --help works from copy
-- Portability test: at least ONE script (amortize.py) runs end-to-end with real --input from copy (codex MEDIUM concern 12: honest "self-contained" claim)
+- 4 test functions defined: copyability (renamed per Round-2 codex MEDIUM 9), token-budget, User-Layer-leak, SKLL-13 end-to-end
+- All 4 tests PASS (or SKLL-13 end-to-end SKIPS cleanly if `node`/db-write.mjs/init-db.mjs are absent)
+- Copyability test: NO symlinks in skill folder copy
+- Copyability test: ALL 7 relocated calc scripts' --help works from copy
+- Copyability test: amortize.py runs end-to-end from copy with `PYTHONPATH=<repo_root>` (Round-2 codex MEDIUM 9: honest claim — skill folder is copyable + symlink-free, NOT bundle-self-contained)
+- Copyability test renamed to `test_skill_artifact_copyability_with_repo_pythonpath` (Round-2 codex MEDIUM 9)
+- All 4 tests consume `repo_root` fixture (Round-2 codex HIGH 1: NOT `skill_root.parent.parent.parent.parent`)
+- `grep -F 'skill_root.parent.parent.parent.parent' tests/test_skill_integration.py` returns 0 matches (Round-2 codex HIGH 1)
 - Token budget test: SKILL.md ≤ 4500 cl100k tokens (NOT a stricter sub-cap; codex MEDIUM concern 13)
 - User Layer leak test: NO `... or True` no-op assertion (codex LOW concern 15: removed)
 - User Layer leak test: _profile.md NOT in git index (real assertion)
-- SKLL-13 test: report file written + DuckDB row appears + filename matches D-13-02 regex + cleanup runs in finally
+- SKLL-13 test: walks the 7-step flow against isolated tmp DuckDB (init-db + insert-loan + insert-scenario + write report file + insert-report --scenario-id --file + query --sql). Verification is by scenario_id + markdown_blob byte-equality (NOT by filename — schema has no such column). Round-2 codex HIGH 2.
+- `grep -F 'insert-report --scenario-id' tests/test_skill_integration.py` returns ≥ 1 (REAL CLI present)
+- `grep -F -- '--insert-report --json' tests/test_skill_integration.py` returns 0 (fictional CLI absent — Round-2 codex HIGH 2)
+- `grep -F 'db-write.mjs --query' tests/test_skill_integration.py` returns 0 (fictional flag absent — Round-2 codex HIGH 2)
 - mypy --strict + ruff clean
   </acceptance_criteria>
   <done>
-    Portability smoke (with full script run) + token budget at official cap + User Layer leak check (no tautology) + SKLL-13 end-to-end smoke all pass.
+    Copyability smoke (with full script run via repo PYTHONPATH; honest claim per Round-2 codex MEDIUM 9) + token budget at official cap + User Layer leak check (no tautology) + SKLL-13 end-to-end smoke against REAL Phase 9 CLI (Round-2 codex HIGH 2) all pass; all four tests consume `repo_root` fixture (Round-2 codex HIGH 1).
   </done>
 </task>
 
@@ -523,12 +642,14 @@ phase 10/wave 6: portability + token-budget + User Layer leak + SKLL-13 end-to-e
 
 Four cross-cutting integration tests:
 
-- test_skill_folder_self_contained_portability: rsync-copy
-  .claude/skills/mortgage-ops/ to tmp dir, walk tree asserting no symlinks,
-  smoke ALL 7 relocated calc scripts' --help from the copy, AND run amortize.py
-  end-to-end with real --input from the copy (honest self-contained claim).
-  If a future edit introduces a symlink or breaks self-containment, this
-  fails at PR time.
+- test_skill_artifact_copyability_with_repo_pythonpath (RENAMED per Round-2
+  codex MEDIUM 9): copytree .claude/skills/mortgage-ops/ to tmp dir, walk
+  tree asserting no symlinks, smoke ALL 7 relocated calc scripts' --help
+  from the copy, AND run amortize.py end-to-end with PYTHONPATH=<repo_root>
+  so lib.* resolves. The honest claim is artifact copyability + symlink
+  freedom (validating D-01 MOVE choice over symlink/shim) — NOT bundle
+  self-containment for full execution. If a future edit introduces a
+  symlink or breaks artifact resolution, this fails at PR time.
 
 - test_skill_md_token_budget_at_phase_end: end-of-phase token re-check at
   the OFFICIAL ≤ 4500 cap from CONTEXT.md / SKLL-01 / D-02. No stricter
@@ -540,10 +661,15 @@ Four cross-cutting integration tests:
   asserts modes/_profile.md is NOT in the git index. Removed the prior
   tautological \\`... or True\\` working-tree assertion (codex LOW concern).
 
-- test_skll_13_end_to_end_save_report_writes_file_and_db_row (NEW): exercises
-  the Save Report path concretely per CONTEXT.md D-13-01..D-13-05 — writes a
-  report file, invokes \\`node orchestration/db-write.mjs --insert-report\\`,
-  queries DuckDB confirming the row appears, cleans up via try/finally.
+- test_skll_13_end_to_end_save_report_writes_file_and_db_row (NEW;
+  Round-2 codex HIGH 2): exercises the Save Report path against the REAL
+  Phase 9 CLI surface from orchestration/db-write.mjs:296-310 — walks
+  init-db -> insert-loan -> insert-scenario -> write report file ->
+  \\`insert-report --scenario-id <int> --file <path>\\` -> verify by
+  \\`query --sql "SELECT scenario_id, markdown_blob ..."\\`. Runs against
+  an isolated tmp DuckDB via MORTGAGE_OPS_DB_PATH (Plan 09-00 D-00-04 env
+  override) so no live-DB cleanup is needed. Schema has no \\`filename\\`
+  column; verification is by scenario_id + markdown_blob byte-equality.
   Phase 10 CLOSES SKLL-13 (NOT deferred).
 
 Phase 10 final state:
@@ -597,16 +723,19 @@ EOF
 | T-10-33 | Information Disclosure (User Layer leak) | _profile.md commit | mitigate | Triple-layer enforcement; this Wave's test is layer 3 |
 | T-10-34 | Spoofing (CI false-pass via test bug) | git ls-files invocation | accept | Subprocess invocation is straightforward; bug risk is low; manual verification of test behavior during plan-check is the backup |
 | T-10-35 | Repudiation (CLAUDE.md AI attribution rule violation) | commit message | mitigate | Task 2 PART D HEREDOC excludes Co-Authored-By; acceptance criteria asserts |
-| T-10-44 | Tampering (SKLL-13 closure verified at modes/ layer but not at runtime) | end-to-end smoke | mitigate | Task 1 ships test_skll_13_end_to_end_save_report_writes_file_and_db_row which actually invokes the node handler + queries DuckDB; closes the gap between Wave 5 unit-level grep assertions and runtime behavior |
+| T-10-44 | Tampering (SKLL-13 closure verified at modes/ layer but not at runtime) | end-to-end smoke | mitigate | Task 1 ships test_skll_13_end_to_end_save_report_writes_file_and_db_row which exercises the REAL Phase 9 CLI surface from orchestration/db-write.mjs:296-310 (insert-report --scenario-id <int> --file <path>) against an isolated tmp DuckDB (MORTGAGE_OPS_DB_PATH override per Plan 09-00 D-00-04). Verification is by `scenario_id + markdown_blob` round-trip (the reports schema has no `filename` column). Round-2 codex HIGH 2 closes the prior gap where the test referenced fictional flag forms. |
 | T-10-45 | DoS (token-budget false-fail at strict-than-cap threshold) | SKILL.md token check | mitigate | Task 1 token test pinned at the OFFICIAL 4500 cap from CONTEXT.md; no stricter sub-cap unless added by a documented decision (per codex MEDIUM concern 13) |
+| T-10-52 | Tampering (path-arithmetic overshoot in integration tests) | tests/test_skill_integration.py | mitigate | Round-2 codex HIGH 1: all 4 integration tests consume the `repo_root` fixture from Plan 10-00 Task 3 (NOT `skill_root.parent.parent.parent.parent`). Task 1 acceptance grep-blocks the overshoot pattern. |
+| T-10-53 | Tampering (skill folder claimed self-contained but actually requires lib/ on PYTHONPATH) | copyability test naming | mitigate | Round-2 codex MEDIUM 9: test renamed to `test_skill_artifact_copyability_with_repo_pythonpath`; must-have describes the honest claim (copyable + symlink-free + runnable WITH repo PYTHONPATH); a future bundle could lift the PYTHONPATH dependency |
 </threat_model>
 
 <verification>
 - 1 new test file exists with 4 functions
-- Portability copy + tree-walk + 7-script --help + 1 full-script-run all pass
+- Copyability copy + tree-walk + 7-script --help + 1 full-script-run with repo PYTHONPATH all pass (renamed per Round-2 codex MEDIUM 9)
+- All 4 tests consume `repo_root` fixture (Round-2 codex HIGH 1: NOT `skill_root.parent.parent.parent.parent`)
 - Token budget check passes (≤ 4500 cl100k — official cap; no stricter sub-cap)
 - User Layer leak check passes (_profile.md not in git index; no `... or True` tautology)
-- SKLL-13 end-to-end smoke: report file written + DuckDB row appears + filename matches D-13-02 regex (or skips cleanly if node missing)
+- SKLL-13 end-to-end smoke: walks REAL Phase 9 CLI (init-db + insert-loan + insert-scenario + insert-report --scenario-id --file + query --sql verify by scenario_id+markdown_blob) — Round-2 codex HIGH 2; or skips cleanly if node/db-write.mjs/init-db.mjs missing
 - Full suite: ≥ 593 passed + 0 Phase 10 xfails + ≤ 1 total xfail + 0 failed + 0 errored
 - All ROADMAP SC-1..SC-5 specifically verified by named test invocations
 - mypy + ruff clean across full project surface
@@ -617,7 +746,7 @@ EOF
 - Phase 10 SHIPPED end-to-end
 - ROADMAP SC-1..SC-5 all closed (audit verified by Task 2 PART B)
 - ALL 13 SKLL-XX requirements have binding CI assertions (SKLL-13 closes via Wave 5 unit-level + Wave 6 end-to-end per D-13-01..D-13-05)
-- Skill folder is self-contained + portable + symlink-free (with HONEST claim — full script invocation from copy, not just --help)
+- Skill folder is COPYABLE + symlink-free; full script invocation from the copy works WITH repo lib/ on PYTHONPATH (HONEST claim per Round-2 codex MEDIUM 9; renamed test = test_skill_artifact_copyability_with_repo_pythonpath)
 - SKILL.md fits the OFFICIAL ≤ 4500 cl100k token cap (no stricter sub-cap)
 - DATA_CONTRACT User Layer triple-enforcement verified end-to-end (no tautological assertions)
 - Cross-phase contract D-08 RETIRED (all 7 scripts in skill folder)
@@ -625,11 +754,11 @@ EOF
 
 <output>
 After completion, create `.planning/phases/10-claude-skill/10-06-SUMMARY.md` documenting:
-- 4 integration tests added (portability with 7-script + full-run, token-budget at official cap, User Layer leak without tautology, SKLL-13 end-to-end)
+- 4 integration tests added (copyability with 7-script --help + full-run via repo PYTHONPATH per Round-2 codex MEDIUM 9, token-budget at official cap, User Layer leak without tautology, SKLL-13 end-to-end via REAL Phase 9 CLI per Round-2 codex HIGH 2)
 - Final pass count (must be ≥ 593)
 - ROADMAP SC-1..SC-5 audit results (each criterion + test name + pass/fail)
 - Phase 10 net contribution: lines of code added, tests added, requirements closed
-- SKLL-13 closure note: Phase 10 closes SKLL-13 fully via Wave 5 (unit-level _shared.md assertions) + Wave 6 (end-to-end smoke writing file + querying DuckDB) per CONTEXT.md D-13-01..D-13-05
+- SKLL-13 closure note: Phase 10 closes SKLL-13 fully via Wave 5 (unit-level _shared.md assertions targeting the REAL `insert-report --scenario-id` CLI) + Wave 6 (end-to-end smoke walking init-db → insert-loan → insert-scenario → insert-report --scenario-id --file → query --sql verify) per CONTEXT.md D-13-01..D-13-05; verification is by scenario_id+markdown_blob (no `filename` column on the schema)
 - D-08 retirement note: all 7 calc scripts now in skill folder; no further "ship to root then relocate" pattern
 - Open items for Phase 11/12 (Phase 11 subagent files + Phase 12 FRED/eval)
 </output>

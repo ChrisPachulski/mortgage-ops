@@ -51,23 +51,26 @@ must_haves:
     - "Test SKLL-03 parses YAML frontmatter; asserts 4 keys (name, description, license, compatibility) + spec constraints"
     - "Test SKLL-04 asserts LICENSE.txt exists in skill folder"
     - "Test SKLL-05 parametrized over 7 modes asserts each modes/{name}.md exists"
-    - "Test SKLL-06 asserts modes/_shared.md contains the 12 mandatory section headings (9 UI-SPEC §i + Profile Loading + Output Formatting + Save Report per D-13/D-NUM/D-PROF-04)"
-    - "Test SKLL-07 asserts modes/_profile.md is gitignored AND modes/_profile.example.md is committed"
+    - "Test SKLL-06 asserts modes/_shared.md contains the 12 mandatory section headings (9 UI-SPEC §i + Profile Loading + Output Formatting + Save Report per D-13/D-NUM/D-PROF-04) AND cites at least one D-NUM example token per directive ($1,264.14 for D-NUM-01, 6.500% for D-NUM-02, 43.0% for D-NUM-03, `<n> bps (<x>.<yy>%)` regex for D-NUM-04) — Round-2 codex MEDIUM 7"
+    - "Test SKLL-07 asserts modes/_profile.md is gitignored AND modes/_profile.example.md is committed; the test consumes the `repo_root` fixture from Plan 10-00 Task 3 (Round-2 codex HIGH 1: `skill_root.parent.parent.parent.parent` overshoots repo root by one level)"
     - "NEW Test test_profile_example_md_has_exact_four_keys (D-PROF-01 + D-PROF-02): parses _profile.example.md YAML body and asserts EXACTLY four top-level keys (verbosity, citation_density, save_report, disambiguation); NO extras allowed"
     - "Test SKLL-08 parametrized over 9 references asserts each references/{name}.md exists"
     - "Test SKLL-09 asserts SKILL.md contains the topic→reference table (substring match)"
     - "Test SKLL-11 asserts SKILL.md contains the literal 'ALWAYS shell out' doctrine substring"
-    - "Test SKLL-12 asserts each of the 7 currently-relocated calc scripts has a working --help (subprocess) AND SKILL.md contains the run-help-first substring"
+    - "Test SKLL-12 asserts each of the 7 RELOCATED calc scripts (amortize, affordability, arm_simulate, refi_npv, apr_reg_z, stress_test, points_breakeven) has a working --help (subprocess; D-18 fast --help) AND SKILL.md contains the run-help-first substring. Round-2 codex MEDIUM 6: 7-script audit closes in Wave 5; not split with Wave 6."
     - "NEW Test test_skll_13_report_filename_format (D-13-02): asserts a saved report filename matches `reports/{NNN:03d}-{mode}-{YYYY-MM-DD}.md` (or asserts the convention is documented in modes/_shared.md verbatim with parseable regex)"
-    - "NEW Test test_skll_13_report_persisted_to_duckdb (D-13-04): asserts after a save, SELECT COUNT(*) FROM reports WHERE filename = ? returns 1 (or asserts the literal `node orchestration/db-write.mjs --insert-report` invocation appears in modes/_shared.md)"
+    - "NEW Test test_skll_13_report_persisted_to_duckdb (D-13-04): asserts the literal REAL CLI invocation `node orchestration/db-write.mjs insert-report --scenario-id` appears in modes/_shared.md (per orchestration/db-write.mjs:296-310; Round-2 codex HIGH 2). Forbidden-substring guards block the fictional `--insert-report --json` and `db-write.mjs --query` flag forms. The reports table per init-db.mjs has no `filename` column — Plan 10-06 end-to-end smoke verifies row presence by `scenario_id`, not `filename`."
     - "Bonus test asserts arm-mechanics.md byte-equality between project root and skill folder (drift protection per 10-PATTERNS CRITICAL #4)"
     - "NEW Bonus test asserts refi-npv.md byte-equality between project root and skill folder (Plan 10-04 Task 2 byte-lift; mirrors arm-mechanics pattern)"
     - "NEW Bonus test asserts apr-reg-z.md byte-equality between project root and skill folder (Plan 10-04 Task 2 byte-lift; mirrors arm-mechanics pattern)"
     - "Bonus test asserts 6-key Pydantic envelope still works for relocated scripts (renamed test_amortize_envelope_smoke OR expanded to cover all relocated scripts — codex MEDIUM concern: prior test name overstated coverage)"
-    - "REVISED Bonus test test_profile_md_write_attempt_blocked: stages a temp _profile.md (try/finally), runs scripts/hooks/block-user-layer.py, asserts non-zero exit and clean cleanup. Replaces prior version that only grep-asserted hook source."
+    - "REVISED Bonus test test_profile_md_write_attempt_blocked (Round-2 codex HIGH 3): invokes `python scripts/hooks/block-user-layer.py .claude/skills/mortgage-ops/modes/_profile.md` with the candidate path AS argv[1] (matching the hook's `argv[1:]` interface verified by reading scripts/hooks/block-user-layer.py:46-67), asserts exit code 1 + stderr names the offending file, plus a positive-control invocation with clean paths exits 0. No git staging is needed — that approach was a Round-1 misread of the hook's actual interface."
     - "REVISED Bonus test test_modes_stress_md_subagent_forward_link: asserts modes/stress.md contains LITERAL `if it exists` AND LITERAL path `.claude/agents/stress-test-agent.md` (per D-SUBA-FW-02)"
     - "NEW Bonus test test_skill_md_subagent_section_present: asserts SKILL.md contains the literal heading `## Subagents (Phase 11)` AND all THREE filenames (`amortization-agent`, `refi-npv-agent`, `stress-test-agent`) per D-SUBA-FW-01"
     - "Full pytest suite ≥ 549 baseline + Phase 10 net additions; SKLL-13 is CLOSED (not xfail) per D-13-01..D-13-05"
+    - "Wave 5 ships explicit import housekeeping at the start of Task 1: `import re`, `import subprocess`, `import sys`, `import yaml`, `from tests._skill_helpers import count_tokens` re-added at module level (Round-2 codex HIGH 5; deferred from Wave 0 for ruff F401 hygiene). `ruff check tests/test_skill.py` returns 0 errors at Wave 5 commit time."
+    - "All Wave 5 tests that need the repo root use the `repo_root` fixture from Plan 10-00 Task 3 (Round-2 codex HIGH 1: NOT `skill_root.parent.parent.parent.parent`, which overshoots by one level since .claude/skills/mortgage-ops is only 3 levels deep)."
+    - "All Wave 5 SKLL-13 assertions reference the REAL Phase 9 CLI from `orchestration/db-write.mjs:296-310` (`insert-report --scenario-id <int> --file <path>` and `query --sql \"...\"`); fictional flag forms (`--insert-report --json`, `--query \"...\"`) are forbidden by guard assertions (Round-2 codex HIGH 2)."
   artifacts:
     - path: "tests/test_skill.py"
       provides: "Wave 5 flips all SKLL-01..12 xfails to real assertions; adds 4 bonus tests (byte-equal mirror, envelope smoke, _profile.md write-block, subagent forward-link)"
@@ -195,7 +198,23 @@ def test_reference_file_exists(ref: str, skill_root: Path) -> None:
     10-RESEARCH §"Pinned Oracle Examples" Oracle 1, 2, 4
   </read_first>
   <action>
-For each of these 5 Wave 0 stubs, REMOVE the `@pytest.mark.xfail(...)` decorator and REPLACE the body `pytest.fail("Wave 0 stub")` with the real assertion. Use Edit (not Write) to preserve everything else in tests/test_skill.py.
+**STEP 0 — Import housekeeping (Round-2 codex HIGH 5).** Wave 0 (Plan 10-00 Task 4) deliberately deferred `re`, `subprocess`, `sys`, `yaml`, and the `count_tokens` helper out of `tests/test_skill.py` module-level imports to keep `ruff check` F401-clean while every body was just `pytest.fail("Wave 0 stub")`. Wave 5 (this plan) flips assertions that USE all five names. Before flipping any decorator, ADD these imports at the top of `tests/test_skill.py` (after `from pathlib import Path` + `import pytest` block):
+
+```python
+import re
+import subprocess
+import sys
+
+import yaml
+
+from tests._skill_helpers import count_tokens
+```
+
+Verify with `ruff check tests/test_skill.py` after the assertions are flipped — there must be ZERO F401 errors at Wave 5 commit time. Each added import MUST be consumed by at least one flipped assertion in Tasks 1-4 below.
+
+If a future Wave 5 revision drops one of the assertions that consume these imports, the matching import MUST also be removed (or `ruff check` will fail F401). The Round-2 codex HIGH 5 contract is: deferred imports return at module level the moment the bodies that need them are wired in.
+
+For each of the 5 Wave 0 stubs in this task, REMOVE the `@pytest.mark.xfail(...)` decorator and REPLACE the body `pytest.fail("Wave 0 stub")` with the real assertion. Use Edit (not Write) to preserve everything else in tests/test_skill.py.
 
 STUB 1 — test_skill_md_under_token_budget (SKLL-01 token):
 ```python
@@ -312,6 +331,7 @@ EXPECTED_REFERENCES: frozenset[str] = frozenset({
 
 SHARED_MD_REQUIRED_SECTIONS: tuple[str, ...] = (
     "Sources of Truth",
+    "Profile Loading",
     "Money Discipline",
     "Always Cite the Script",
     "Never Invent Numbers",
@@ -319,9 +339,27 @@ SHARED_MD_REQUIRED_SECTIONS: tuple[str, ...] = (
     "Script Invocation Doctrine",
     "Error Narration Template",
     "Output File Naming",
+    "Output Formatting",
+    "Save Report",
     "Forbidden Behaviors",
 )
-"""SKLL-06 + UI-SPEC §i: 9 mandatory _shared.md section headings."""
+"""SKLL-06 + UI-SPEC §i + Round-2 codex MEDIUM 7: 12 mandatory _shared.md
+section headings. Earlier draft only listed 9 (UI-SPEC §i baseline) but
+the CONTEXT.md must-have at Plan 10-03 line ~54 mandates 12 sections
+(adding Profile Loading per D-PROF-04, Output Formatting per D-NUM-01..06,
+Save Report per D-13-01..05). The CI assertion here matches the must-have."""
+
+# D-NUM-01..06 example tokens — the Output Formatting section MUST cite at
+# least one example per directive (Round-2 codex MEDIUM 7).
+SHARED_MD_DNUM_EXAMPLES: tuple[str, ...] = (
+    "$1,264.14",      # D-NUM-01 money: 2 decimals + comma + $ prefix
+    "6.500%",         # D-NUM-02 rate: 3 decimals + trailing zeros + %
+    "43.0%",          # D-NUM-03 ratio (DTI / LTV / CLTV): 1 decimal + %
+)
+"""D-NUM-01..06 example tokens (Round-2 codex MEDIUM 7). The Output
+Formatting section MUST cite at least one example per directive so the
+display contract is auditable. ARM bps formatting (D-NUM-04) is matched
+separately by the existing `bps (` substring (e.g. `200 bps (2.00%)`)."""
 ```
 
 Then flip each stub:
@@ -335,20 +373,34 @@ def test_mode_file_exists(mode: str, skill_root: Path) -> None:
     assert p.exists(), f"SKLL-05 mode file missing: modes/{mode}.md"
 ```
 
-STUB 7 — test_shared_mode_has_required_sections (SKLL-06):
+STUB 7 — test_shared_mode_has_required_sections (SKLL-06; Round-2 codex MEDIUM 7: assert all 12 sections + D-NUM example tokens, matching the Plan 10-03 must-have):
 ```python
 def test_shared_mode_has_required_sections(skill_root: Path) -> None:
-    """SKLL-06 + UI-SPEC §i: modes/_shared.md contains all 9 mandatory section headings."""
+    """SKLL-06 + UI-SPEC §i + Round-2 codex MEDIUM 7: modes/_shared.md contains
+    all 12 mandatory section headings (9 UI-SPEC §i + Profile Loading per
+    D-PROF-04 + Output Formatting per D-NUM-01..06 + Save Report per
+    D-13-01..05) AND each D-NUM-XX directive cites at least one example
+    token so the display contract is auditable."""
     text = (skill_root / "modes" / "_shared.md").read_text()
     for section in SHARED_MD_REQUIRED_SECTIONS:
         assert section in text, f"SKLL-06 _shared.md missing section: {section!r}"
+    # D-NUM-01..03 example tokens (Round-2 codex MEDIUM 7)
+    for example in SHARED_MD_DNUM_EXAMPLES:
+        assert example in text, (
+            f"D-NUM (Round-2 codex MEDIUM 7): _shared.md Output Formatting "
+            f"section must cite the example token {example!r}"
+        )
+    # D-NUM-04 ARM bps example: any `<n> bps (<x>.<yy>%)` token suffices
+    assert re.search(r"\d+\s*bps\s*\(\d+\.\d{2}%\)", text), (
+        "D-NUM-04 (Round-2 codex MEDIUM 7): _shared.md must include an ARM "
+        "bps example like `200 bps (2.00%)` or `250 bps (2.50%)`."
+    )
 ```
 
-STUB 8 — test_profile_md_user_layer_gitignored (SKLL-07 + D-07):
+STUB 8 — test_profile_md_user_layer_gitignored (SKLL-07 + D-07). Consume the `repo_root` fixture from Plan 10-00 Task 3 (Round-2 codex HIGH 1: `skill_root.parent.parent.parent.parent` overshoots the repo root by one level — `.claude/skills/mortgage-ops` is only 3 levels deep):
 ```python
-def test_profile_md_user_layer_gitignored(skill_root: Path) -> None:
+def test_profile_md_user_layer_gitignored(skill_root: Path, repo_root: Path) -> None:
     """SKLL-07 + D-07: modes/_profile.md is gitignored AND modes/_profile.example.md is committed."""
-    repo_root = skill_root.parent.parent.parent.parent
     gitignore = (repo_root / ".gitignore").read_text()
     profile_md_pattern = ".claude/skills/mortgage-ops/modes/_profile.md"
     assert profile_md_pattern in gitignore, (
@@ -425,10 +477,19 @@ def test_skill_md_shell_out_doctrine(skill_root: Path) -> None:
     )
 ```
 
-STUB 12 — test_each_script_has_help_and_doctrine_documented (SKLL-12):
+STUB 12 — test_each_script_has_help_and_doctrine_documented (SKLL-12). Round-2 codex MEDIUM 6: SKLL-12 closure asserts `--help` exits 0 for ALL SEVEN relocated calc scripts in this single Wave 5 test. No split between Wave 5 and Wave 6 — the 7-script audit closes here:
 ```python
 def test_each_script_has_help_and_doctrine_documented(skill_root: Path) -> None:
-    """SKLL-12 + ROADMAP SC-5 + webapp-testing exemplar: each relocated script's --help works AND SKILL.md has the run-help-first doctrine substring."""
+    """SKLL-12 + ROADMAP SC-5 + webapp-testing exemplar: each of the SEVEN
+    relocated calc scripts has a working `--help` (D-18 fast --help inherited
+    from Phase 3) AND SKILL.md has the run-help-first doctrine substring.
+
+    Round-2 codex MEDIUM 6: prior draft only ran --help for 3 of 7 scripts
+    (amortize, affordability, arm_simulate) and the commit message claimed
+    SKLL-12 closure. That overstates coverage. This Wave 5 test runs --help
+    for all 7 relocated calc scripts (amortize, affordability, arm_simulate,
+    refi_npv, apr_reg_z, stress_test, points_breakeven). _cli_helpers.py is
+    NOT in the list — it has no argparse main."""
     text = (skill_root / "SKILL.md").read_text()
     # Doctrine substring (paraphrased from webapp-testing per Plan 10-02 Task 2).
     assert "run `--help` first" in text or "Always run scripts with `--help` first" in text, (
@@ -436,8 +497,16 @@ def test_each_script_has_help_and_doctrine_documented(skill_root: Path) -> None:
         "(doctrine lifted from anthropics/skills/skills/webapp-testing/SKILL.md per RESEARCH §b)"
     )
 
-    # Each currently-relocated script's --help must exit 0 (D-18 fast --help inherited from Phase 3).
-    relocated = ["amortize.py", "affordability.py", "arm_simulate.py"]
+    # Each of the 7 relocated user-facing calc scripts must --help exit 0
+    relocated = [
+        "amortize.py",
+        "affordability.py",
+        "arm_simulate.py",
+        "refi_npv.py",
+        "apr_reg_z.py",
+        "stress_test.py",
+        "points_breakeven.py",
+    ]
     for name in relocated:
         script = skill_root / "scripts" / name
         assert script.is_file(), f"{name} missing from skill folder (Plan 10-01 should have relocated)"
@@ -490,28 +559,39 @@ REMOVE the 2 corresponding `@pytest.mark.xfail(...)` decorators.
   <action>
 APPEND/FLIP these tests at end of tests/test_skill.py. This task addresses codex review HIGH/MEDIUM concerns 1, 2, 3, 5, 7, 8, 11 + closes SKLL-13 per D-13-01..D-13-05:
 
-**FLIP-A — D-PROF-01 four-key schema** (test from Plan 10-00 Task 4):
+**FLIP-A — D-PROF-01 four-key schema** (test from Plan 10-00 Task 4; Round-2 codex HIGH 4 Option A producer/consumer fix: `_profile.example.md` is **pure YAML** per Plan 10-03 Task 2 — no fenced ```yaml block. Parsing the entire file body directly with `yaml.safe_load` matches the producer contract; a regex extraction of a fenced block would fail at runtime because the file has no fence):
 ```python
 def test_profile_example_md_has_exact_four_keys(skill_root: Path) -> None:
-    """D-PROF-01 + D-PROF-02: _profile.example.md YAML body has EXACTLY these
-    four top-level keys: verbosity, citation_density, save_report,
-    disambiguation. Calc inputs do NOT belong here — they live in
-    config/household.yml + config/profile.yml per Phase 1 DATA_CONTRACT."""
-    import re as _re
-
+    """D-PROF-01 + D-PROF-02 + Round-2 codex HIGH 4 Option A:
+    _profile.example.md is pure YAML (no fenced block) so the
+    user's `cp _profile.example.md _profile.md` produces a
+    directly-parseable file. Parse the entire body and assert
+    EXACTLY four top-level keys.
+    """
     raw = (skill_root / "modes" / "_profile.example.md").read_text()
-    m = _re.search(r"```yaml\n(.*?)\n```", raw, _re.DOTALL)
-    assert m, "_profile.example.md must contain a fenced ```yaml ...``` block (D-PROF-01)"
-    parsed = yaml.safe_load(m.group(1))
+    assert "```yaml" not in raw, (
+        "Round-2 codex HIGH 4: _profile.example.md must NOT contain a "
+        "fenced ```yaml block — it must be pure YAML so the user's `cp` "
+        "to _profile.md produces a yaml.safe_load-parseable file."
+    )
+    parsed = yaml.safe_load(raw)
+    assert isinstance(parsed, dict), (
+        "_profile.example.md must parse as a YAML mapping (D-PROF-01)."
+    )
     expected = {"verbosity", "citation_density", "save_report", "disambiguation"}
     actual = set(parsed.keys())
     assert actual == expected, (
-        f"D-PROF-01: _profile.example.md must have EXACTLY 4 top-level keys "
-        f"{expected}; got {actual}. Extras would violate D-PROF-02 (calc inputs "
-        f"belong in config/household.yml + config/profile.yml)."
+        f"D-PROF-01: must have EXACTLY 4 top-level keys {expected}; "
+        f"got {actual}. Extras violate D-PROF-02."
     )
 ```
 REMOVE the `@pytest.mark.xfail` decorator that Wave 0 placed on this stub.
+
+NOTE on imports: this revised FLIP-A no longer imports `re` (the prior
+fence-extraction body did). Other Wave 5 tests (FLIP-B `test_report_filename_format`,
+SKLL-06 `test_shared_mode_has_required_sections` D-NUM-04 bps regex) still
+use `re`, so the module-level `import re` from Task 1 STEP 0 stays — F401
+would only fire if NO test referenced `re`, which is not the case here.
 
 **FLIP-B — SKLL-13 report filename format** (test from Plan 10-00 Task 4):
 ```python
@@ -539,19 +619,37 @@ def test_report_filename_format(skill_root: Path) -> None:
 ```
 REMOVE the `@pytest.mark.xfail` decorator.
 
-**FLIP-C — SKLL-13 DuckDB persistence** (test from Plan 10-00 Task 4):
+**FLIP-C — SKLL-13 DuckDB persistence** (test from Plan 10-00 Task 4; Round-2 codex HIGH 2: assert the REAL Phase 9 CLI from `orchestration/db-write.mjs:296-310`, NOT the fictional `--insert-report --json` form. The reports table per `orchestration/init-db.mjs:76-82` has NO `filename` column — the file on disk is the durable filename anchor):
 ```python
 def test_report_persisted_to_duckdb(skill_root: Path) -> None:
     """SKLL-13 + D-13-04: Phase 10 closes SKLL-13. modes/_shared.md MUST
-    invoke `node orchestration/db-write.mjs --insert-report` after each
-    report write. This test asserts the literal invocation appears in
-    _shared.md. Plan 10-06 adds an end-to-end smoke that actually runs
-    the save path and then SELECT COUNT(*) FROM reports WHERE filename = ?."""
+    invoke the REAL `node orchestration/db-write.mjs insert-report
+    --scenario-id <int> --file <path>` subcommand after each report write.
+    This test asserts the literal CLI invocation appears in _shared.md.
+    Plan 10-06 adds an end-to-end smoke that actually exercises init-db +
+    insert-loan + insert-scenario + insert-report and queries
+    `SELECT scenario_id, markdown_blob FROM reports WHERE scenario_id = ?`.
+
+    Round-2 codex HIGH 2: prior draft asserted the fictional flag form
+    `--insert-report --json` and queried by a `filename` column that does
+    not exist on the schema. Both are forbidden here."""
     shared = (skill_root / "modes" / "_shared.md").read_text()
-    assert "node orchestration/db-write.mjs --insert-report" in shared, (
-        "SKLL-13 D-13-04: modes/_shared.md must invoke "
-        "`node orchestration/db-write.mjs --insert-report` to persist the "
-        "report markdown to DuckDB after writing the .md file."
+    assert "node orchestration/db-write.mjs insert-report --scenario-id" in shared, (
+        "SKLL-13 D-13-04: modes/_shared.md must invoke the REAL CLI "
+        "`node orchestration/db-write.mjs insert-report --scenario-id <int> "
+        "--file <path>` (per orchestration/db-write.mjs:296-310 usage block) "
+        "to persist the report markdown to DuckDB after writing the .md file."
+    )
+    # Forbidden-substring guards (Round-2 codex HIGH 2: prior fictional CLI
+    # forms must never re-appear in _shared.md)
+    assert "--insert-report --json" not in shared, (
+        "Round-2 codex HIGH 2: `--insert-report --json` is NOT a real flag on "
+        "orchestration/db-write.mjs. Use the `insert-report --scenario-id <int> "
+        "--file <path>` subcommand instead."
+    )
+    assert "db-write.mjs --query" not in shared, (
+        "Round-2 codex HIGH 2: `--query` is NOT a real flag. The real "
+        "subcommand is `query --sql \"SELECT ...\"`."
     )
     # Also assert the override knob per D-13-05
     assert "save_report: false" in shared, (
@@ -561,14 +659,13 @@ def test_report_persisted_to_duckdb(skill_root: Path) -> None:
 ```
 REMOVE the `@pytest.mark.xfail` decorator.
 
-**BONUS 1 — drift protection for arm-mechanics.md** (10-PATTERNS CRITICAL #4 §5):
+**BONUS 1 — drift protection for arm-mechanics.md** (10-PATTERNS CRITICAL #4 §5; consumes `repo_root` fixture per Round-2 codex HIGH 1):
 ```python
-def test_arm_mechanics_skill_mirror_in_sync(skill_root: Path) -> None:
+def test_arm_mechanics_skill_mirror_in_sync(skill_root: Path, repo_root: Path) -> None:
     """10-PATTERNS CRITICAL #4 §5: <repo>/references/arm-mechanics.md MUST stay
     byte-identical to .claude/skills/mortgage-ops/references/arm-mechanics.md
     so Phase 5 docstring path (project root) and SKLL-08 progressive disclosure
     (skill folder) cannot drift apart silently."""
-    repo_root = skill_root.parent.parent.parent.parent
     project_copy = repo_root / "references" / "arm-mechanics.md"
     skill_copy = skill_root / "references" / "arm-mechanics.md"
     assert project_copy.exists(), "Phase 5 source-of-truth missing"
@@ -579,14 +676,13 @@ def test_arm_mechanics_skill_mirror_in_sync(skill_root: Path) -> None:
     )
 ```
 
-**BONUS 1b — drift protection for refi-npv.md** (NEW; mirrors arm-mechanics; required by Plan 10-04 Task 2 byte-lift):
+**BONUS 1b — drift protection for refi-npv.md** (NEW; mirrors arm-mechanics; required by Plan 10-04 Task 2 byte-lift; consumes `repo_root` fixture per Round-2 codex HIGH 1):
 ```python
-def test_refi_npv_skill_mirror_in_sync(skill_root: Path) -> None:
+def test_refi_npv_skill_mirror_in_sync(skill_root: Path, repo_root: Path) -> None:
     """Plan 10-04 Task 2 byte-lift: <repo>/references/refi-npv.md MUST stay
     byte-identical to .claude/skills/mortgage-ops/references/refi-npv.md.
     Phase 6 lib/refinance.py docstring cites the project-root path; Phase 10
     progressive disclosure cites the skill-folder path. Both must agree."""
-    repo_root = skill_root.parent.parent.parent.parent
     project_copy = repo_root / "references" / "refi-npv.md"
     skill_copy = skill_root / "references" / "refi-npv.md"
     assert project_copy.exists(), "Phase 6 source-of-truth missing"
@@ -597,14 +693,13 @@ def test_refi_npv_skill_mirror_in_sync(skill_root: Path) -> None:
     )
 ```
 
-**BONUS 1c — drift protection for apr-reg-z.md** (NEW; mirrors arm-mechanics; required by Plan 10-04 Task 2 byte-lift):
+**BONUS 1c — drift protection for apr-reg-z.md** (NEW; mirrors arm-mechanics; required by Plan 10-04 Task 2 byte-lift; consumes `repo_root` fixture per Round-2 codex HIGH 1):
 ```python
-def test_apr_reg_z_skill_mirror_in_sync(skill_root: Path) -> None:
+def test_apr_reg_z_skill_mirror_in_sync(skill_root: Path, repo_root: Path) -> None:
     """Plan 10-04 Task 2 byte-lift: <repo>/references/apr-reg-z.md MUST stay
     byte-identical to .claude/skills/mortgage-ops/references/apr-reg-z.md.
     Phase 7 lib/apr.py docstring cites the project-root path; Phase 10
     progressive disclosure cites the skill-folder path. Both must agree."""
-    repo_root = skill_root.parent.parent.parent.parent
     project_copy = repo_root / "references" / "apr-reg-z.md"
     skill_copy = skill_root / "references" / "apr-reg-z.md"
     assert project_copy.exists(), "Phase 7 source-of-truth missing"
@@ -641,72 +736,52 @@ def test_amortize_envelope_smoke(skill_root: Path, tmp_path: Path) -> None:
         )
 ```
 
-**BONUS 3 — _profile.md write-block REVISED** (codex MEDIUM concern 11: replace grep-on-source with real test):
+**BONUS 3 — _profile.md write-block REVISED** (Round-2 codex HIGH 3: prior draft invoked the hook with NO args, which made `argv[1:] == []`, `offenders = []`, and the hook returned 0 — the test passed for the wrong reason. The REAL hook source `scripts/hooks/block-user-layer.py:46-67` reads `argv[1:]` for staged paths, so the test invocation must pass the candidate path AS argv. No git staging needed; this is purely a unit-level invocation):
 ```python
-def test_profile_md_write_attempt_blocked(skill_root: Path, tmp_path: Path) -> None:
+def test_profile_md_write_attempt_blocked(skill_root: Path, repo_root: Path) -> None:
     """DATA_CONTRACT + UI-SPEC §f: scripts/hooks/block-user-layer.py MUST
-    reject any staged change to .claude/skills/mortgage-ops/modes/_profile.md.
+    reject any argv invocation that names .claude/skills/mortgage-ops/modes/_profile.md
+    as a staged path.
 
-    REVISED per codex review: prior version only grep-asserted that the hook
-    SOURCE contained the path string. That doesn't prove the hook actually
-    blocks staging. This version stages a temp _profile.md file in the working
-    tree, runs the hook, asserts non-zero exit + clear error message, and
-    cleans up via try/finally regardless of outcome.
+    REVISED per Round-2 codex HIGH 3: the hook reads `argv[1:]` (verified by
+    reading scripts/hooks/block-user-layer.py:46-67 — `def main(argv): offenders
+    = [a for a in argv[1:] if is_user_layer(a)]; if not offenders: return 0`).
+    To trigger the rejection path the test passes the candidate path AS argv.
+    No git staging is required; the pre-commit shim invokes the hook with
+    staged paths as argv at commit time, which is what we simulate here.
 
-    Strategy: the hook reads `git diff --cached --name-only` (or equivalent).
-    To trigger it, we (1) write a real file at the User Layer path,
-    (2) `git add -f` it (force-add bypasses .gitignore), (3) invoke the hook,
-    (4) ALWAYS unstage + remove the file in finally."""
-    import shutil
-
-    repo_root = skill_root.parent.parent.parent.parent
+    Round-1 fix (replace grep-on-source) was the right direction but used a
+    git-staging approach assuming `git diff --cached`; that doesn't match the
+    actual hook source. Round-2 corrects the invocation to argv-based.
+    """
     hook = repo_root / "scripts" / "hooks" / "block-user-layer.py"
     assert hook.is_file(), f"hook missing at {hook}"
 
-    target_dir = skill_root / "modes"
-    target_dir.mkdir(parents=True, exist_ok=True)
-    target = target_dir / "_profile.md"
-    created_file = False
-    staged = False
-    try:
-        # PART A — write a temp _profile.md (User Layer; gitignored, so won't
-        # auto-stage but force-add will).
-        target.write_text("verbosity: standard\nsave_report: true\n")
-        created_file = True
+    target = ".claude/skills/mortgage-ops/modes/_profile.md"
+    result = subprocess.run(
+        [sys.executable, str(hook), target],
+        cwd=str(repo_root),
+        capture_output=True, text=True, timeout=10,
+    )
+    assert result.returncode == 1, (
+        f"DATA_CONTRACT violation: hook should reject {target!r} with exit 1; "
+        f"got {result.returncode}. stdout: {result.stdout[:500]} stderr: {result.stderr[:500]}"
+    )
+    # Hook MUST name the offending file in stderr
+    assert "_profile.md" in result.stderr, (
+        f"hook stderr should name the offending file; got: {result.stderr[:500]}"
+    )
 
-        # PART B — force-stage so the hook sees it.
-        add = subprocess.run(
-            ["git", "add", "-f", str(target.relative_to(repo_root))],
-            cwd=str(repo_root),
-            capture_output=True, text=True, timeout=10,
-        )
-        assert add.returncode == 0, f"git add -f failed: {add.stderr}"
-        staged = True
-
-        # PART C — run the hook; MUST exit non-zero.
-        result = subprocess.run(
-            [sys.executable, str(hook)],
-            cwd=str(repo_root),
-            capture_output=True, text=True, timeout=10,
-        )
-        assert result.returncode != 0, (
-            "DATA_CONTRACT violation: hook should reject staged _profile.md "
-            f"but exited 0. stdout: {result.stdout[:500]} stderr: {result.stderr[:500]}"
-        )
-        # Optional: assert error message names the offending file
-        combined = (result.stdout + result.stderr).lower()
-        assert "_profile.md" in combined or "user layer" in combined, (
-            "hook rejected non-zero but error message should name the file or User Layer concept"
-        )
-    finally:
-        # ALWAYS clean up (try/finally so failure mid-test doesn't leak state).
-        if staged:
-            subprocess.run(
-                ["git", "restore", "--staged", str(target.relative_to(repo_root))],
-                cwd=str(repo_root), capture_output=True, text=True,
-            )
-        if created_file and target.exists():
-            target.unlink()
+    # Sanity: the hook should also accept a clean staging (positive control —
+    # confirms the hook is not just always rejecting everything)
+    clean_result = subprocess.run(
+        [sys.executable, str(hook), "lib/money.py", "pyproject.toml"],
+        cwd=str(repo_root),
+        capture_output=True, text=True, timeout=10,
+    )
+    assert clean_result.returncode == 0, (
+        f"hook false-rejected clean staging; got exit {clean_result.returncode}"
+    )
 ```
 
 **BONUS 4 — D-SUBA-FW-02 existence-check seam in modes/stress.md** (REVISED per codex HIGH concern 4):
@@ -852,9 +927,10 @@ EOF
 - `pytest -q` shows ≤ 1 xfailed total (Phase 5 ARM cross-source agreement xfail OUTSIDE Phase 10 scope is acceptable)
 - `pytest -q` shows 0 failed, 0 errored
 - mypy + ruff clean
+- `ruff check tests/test_skill.py` returns 0 errors (Round-2 codex HIGH 5: deferred imports re-added at module level via Task 1 STEP 0 import-housekeeping)
 - Commit exists; subject mentions "phase 10/wave 5"
 - Commit body has NO AI attribution (CLAUDE.md global rule)
-- ALL 12 SKLL-XX requirements claimed in this plan closed: SKLL-01, 02, 03, 04, 05, 06, 07, 08, 09, 11, 12, 13. (SKLL-10 closed in Wave 1.)
+- ALL 12 SKLL-XX requirements claimed in this plan closed: SKLL-01, 02, 03, 04, 05, 06, 07, 08, 09, 11, 12, 13. (SKLL-10 closed in Wave 1.) SKLL-12 closure covers all 7 relocated calc scripts in Wave 5 per Round-2 codex MEDIUM 6.
   </acceptance_criteria>
   <done>
     All Phase 10 CI assertions wired; only SKLL-13 remains xfail; commit landed without AI attribution.

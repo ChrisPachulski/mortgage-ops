@@ -42,6 +42,7 @@ must_haves:
     - "SKILL.md contains the ALWAYS-shell-out doctrine substring (SKLL-11 + UI-SPEC §g) and the 'run --help first' doctrine substring (SKLL-12 + webapp-testing exemplar)"
     - "SKILL.md contains the topic→reference progressive-disclosure table (SKLL-09 + D-09 + UI-SPEC §d)"
     - "SKILL.md contains a `## Subagents (Phase 11)` section naming all THREE Phase 11 subagent filenames (`amortization-agent`, `refi-npv-agent`, `stress-test-agent`) per LOCKED DECISION D-SUBA-FW-01 — forward-link only, no delegation instruction"
+    - "SKILL.md routing precedence rule 5 (`stress / sweep`) MUST NOT contain dispatch-to-subagent text (Round-2 codex MEDIUM 8: prior draft contradicted the Subagents-section forward-link doctrine). The existence-check seam lives ONLY in `modes/stress.md` per D-SUBA-FW-02."
   artifacts:
     - path: ".claude/skills/mortgage-ops/SKILL.md"
       provides: "Skill-router entrypoint: frontmatter + routing skeleton + math-discipline doctrine + script invocation doctrine + progressive-disclosure rules + Subagents (Phase 11) forward-link section + discovery menu"
@@ -133,7 +134,7 @@ UI-SPEC §a Routing UX — ambiguous-case disambiguation rules (paste verbatim):
 > 2. "refinance" / "refi" verb      → refinance (overrides arm/amortize/stress vocabulary)
 > 3. "afford" / "borrow" verb       → affordability (overrides amortize)
 > 4. "compare" / multi-offer        → compare (overrides evaluate)
-> 5. "stress" / "sweep" + range     → stress (dispatches to subagent if N>5)
+> 5. "stress" / "sweep" + range     → stress
 > 6. "ARM" / "X/Y" + no refi verb   → arm
 > 7. "amortization" / "schedule"    → amortize
 > 8. Single offer + judgment verb   → evaluate
@@ -288,7 +289,7 @@ Precedence (top wins; UI-SPEC §a):
 2. "refinance" / "refi" verb      → `refinance` (overrides arm/amortize/stress vocabulary)
 3. "afford" / "borrow" verb       → `affordability` (overrides amortize)
 4. "compare" / multi-offer        → `compare` (overrides evaluate)
-5. "stress" / "sweep" + range     → `stress` (dispatches to subagent if N>5 — Phase 11 SUBA-05)
+5. "stress" / "sweep" + range     → `stress`
 6. "ARM" / "X/Y" + no refi verb   → `arm`
 7. "amortization" / "schedule"    → `amortize`
 8. Single offer + judgment verb   → `evaluate`
@@ -514,6 +515,8 @@ CRITICAL CONSTRAINTS:
 DO NOT include FRED MCP `!` shell injection (Phase 12 LIVE-02 ships that).
 DO NOT include runtime subagent dispatch logic (Phase 11 SUBA-05 wires actual delegation). DO include the `## Subagents (Phase 11)` forward-link section below per D-SUBA-FW-01 — naming the three agents is a forward-link only, NOT a delegation instruction.
 
+Round-2 codex MEDIUM 8: SKILL.md MUST NOT carry routing-to-subagent text in the routing precedence list. The earlier draft of precedence rule 5 read "stress (dispatches to subagent if N>5)" — that contradicts the Subagents-section forward-link doctrine, since SKILL.md would then both (a) instruct dispatch AND (b) say "Phase 10 ships ONLY the forward-link". The fix is to strip the parenthetical from rule 5 (no dispatch wording in SKILL.md) and keep the existence-check seam ONLY in `modes/stress.md` per D-SUBA-FW-02.
+
 LINES 271-300 (between Estimated APR and Discovery Menu): MANDATORY `## Subagents (Phase 11)` section per LOCKED DECISION D-SUBA-FW-01. One paragraph naming all three Phase 11 subagent filenames. The section ships in Phase 10 SKILL.md but the agent files themselves do NOT exist until Phase 11 — this section is a forward-link, not an instruction to delegate.
 
 ```markdown
@@ -550,6 +553,7 @@ The section MUST contain ALL THREE filenames as bare tokens (`amortization-agent
 - File contains the discovery menu code fence
 - File contains literal heading `## Subagents (Phase 11)` (D-SUBA-FW-01)
 - File contains all THREE subagent filenames: `amortization-agent`, `refi-npv-agent`, `stress-test-agent` (D-SUBA-FW-01)
+- File does NOT contain the substring "dispatches to subagent" (Round-2 codex MEDIUM 8: SKILL.md must not carry runtime dispatch text; the existence-check seam lives in `modes/stress.md` only)
   </acceptance_criteria>
   <done>
     SKILL.md exists, parses, fits all budgets, contains all load-bearing doctrines and the routing skeleton.
@@ -578,6 +582,7 @@ The section MUST contain ALL THREE filenames as bare tokens (`amortization-agent
 | T-10-15 | Tampering (doctrine substring drift) | SKLL-11 + SKLL-12 substrings | mitigate | Task 2 acceptance grep-asserts the literal substrings; Wave 5 wires the same assertion in CI so future SKILL.md edits cannot silently drop the doctrine |
 | T-10-16 | Spoofing (license claim mismatch) | LICENSE.txt + frontmatter | accept | LICENSE.txt is the source of truth; frontmatter `license:` field is human-readable summary. Both reference MIT consistently |
 | T-10-38 | Tampering (subagent forward-link drift) | `## Subagents (Phase 11)` section | mitigate | Task 2 acceptance grep-asserts heading + all 3 filenames; Wave 5 (10-05) wires the same assertion in CI; if SKILL.md edits silently drop a name, the test fails |
+| T-10-51 | Tampering (SKILL.md self-contradiction: dispatch text in routing precedence vs. forward-link section saying "no delegation") | routing precedence rule 5 | mitigate | Task 2 acceptance grep-blocks the substring "dispatches to subagent" in SKILL.md; existence-check seam stays in modes/stress.md only (Round-2 codex MEDIUM 8) |
 </threat_model>
 
 <verification>

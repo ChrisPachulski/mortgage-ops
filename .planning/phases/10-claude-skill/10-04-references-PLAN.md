@@ -390,11 +390,14 @@ Loaded on demand from SKILL.md per the topic→reference table.
 
 Source: IRS Publication 936 §"Limits on Home Mortgage Interest Deduction".
 
-## Worksheet Logic (RUL-11)
+## Qualified-Loan-Limit Logic (RUL-11)
 
-`lib.rules.irs_pub936.qualified_loan_limit_worksheet(...)` implements the
-Pub 936 worksheet. Inputs: total acquisition indebtedness, year-of-origination
-flag (post-2017 vs grandfathered). Output: deductible interest cap.
+`lib.rules.irs_pub936.qualified_loan_limit(...)` implements the Pub 936
+qualified-loan-limit predicate (function name verified against
+`lib/rules/irs_pub936.py` source — Round-2 codex LOW 12 caught a draft
+that referenced a non-existent `..._worksheet(...)` symbol). Inputs:
+total acquisition indebtedness, year-of-origination flag (post-2017 vs
+grandfathered). Output: deductible interest cap.
 
 ## Points Deductibility (Pub 936)
 
@@ -427,17 +430,17 @@ authored that doc as the source-of-truth for refi NPV conventions).
 - `lib/refinance.py` + `.claude/skills/mortgage-ops/scripts/refi_npv.py` (Phase 6 SHIPPED; relocated by Plan 10-01)
 - `.claude/skills/mortgage-ops/references/refi-npv.md` (Phase 6 reference, byte-lifted by Plan 10-04 Task 2)
 
-**Last reviewed:** 2026-05-02
+**Last reviewed:** 2026-05-08
 ```
   </action>
   <verify>
-    <automated>cd /Users/cujo253/Documents/mortgage-ops &amp;&amp; test -f .claude/skills/mortgage-ops/references/tax-deductibility.md &amp;&amp; grep -q '750,000\|750000\|\$750k' .claude/skills/mortgage-ops/references/tax-deductibility.md &amp;&amp; grep -q 'Phase 6' .claude/skills/mortgage-ops/references/tax-deductibility.md &amp;&amp; grep -q 'D-08\|after.tax' .claude/skills/mortgage-ops/references/tax-deductibility.md</automated>
+    <automated>cd /Users/cujo253/Documents/mortgage-ops &amp;&amp; test -f .claude/skills/mortgage-ops/references/tax-deductibility.md &amp;&amp; grep -q '750,000\|750000\|\$750k' .claude/skills/mortgage-ops/references/tax-deductibility.md &amp;&amp; grep -q 'Phase 6' .claude/skills/mortgage-ops/references/tax-deductibility.md &amp;&amp; grep -q 'D-08\|after.tax' .claude/skills/mortgage-ops/references/tax-deductibility.md &amp;&amp; grep -q 'qualified_loan_limit(' .claude/skills/mortgage-ops/references/tax-deductibility.md &amp;&amp; ! grep -q 'qualified_loan_limit_worksheet' .claude/skills/mortgage-ops/references/tax-deductibility.md</automated>
   </verify>
   <acceptance_criteria>
 - File exists at `.claude/skills/mortgage-ops/references/tax-deductibility.md`
 - Contains "$750,000" or "750000" or "$750k" (Pub 936 cap)
 - Contains "after-tax" or "after tax" (mode reference)
-- Contains "Last reviewed: 2026-05-02"
+- Contains "Last reviewed: 2026-05-08" (Round-2 codex LOW 12: date refreshed to today; alternatively CI may assert presence of any "Last reviewed: YYYY-MM-DD" line without pinning the value)
 - File ≥ 40 lines
 - Cross-references `references/refi-npv.md` (Phase 6 source-of-truth for refi NPV doctrine)
   </acceptance_criteria>

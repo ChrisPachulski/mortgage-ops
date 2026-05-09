@@ -10,6 +10,7 @@ files_modified:
   - tests/_skill_helpers.py
   - tests/fixtures/skill/.gitkeep
   - pyproject.toml
+  - uv.lock
 autonomous: true
 requirements:
   - SKLL-01
@@ -36,10 +37,11 @@ must_haves:
     - "Every Phase 10 requirement (SKLL-01..13) has at least one xfail-decorated stub function — including SKLL-13 per D-13-01..05 (Phase 10 closes SKLL-13; NOT deferred)"
     - "Stubbed file runs (`pytest tests/test_skill.py -v`) without ImportError; xfail tests show as XFAIL not ERROR"
     - "tests/_skill_helpers.py exposes count_tokens(text) helper using tiktoken cl100k_base (D-02), reusable by Phase 11/12"
-    - "tests/conftest.py exposes skill_root pytest fixture returning Path(.claude/skills/mortgage-ops)"
-    - "pyproject.toml [dependency-groups].dev includes tiktoken>=0.7,<1.0 (D-02 enforcement dep)"
+    - "tests/conftest.py exposes skill_root pytest fixture returning Path(.claude/skills/mortgage-ops) AND a repo_root pytest fixture returning the repo root via Path(__file__).resolve().parents[1] (Round-2 codex HIGH 1: tests must use parents[2] of skill_root, not parent.parent.parent.parent)"
+    - "pyproject.toml [dependency-groups].dev includes tiktoken>=0.7,<1.0 (D-02 enforcement dep) AND preserves the existing pytest-timeout>=2.3 entry (Round-2 codex MEDIUM 10: do not drop unrelated dev deps)"
+    - "uv.lock is updated by `uv sync --quiet` and committed alongside pyproject.toml (Round-2 codex MEDIUM 10: lock-file drift in same commit)"
     - "Phase 10 test scaffold is additive: introduces no behavior change to Phase 1..5 production code or existing tests; only adds new xfail-decorated stubs that downstream waves flip"
-    - "tests/test_skill.py passes `ruff check` (no F401 unused-import) at Wave 0 commit time — imports needed only by Wave 5 assertions are deferred into the test bodies that use them"
+    - "tests/test_skill.py passes `ruff check` (no F401 unused-import) at Wave 0 commit time — imports needed only by Wave 5 assertions are deferred into the test bodies that use them; Wave 5 Plan 10-05 explicitly re-adds them at module level via an import-housekeeping step"
   artifacts:
     - path: "tests/test_skill.py"
       provides: "≥ 15 xfail stubs covering SKLL-01..SKLL-13 (including 2 new SKLL-13 stubs per D-13-05) + cross-cutting envelope/help-doctrine tests"
@@ -49,13 +51,15 @@ must_haves:
       provides: "Shared tiktoken cl100k_base token-counting helper for Phase 10/11/12 (per RESEARCH §i + D-02)"
       contains: "def count_tokens"
     - path: "tests/conftest.py"
-      provides: "skill_root fixture returning Path(.claude/skills/mortgage-ops) for cross-test reuse"
+      provides: "skill_root + repo_root fixtures for cross-test reuse (skill_root = Path(.claude/skills/mortgage-ops); repo_root = Path(__file__).resolve().parents[1])"
       contains: "def skill_root"
     - path: "tests/fixtures/skill/.gitkeep"
       provides: "Empty placeholder so future skill fixtures (e.g. invocation captures) commit cleanly"
     - path: "pyproject.toml"
-      provides: "tiktoken>=0.7,<1.0 added to [dependency-groups].dev for SKLL-01 enforcement"
+      provides: "tiktoken>=0.7,<1.0 added to [dependency-groups].dev for SKLL-01 enforcement; pytest-timeout>=2.3 + every other existing dev dep preserved verbatim"
       contains: "tiktoken"
+    - path: "uv.lock"
+      provides: "Lock file refreshed by `uv sync --quiet` after pyproject.toml dev-dep add (Round-2 codex MEDIUM 10)"
   key_links:
     - from: "tests/test_skill.py"
       to: "tests/_skill_helpers.py"
@@ -63,8 +67,8 @@ must_haves:
       pattern: "from tests._skill_helpers import"
     - from: "tests/test_skill.py"
       to: "tests/conftest.py"
-      via: "skill_root fixture parametric injection"
-      pattern: "def test_.*\\(.*skill_root"
+      via: "skill_root + repo_root fixture parametric injection"
+      pattern: "def test_.*\\(.*(skill_root|repo_root)"
     - from: "Wave 1..5 plans"
       to: "tests/test_skill.py xfail decorators"
       via: "incremental flip from xfail → pass as relocation/scaffold/modes/refs/CI tests land"
@@ -72,11 +76,11 @@ must_haves:
 ---
 
 <objective>
-Establish the Phase 10 test scaffolding that subsequent waves flip xfail→pass against. Ship the `skill_root` pytest fixture, the `tests/_skill_helpers.py` tiktoken token-counting helper (per LOCKED DECISION D-02), ≥ 15 xfail-decorated stub tests covering every SKLL-01..13 requirement (including 2 new SKLL-13 stubs per D-13-05 — Phase 10 closes SKLL-13, NOT deferred to Phase 9), the empty `tests/fixtures/skill/` directory, and the `tiktoken>=0.7,<1.0` dev-dep addition to `pyproject.toml`.
+Establish the Phase 10 test scaffolding that subsequent waves flip xfail→pass against. Ship the `skill_root` + `repo_root` pytest fixtures, the `tests/_skill_helpers.py` tiktoken token-counting helper (per LOCKED DECISION D-02), ≥ 15 xfail-decorated stub tests covering every SKLL-01..13 requirement (including 2 new SKLL-13 stubs per D-13-05 — Phase 10 closes SKLL-13, NOT deferred to Phase 9), the empty `tests/fixtures/skill/` directory, and the `tiktoken>=0.7,<1.0` dev-dep addition to `pyproject.toml` (preserving every existing dev dep verbatim — `pytest-timeout>=2.3` etc.).
 
 Purpose: Nyquist validation gate. Every requirement-closing wave (Plans 10-01 through 10-05) flips a specific xfail to a real assertion. Without Wave 0, downstream plans have no test landing pads — they would either ship code with no test or invent test names ad-hoc.
 
-Output: A test file that COLLECTS but xfails everything; a `_skill_helpers.py` shared harness for Phase 10/11/12 reuse; a conftest.py extension; one empty fixture directory; one pyproject.toml dev-dep addition. Zero skill content, zero scripts moved.
+Output: A test file that COLLECTS but xfails everything; a `_skill_helpers.py` shared harness for Phase 10/11/12 reuse; a conftest.py extension exposing two fixtures (skill_root + repo_root); one empty fixture directory; one pyproject.toml dev-dep addition (alphabetized, preserving pytest-timeout); one uv.lock refresh. Zero skill content, zero scripts moved.
 </objective>
 
 <execution_context>
@@ -97,52 +101,63 @@ Output: A test file that COLLECTS but xfails everything; a `_skill_helpers.py` s
 @tests/conftest.py
 @tests/test_arm.py
 @pyproject.toml
+@uv.lock
 
 <interfaces>
 LOCKED DECISIONS (from 10-RESEARCH §"Locked Decisions D-01..D-12" + 10-CONTEXT.md D-13-01..05):
 - D-01 = MOVE relocation (deferred to Wave 1)
 - D-02 = tiktoken cl100k_base @ ≤ 4500 tokens with documented 10% Anthropic-tokenizer margin (THIS WAVE creates the helper; Wave 5 wires the assertion)
 - D-03..D-12 = SKILL.md frontmatter / LICENSE / cross-phase contract / progressive disclosure rules (downstream waves)
-- **D-13-01..D-13-05 (10-CONTEXT.md): Phase 10 CLOSES SKLL-13.** modes/_shared.md adds a "Save Report" step that writes `reports/{NNN:03d}-{mode}-{YYYY-MM-DD}.md` then calls `node orchestration/db-write.mjs --insert-report --json {meta}`. Wave 0 ships TWO new SKLL-13 stubs (D-13-05); Wave 5 flips them.
+- **D-13-01..D-13-05 (10-CONTEXT.md): Phase 10 CLOSES SKLL-13.** modes/_shared.md adds a "Save Report" step that writes `reports/{NNN:03d}-{mode}-{YYYY-MM-DD}.md` then calls `node orchestration/db-write.mjs insert-report --scenario-id <id> --file <path>` (the REAL Phase 9 CLI surface — see `orchestration/db-write.mjs` lines 296-310 usage block). Wave 0 ships TWO new SKLL-13 stubs (D-13-05); Wave 5 flips them.
+
+**Round-2 codex HIGH 2 — db-write.mjs CLI surface (verify by reading `orchestration/db-write.mjs:296-310`):**
+- `node orchestration/db-write.mjs insert-report --scenario-id <int> --file <path>` ✓ (real subcommand)
+- `node orchestration/db-write.mjs query --sql "SELECT ..."` ✓ (real subcommand)
+- `node orchestration/db-write.mjs --insert-report --json '{...}'` ✗ (NOT a real flag; do not generate stubs whose Wave 5 flip targets this string)
+- `reports` table schema (orchestration/init-db.mjs lines 76-82): `(id PK, scenario_id NOT NULL, markdown_blob TEXT NOT NULL, generated_at TIMESTAMP)`. NO `filename` column. The file on disk IS the durable filename anchor; persistence stores `(scenario_id, markdown_blob)`.
 
 Phase 5 Plan 05-00 xfail-stub pattern (lift verbatim shape) — every stub uses
 `@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 10-XX implements ...")`
 plus body `pytest.fail("Wave 0 stub")`. The strict flag means an accidentally-passing stub raises XPASS → CI fail → forces the wave that fixes it to also remove the decorator.
 
-Existing tests/conftest.py exposes 4 fixtures (golden_fixture, amortize_fixture, affordability_fixture, arm_fixture) — all callable-loaders. The skill_root fixture appended in this plan returns a Path CONSTANT (not a callable), because callers want a path not a per-test loader.
+Existing tests/conftest.py exposes 4 fixtures (golden_fixture, amortize_fixture, affordability_fixture, arm_fixture) — all callable-loaders. The skill_root + repo_root fixtures appended in this plan return Path CONSTANTS (not callables), because callers want a path not a per-test loader.
 
-**Ruff F401 hygiene:** Wave 0 ships ONLY xfail stubs whose bodies are `pytest.fail("Wave 0 stub")`. Top-of-file imports (`re`, `subprocess`, `sys`, `yaml`, `count_tokens`) are not used by any stub body, so `ruff check` flags them as F401 unused-import. To keep `ruff check` green at Wave 0 commit, ALL such imports MUST be deferred — placed inside the eventual flipped-test bodies in Wave 5, NOT at module level. Module-level imports at Wave 0 are limited to `pytest` and `from __future__ import annotations` (used by xfail decorator + type hints) and `from pathlib import Path` (used in test signatures `skill_root: Path`).
+**Path arithmetic note (Round-2 codex HIGH 1):** repo_root = `Path(__file__).resolve().parents[1]` from inside `tests/conftest.py` (1 level up — `tests/` → repo root). Equivalent for `skill_root` callers: `skill_root.parents[2]` because `.claude/skills/mortgage-ops/.parents[0]==.claude/skills`, `.parents[1]==.claude`, `.parents[2]==repo_root`. The literal `skill_root.parent.parent.parent.parent` (4 chained `.parent` calls) goes ONE TOO FAR and resolves above the repo root. Wave 5 + Wave 6 plans MUST use either the `repo_root` fixture or `skill_root.parents[2]`.
+
+**Ruff F401 hygiene:** Wave 0 ships ONLY xfail stubs whose bodies are `pytest.fail("Wave 0 stub")`. Top-of-file imports (`re`, `subprocess`, `sys`, `yaml`, `count_tokens`) are not used by any stub body, so `ruff check` flags them as F401 unused-import. To keep `ruff check` green at Wave 0 commit, ALL such imports MUST be deferred — placed inside the eventual flipped-test bodies in Wave 5, NOT at module level. Module-level imports at Wave 0 are limited to `pytest` and `from __future__ import annotations` (used by xfail decorator + type hints) and `from pathlib import Path` (used in test signatures `skill_root: Path`). Plan 10-05 ships an explicit "import housekeeping" step that re-adds these at module level when the assertions consume them (Round-2 codex HIGH 5).
 </interfaces>
 </context>
 
 <tasks>
 
 <task type="auto">
-  <name>Task 1: Add tiktoken>=0.7,<1.0 to pyproject.toml [dependency-groups].dev (D-02 dep gate)</name>
-  <files>pyproject.toml</files>
+  <name>Task 1: Add tiktoken>=0.7,<1.0 to pyproject.toml [dependency-groups].dev (D-02 dep gate; preserve every existing dev dep)</name>
+  <files>pyproject.toml, uv.lock</files>
   <read_first>
-    pyproject.toml lines 13-19 (existing [dependency-groups].dev block);
+    pyproject.toml current `[dependency-groups]` block (read the file BEFORE editing — codex MEDIUM 10 mandates using the actual current contents as the baseline);
     10-RESEARCH §(i) D-02 — pin rationale (tiktoken 0.7+ latest at research time)
   </read_first>
   <action>
-Edit `pyproject.toml`. In the existing `[dependency-groups]` block (lines 13-19), append `"tiktoken>=0.7,<1.0",` to the `dev` list, alphabetized.
+Edit `pyproject.toml`. **Read the current `[dependency-groups]` block first** — codex Round-2 MEDIUM 10 caught a draft that dropped `pytest-timeout>=2.3`. The actual current block (verify by reading) contains:
 
-Current list (lines 14-19):
 ```
 dev = [
     "pytest>=9.0",
+    "pytest-timeout>=2.3",
     "mypy>=1.20",
     "ruff>=0.15",
     "pre-commit>=4.6",
 ]
 ```
 
-After edit (alphabetized):
+After edit (alphabetized; only ADD `"tiktoken>=0.7,<1.0",`; preserve every other entry verbatim):
+
 ```
 dev = [
     "mypy>=1.20",
     "pre-commit>=4.6",
     "pytest>=9.0",
+    "pytest-timeout>=2.3",
     "ruff>=0.15",
     "tiktoken>=0.7,<1.0",
 ]
@@ -150,20 +165,25 @@ dev = [
 
 DO NOT touch any other section of pyproject.toml. The ruff `src` and mypy `files` lines are EXPRESSLY DEFERRED to Plan 10-01 (Wave 1) per LOCKED DECISION D-01; editing them here would create a sync gap with the actual file moves.
 
-After the edit, run `uv sync --quiet` so `uv.lock` updates and tiktoken becomes importable.
+DO NOT drop `pytest-timeout>=2.3` or any other entry currently in `dev`. Round-2 codex MEDIUM 10: the dev-deps list is the source of truth — read it, add tiktoken to it, write it back. Do not regenerate from a draft.
+
+After the edit, run `uv sync --quiet` so `uv.lock` updates and tiktoken becomes importable. The `uv.lock` change MUST land in the same commit (it's listed in `files_modified`).
   </action>
   <verify>
-    <automated>cd /Users/cujo253/Documents/mortgage-ops &amp;&amp; grep -q 'tiktoken' pyproject.toml &amp;&amp; uv sync --quiet &amp;&amp; python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')"</automated>
+    <automated>cd /Users/cujo253/Documents/mortgage-ops &amp;&amp; grep -q 'tiktoken' pyproject.toml &amp;&amp; grep -q 'pytest-timeout' pyproject.toml &amp;&amp; uv sync --quiet &amp;&amp; python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')"</automated>
   </verify>
   <acceptance_criteria>
 - `grep -c 'tiktoken' pyproject.toml` returns ≥ 1
+- `grep -c 'pytest-timeout' pyproject.toml` returns ≥ 1 (Round-2 codex MEDIUM 10: NOT dropped)
+- `grep -c 'pre-commit' pyproject.toml` returns ≥ 1
 - `grep -c 'src = ' pyproject.toml` returns 1 (UNCHANGED at this wave)
 - `grep -c 'files = ' pyproject.toml` returns ≥ 1 (UNCHANGED at this wave)
 - `python -c "import tiktoken; tiktoken.get_encoding('cl100k_base')"` exits 0
 - `uv.lock` mtime newer than before (or `uv sync` ran successfully)
+- `uv.lock` is staged for commit alongside pyproject.toml
   </acceptance_criteria>
   <done>
-    tiktoken is importable; pyproject.toml has the new dev-dep; no other pyproject sections touched.
+    tiktoken is importable; pyproject.toml has the new dev-dep; every existing dev dep (pytest, pytest-timeout, mypy, ruff, pre-commit) preserved; uv.lock refreshed and ready to commit; no other pyproject sections touched.
   </done>
 </task>
 
@@ -260,14 +280,15 @@ DO NOT write a test file for this helper — Task 3 covers it indirectly via tes
 </task>
 
 <task type="auto">
-  <name>Task 3: Extend tests/conftest.py with skill_root fixture + create tests/fixtures/skill/.gitkeep</name>
+  <name>Task 3: Extend tests/conftest.py with skill_root + repo_root fixtures + create tests/fixtures/skill/.gitkeep</name>
   <files>tests/conftest.py, tests/fixtures/skill/.gitkeep</files>
   <read_first>
     tests/conftest.py (full file) — existing fixture shape;
-    10-RESEARCH §"Wave 0 Gaps" — `skill_root` returns a Path constant (not a callable)
+    10-RESEARCH §"Wave 0 Gaps" — `skill_root` returns a Path constant (not a callable);
+    Round-2 codex HIGH 1 — Wave 5/6 tests must NOT use `skill_root.parent.parent.parent.parent` (4 levels up overshoots repo root). Add a `repo_root` fixture so callers have a single source of truth.
   </read_first>
   <action>
-PART A — Append to `tests/conftest.py` after the last existing fixture. The skill_root fixture differs from the *_fixture pattern: returns a Path CONSTANT (not a callable).
+PART A — Append to `tests/conftest.py` after the last existing fixture. Both new fixtures return Path CONSTANTS (not callables).
 
 Append exactly this block at end of file:
 
@@ -288,6 +309,24 @@ def skill_root() -> Path:
     .claude/skills/mortgage-ops/ (project-relative).
     """
     return Path(__file__).resolve().parent.parent / ".claude" / "skills" / "mortgage-ops"
+
+
+@pytest.fixture
+def repo_root() -> Path:
+    """Return the absolute path to the repo root for cross-test reuse.
+
+    Round-2 codex HIGH 1: prior Wave 5/6 drafts used
+    `skill_root.parent.parent.parent.parent` (four chained .parent calls)
+    to derive the repo root. That goes one level too high — `.claude/skills/
+    mortgage-ops` is only THREE levels deep (mortgage-ops → skills → .claude
+    → repo root). The correct equivalents are `skill_root.parents[2]` or
+    this `repo_root` fixture. Wave 5/6 tests MUST use one of these two
+    forms.
+
+    Implementation: `Path(__file__).resolve().parents[1]` (conftest.py lives
+    in tests/, so parents[0] = tests/, parents[1] = repo root).
+    """
+    return Path(__file__).resolve().parents[1]
 ```
 
 DO NOT modify any existing fixture (golden_fixture, amortize_fixture, affordability_fixture, arm_fixture).
@@ -295,20 +334,23 @@ DO NOT modify any existing fixture (golden_fixture, amortize_fixture, affordabil
 PART B — Create `tests/fixtures/skill/.gitkeep` as an empty (zero-byte) file. Phase 10 doesn't ship invocation-capture fixtures yet; Phase 11/12 will. Committing the directory now establishes the seam.
   </action>
   <verify>
-    <automated>cd /Users/cujo253/Documents/mortgage-ops &amp;&amp; python -c "import pytest; from tests import conftest; print('skill_root' in dir(conftest))" &amp;&amp; test -f tests/fixtures/skill/.gitkeep &amp;&amp; test ! -s tests/fixtures/skill/.gitkeep</automated>
+    <automated>cd /Users/cujo253/Documents/mortgage-ops &amp;&amp; python -c "from tests import conftest; assert 'skill_root' in dir(conftest); assert 'repo_root' in dir(conftest); print('OK')" &amp;&amp; test -f tests/fixtures/skill/.gitkeep &amp;&amp; test ! -s tests/fixtures/skill/.gitkeep</automated>
   </verify>
   <acceptance_criteria>
 - `grep -c 'def skill_root' tests/conftest.py` returns 1
+- `grep -c 'def repo_root' tests/conftest.py` returns 1 (Round-2 codex HIGH 1: new fixture lands in Wave 0 so Wave 5/6 can consume it)
 - `grep -c 'def golden_fixture' tests/conftest.py` returns 1 (UNCHANGED)
 - `grep -c 'def amortize_fixture' tests/conftest.py` returns 1 (UNCHANGED)
 - `grep -c 'def affordability_fixture' tests/conftest.py` returns 1 (UNCHANGED)
 - `grep -c 'def arm_fixture' tests/conftest.py` returns 1 (UNCHANGED)
+- `grep -c 'parents\[1\]' tests/conftest.py` returns ≥ 1 (the repo_root fixture body)
 - `test -f tests/fixtures/skill/.gitkeep` exits 0
 - `wc -c tests/fixtures/skill/.gitkeep` returns 0
 - `pytest tests/test_amortize.py tests/test_affordability.py tests/test_arm.py --collect-only -q` exits 0
+- Sanity assertion: `python -c "from pathlib import Path; r=Path('tests/conftest.py').resolve().parents[1]; assert (r / 'pyproject.toml').is_file()"` exits 0 — proves `parents[1]` actually resolves to the repo root (sanity check for the fixture's path arithmetic)
   </acceptance_criteria>
   <done>
-    skill_root fixture is importable; existing fixtures unchanged; existing test collection still succeeds; .gitkeep committed.
+    skill_root + repo_root fixtures importable; existing fixtures unchanged; existing test collection still succeeds; .gitkeep committed; repo_root path arithmetic validated against pyproject.toml presence.
   </done>
 </task>
 
@@ -319,7 +361,8 @@ PART B — Create `tests/fixtures/skill/.gitkeep` as an empty (zero-byte) file. 
     tests/test_arm.py (full file, ~545 lines) — verbatim shape of xfail-stub module from Phase 5 Plan 05-00;
     10-PATTERNS.md `tests/test_skill_structure.py` section — full sketch of SKLL-01..13 test names and bodies;
     10-RESEARCH §"Phase Requirements → Test Map" — 1:1 SKLL-XX → test name mapping;
-    10-CONTEXT.md D-13-01..05 — Phase 10 CLOSES SKLL-13 with auto-write reports + DuckDB ingest; D-13-05 mandates ≥ 2 new SKLL-13 stubs (filename format + DB persistence)
+    10-CONTEXT.md D-13-01..05 — Phase 10 CLOSES SKLL-13 with auto-write reports + DuckDB ingest; D-13-05 mandates ≥ 2 new SKLL-13 stubs (filename format + DB persistence);
+    orchestration/db-write.mjs lines 296-310 — REAL CLI surface (`insert-report --scenario-id <int> --file <path>` and `query --sql "..."`); Wave 5 flips MUST target these flags, NOT the fictional `--insert-report --json`.
   </read_first>
   <action>
 Create `tests/test_skill.py` as a brand-new file. The file holds ≥ 15 xfail-decorated stub tests + a module header. NO test asserts anything except `pytest.fail("Wave 0 stub")` (the xfail marker absorbs the failure into XFAIL state).
@@ -328,7 +371,7 @@ Create `tests/test_skill.py` as a brand-new file. The file holds ≥ 15 xfail-de
   (a) **Preferred:** OMIT these imports from Wave 0; Wave 5 plan re-adds them at module level when bodies actually use them. Wave 0 module-level imports limited to: `from __future__ import annotations`, `from pathlib import Path` (used in test signatures), `import pytest` (used by xfail decorators).
   (b) **Fallback:** Add `# noqa: F401` to each currently-unused import. Less clean but acceptable.
 
-Use APPROACH (a). Wave 5 plans (Plan 10-05 + Plan 10-06) explicitly re-add `import re`, `import subprocess`, `import sys`, `import yaml`, `from tests._skill_helpers import count_tokens` when the assertions that use them are wired in.
+Use APPROACH (a). Wave 5 plan (Plan 10-05) ships an explicit "import housekeeping" step (Round-2 codex HIGH 5) that re-adds `import re`, `import subprocess`, `import sys`, `import yaml`, `from tests._skill_helpers import count_tokens` at module level when the assertions that use them are wired in.
 
 File structure (lift the docstring + import + xfail-decorator pattern verbatim from `tests/test_arm.py:1-65`):
 
@@ -356,7 +399,9 @@ present.
 Per CONTEXT.md D-13-01..D-13-05: Phase 10 CLOSES SKLL-13 (NOT deferred to
 Phase 9). Two new stubs ship in Wave 0 and flip in Wave 5: filename-format
 test (reports/{NNN:03d}-{mode}-{YYYY-MM-DD}.md per D-13-02) and DuckDB-row
-persistence test (per D-13-04 — `node orchestration/db-write.mjs --insert-report`).
+persistence test (per D-13-04 — `node orchestration/db-write.mjs insert-report
+--scenario-id <int> --file <path>`, the REAL Phase 9 CLI from
+`orchestration/db-write.mjs` usage block lines 296-310).
 
 Each xfail decorator carries `strict=True` so a passing test in xfail state
 raises XPASS at collection time — the wave that flips it MUST also remove
@@ -366,7 +411,8 @@ the decorator. This prevents accidental "fixed but still marked xfail" drift
 Note: imports for `re`, `subprocess`, `sys`, `yaml`, `count_tokens` are NOT
 included at module level in Wave 0 — they would trigger ruff F401
 (unused-import) since stub bodies use only `pytest.fail`. Wave 5 (Plan 10-05)
-adds these imports at module level when the flipped assertions consume them.
+adds these imports at module level when the flipped assertions consume them
+(via an explicit "import housekeeping" step per Round-2 codex HIGH 5).
 """
 
 from __future__ import annotations
@@ -528,7 +574,7 @@ def test_skill_md_shell_out_doctrine(skill_root: Path) -> None:
 
 @pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 10-02 ships --help-first doctrine; Plan 10-05 wires assertion")
 def test_each_script_has_help_and_doctrine_documented(skill_root: Path) -> None:
-    """SKLL-12 + ROADMAP SC-5: each relocated script's `--help` exits 0 in < 200ms, AND SKILL.md contains 'run --help first; do not read source' (or near-equivalent literal text)."""
+    """SKLL-12 + ROADMAP SC-5: each relocated script's `--help` exits 0 in < 200ms, AND SKILL.md contains 'run --help first; do not read source' (or near-equivalent literal text). Wave 5 covers all 7 relocated calc scripts (Round-2 codex MEDIUM 6: SKLL-12 closure NOT split between waves)."""
     pytest.fail("Wave 0 stub")
 
 
@@ -536,36 +582,48 @@ def test_each_script_has_help_and_doctrine_documented(skill_root: Path) -> None:
 # SKLL-13 (2 stubs per D-13-05) — Phase 10 CLOSES SKLL-13. NOT deferred.
 # Per CONTEXT.md D-13-01..05: modes/_shared.md ships a "Save Report" step
 # that writes reports/{NNN:03d}-{mode}-{YYYY-MM-DD}.md and persists via
-# `node orchestration/db-write.mjs --insert-report`. Wave 5 flips both.
+# `node orchestration/db-write.mjs insert-report --scenario-id <id> --file
+# <path>` (REAL Phase 9 CLI per orchestration/db-write.mjs:296-310). Wave 5
+# flips both. NOTE: the `reports` table schema (orchestration/init-db.mjs
+# lines 76-82) is `(id, scenario_id, markdown_blob, generated_at)` — NO
+# `filename` column. The file on disk IS the durable filename anchor;
+# persistence stores the markdown body + the scenario_id link.
 # ---------------------------------------------------------------------------
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 10-03 ships Save Report step in _shared.md (D-13-01..05); Plan 10-05 wires assertion")
+@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 10-03 ships Save Report step in _shared.md (D-13-01..05); Plan 10-05 wires assertion (modes/_shared.md grep for the real CLI invocation)")
 def test_report_filename_format(skill_root: Path) -> None:
     """SKLL-13 + D-13-02: report filenames follow reports/{NNN:03d}-{mode}-{YYYY-MM-DD}.md
     convention (3-digit zero-padded sequence, mode slug from {evaluate, compare,
     refinance, affordability, stress, amortize, arm}, ISO date). Wave 5 wires
-    by inducing a save (or by parsing modes/_shared.md for the convention)
-    and regex-matching the filename."""
+    by parsing modes/_shared.md for the convention regex. Plan 10-06 adds an
+    end-to-end smoke that actually writes a report file under the convention."""
     pytest.fail("Wave 0 stub")
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 10-03 ships db-write.mjs --insert-report integration (D-13-04); Plan 10-05 wires assertion (Plan 10-06 adds end-to-end smoke)")
+@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 10-03 ships db-write.mjs insert-report integration (D-13-04); Plan 10-05 wires assertion (Plan 10-06 adds end-to-end smoke)")
 def test_report_persisted_to_duckdb(skill_root: Path) -> None:
     """SKLL-13 + D-13-04: after writing reports/{NNN}-{mode}-{date}.md, the
-    skill calls `node orchestration/db-write.mjs --insert-report --json
-    {scenario_id, kind, markdown_blob, filename}`. Test asserts that
-    SELECT COUNT(*) FROM reports WHERE filename = ? returns 1 after a
-    simulated save. Wave 5 ships the unit-level assertion; Plan 10-06
-    adds an end-to-end smoke that actually invokes the Save Report path."""
+    skill calls `node orchestration/db-write.mjs insert-report --scenario-id
+    <int> --file <path>` (the REAL Phase 9 CLI per orchestration/db-write.mjs
+    usage block lines 296-310). The reports table schema has no `filename`
+    column — the persistence step stores `(scenario_id, markdown_blob)` and
+    the file on disk is the durable filename anchor.
+
+    Wave 5 ships the unit-level assertion that modes/_shared.md documents the
+    REAL CLI invocation literal (`node orchestration/db-write.mjs
+    insert-report`). Plan 10-06 ships an end-to-end smoke that actually
+    invokes init-db + insert-loan + insert-scenario + insert-report and
+    queries `SELECT scenario_id, markdown_blob FROM reports WHERE
+    scenario_id = ?` returning 1 row."""
     pytest.fail("Wave 0 stub")
 ```
 
 Notes:
 - ≥ 15 stubs total: SKLL-01 has 2 (token + line); SKLL-02..09 each have 1 (= 8); SKLL-07/D-PROF-01 has 1; SKLL-10..12 each have 1 (= 3); SKLL-13 has 2 (= 16 total). The "≥ 15" floor accommodates either the 16-stub layout above or a planner choice to fold the D-PROF-01 stub into SKLL-07.
 - All stubs use `@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 10-XX ...")`.
-- Module-level imports limited to `from __future__ import annotations`, `from pathlib import Path`, `import pytest` — Wave 5 ADDS the rest when needed.
+- Module-level imports limited to `from __future__ import annotations`, `from pathlib import Path`, `import pytest` — Wave 5 ADDS the rest when needed via explicit "import housekeeping" step.
 - Each stub body is just `pytest.fail("Wave 0 stub")`.
-- SKLL-13 (D-13-01..05) closure stubs MUST be present — codex review HIGH severity called out their absence as the largest contract mismatch.
+- SKLL-13 (D-13-01..05) closure stubs MUST be present — codex review HIGH severity called out their absence as the largest contract mismatch. Round 2 review tightened the docstrings to reference the REAL `db-write.mjs insert-report` CLI (NOT the fictional `--insert-report --json`) and dropped the non-existent `filename` column.
   </action>
   <verify>
     <automated>cd /Users/cujo253/Documents/mortgage-ops &amp;&amp; pytest tests/test_skill.py -v --tb=no 2&gt;&amp;1 | tail -25</automated>
@@ -589,6 +647,9 @@ Notes:
 - `grep -c 'def test_each_script_has_help_and_doctrine_documented' tests/test_skill.py` returns 1
 - `grep -c 'def test_report_filename_format' tests/test_skill.py` returns 1 (SKLL-13 D-13-02)
 - `grep -c 'def test_report_persisted_to_duckdb' tests/test_skill.py` returns 1 (SKLL-13 D-13-04)
+- `grep -c 'insert-report --scenario-id' tests/test_skill.py` returns ≥ 1 (Round-2 codex HIGH 2: docstrings reference REAL CLI)
+- `grep -c -- '--insert-report --json' tests/test_skill.py` returns 0 (Round-2 codex HIGH 2: no fictional CLI)
+- `grep -c 'filename' tests/test_skill.py | grep -v 'filenames\|format'` returns 0 lines that imply a `filename` column on `reports` (table has none; Round-2 codex HIGH 2)
 - `grep -c '^import re' tests/test_skill.py` returns 0 (deferred; ruff F401 hygiene)
 - `grep -c '^import subprocess' tests/test_skill.py` returns 0 (deferred)
 - `grep -c '^import sys' tests/test_skill.py` returns 0 (deferred)
@@ -600,7 +661,7 @@ Notes:
 - `ruff check tests/test_skill.py` exits 0 (NO F401 unused-import errors)
   </acceptance_criteria>
   <done>
-    tests/test_skill.py is collected by pytest, runs to completion, produces ≥ 15 XFAIL outcomes, and `ruff check` is clean (no F401 violations).
+    tests/test_skill.py is collected by pytest, runs to completion, produces ≥ 15 XFAIL outcomes, and `ruff check` is clean (no F401 violations). SKLL-13 stub docstrings reference the REAL `db-write.mjs insert-report --scenario-id <int> --file <path>` CLI and do NOT reference the fictional `--insert-report --json` form or a non-existent `filename` column (Round-2 codex HIGH 2).
   </done>
 </task>
 
@@ -653,6 +714,8 @@ All three MUST be clean. If `ruff check tests/test_skill.py` reports F401 unused
 | pytest collection → CI signal | XFAIL must be the outcome state; PASS or FAIL or ERROR all leak signal noise |
 | tiktoken dep add → uv.lock | Stale uv.lock would prevent test_skill_md_under_token_budget from importing the helper |
 | ruff F401 → Wave 0 commit | Imports placed prematurely (used only by Wave 5 bodies) fail `ruff check` and block the Wave 0 commit |
+| Path arithmetic in Wave 5/6 (Round-2 codex HIGH 1) | `skill_root.parent.parent.parent.parent` overshoots repo root; Wave 0 ships `repo_root` fixture so callers have a single source of truth |
+| SKLL-13 CLI surface (Round-2 codex HIGH 2) | Wave 5 flip targets MUST point at the REAL `insert-report --scenario-id <int> --file <path>` CLI; the fictional `--insert-report --json` is never a valid target |
 
 ## STRIDE Threat Register
 
@@ -664,30 +727,36 @@ All three MUST be clean. If `ruff check tests/test_skill.py` reports F401 unused
 | T-10-04 | Repudiation (silent regression to Phase 5 baseline) | conftest.py + pyproject.toml edits | mitigate | Task 5 acceptance asserts ≥ 432 passed + mypy + ruff clean |
 | T-10-05 | Tampering (tiktoken pin drift) | pyproject.toml dev group | mitigate | Pin is `>=0.7,<1.0` per D-02; major-version bumps will fail CI explicitly |
 | T-10-36 | Tampering (ruff F401 blocks Wave 0 commit) | premature top-level imports | mitigate | Task 4 mandates module-level imports limited to `pytest`/`pathlib.Path`/`__future__`; Wave 5 plans re-add the rest. Acceptance criteria explicitly grep -c each banned import returns 0. |
+| T-10-46 | Tampering (Wave-5/6 path arithmetic off by one) | `skill_root.parent.parent.parent.parent` overshoot | mitigate | Wave 0 ships `repo_root` fixture (Task 3); Wave 5/6 plans MUST consume it (or `skill_root.parents[2]`). Round-2 codex HIGH 1. |
+| T-10-47 | Tampering (Wave-5 SKLL-13 flip targets fictional CLI) | `--insert-report --json` does not exist | mitigate | Wave 0 stub docstrings reference the REAL `insert-report --scenario-id <int> --file <path>` CLI per orchestration/db-write.mjs:296-310. Task 4 acceptance grep blocks `--insert-report --json` substring. Round-2 codex HIGH 2. |
+| T-10-48 | Tampering (drift between pyproject.toml dev list and uv.lock) | uv.lock not committed | mitigate | Task 1 requires `uv sync --quiet` after pyproject.toml edit; uv.lock is in `files_modified` and acceptance asserts mtime newer. Round-2 codex MEDIUM 10. |
 </threat_model>
 
 <verification>
 - All ≥ 15 expected stub names present in tests/test_skill.py (one grep per name)
-- Two new SKLL-13 stubs present per D-13-05 (test_report_filename_format + test_report_persisted_to_duckdb)
+- Two new SKLL-13 stubs present per D-13-05 (test_report_filename_format + test_report_persisted_to_duckdb) with docstrings referencing the REAL `insert-report --scenario-id <int> --file <path>` CLI (Round-2 codex HIGH 2)
 - One D-PROF-01 stub present (test_profile_example_md_has_exact_four_keys)
 - Module-level imports limited to `__future__`, `pathlib`, `pytest` (no F401 violations)
 - Full pytest suite: ≥ 432 passed + ≥ 15 xfailed + 0 failed + 0 errored
 - mypy --strict + ruff clean across conftest.py + test_skill.py + _skill_helpers.py
-- skill_root fixture importable; existing fixtures unchanged
-- tiktoken importable; uv.lock updated
+- skill_root + repo_root fixtures BOTH importable; existing fixtures unchanged
+- tiktoken importable; uv.lock updated and committed
+- pytest-timeout>=2.3 still present in pyproject.toml dev group (Round-2 codex MEDIUM 10)
 - tests/fixtures/skill/.gitkeep committed (zero bytes)
 </verification>
 
 <success_criteria>
 - tests/test_skill.py exists, collected by pytest, all ≥ 15 stubs report XFAIL
 - tests/_skill_helpers.py exposes count_tokens + assert_under_budget
-- tests/conftest.py extended with skill_root (existing fixtures untouched)
+- tests/conftest.py extended with skill_root + repo_root (existing fixtures untouched)
 - tests/fixtures/skill/.gitkeep committed
-- pyproject.toml has tiktoken>=0.7,<1.0 in [dependency-groups].dev
+- pyproject.toml has tiktoken>=0.7,<1.0 in [dependency-groups].dev (alphabetized) AND retains pytest-timeout>=2.3 + every other pre-existing entry
+- uv.lock refreshed and committed alongside pyproject.toml (Round-2 codex MEDIUM 10)
 - Phase 5 baseline preserved (≥ 432 passed)
 - mypy --strict + ruff format clean across all touched files (NO F401)
 - Wave 1..5 have a clear contract: each downstream plan flips a known xfail name and removes the decorator
-- SKLL-13 has TWO landing-pad stubs per D-13-05 (Phase 10 closes SKLL-13; not deferred)
+- SKLL-13 has TWO landing-pad stubs per D-13-05 with REAL CLI references (Round-2 codex HIGH 2)
+- repo_root fixture available for Wave 5/6 (Round-2 codex HIGH 1)
 </success_criteria>
 
 <output>
@@ -696,8 +765,10 @@ After completion, create `.planning/phases/10-claude-skill/10-00-SUMMARY.md` doc
 - Phase 5 baseline pass count after Wave 0 (must be ≥ 432)
 - mypy + ruff status (must be clean — NO F401)
 - Mapping table: each xfail stub → wave-and-plan responsible for flipping it
-- SKLL-13 closure stubs (test_report_filename_format + test_report_persisted_to_duckdb) confirmed present per D-13-05 (Phase 10 closes SKLL-13)
-- Confirmation that module-level imports are deferred (no F401 violations)
+- SKLL-13 closure stubs (test_report_filename_format + test_report_persisted_to_duckdb) confirmed present per D-13-05 (Phase 10 closes SKLL-13) with REAL CLI references (Round-2 codex HIGH 2)
+- Confirmation that module-level imports are deferred (no F401 violations) AND that Wave 5 plan ships an "import housekeeping" step (Round-2 codex HIGH 5)
+- repo_root fixture confirmation (path-arithmetic seam for Wave 5/6 — Round-2 codex HIGH 1)
+- Confirmation pytest-timeout>=2.3 still in pyproject.toml dev group + uv.lock refreshed (Round-2 codex MEDIUM 10)
 </output>
 </content>
 </invoke>
