@@ -202,14 +202,14 @@ User selected **fine** (8-12 phases). This roadmap is **12 phases** — each cal
   3. All seven calc scripts (`amortize.py`, `affordability.py`, `arm_simulate.py`, `refi_npv.py`, `apr_reg_z.py`, `stress_test.py`, `points_breakeven.py`) live INSIDE `.claude/skills/mortgage-ops/scripts/` (NOT at project root) — verified by a structure test
   4. All seven mode files (`evaluate.md`, `compare.md`, `refinance.md`, `affordability.md`, `stress.md`, `amortize.md`, `arm.md`) exist under `modes/`, plus `_shared.md` and `_profile.md`
   5. References folder contains all nine documents (amortization-formulas, apr-reg-z, arm-mechanics, refi-npv, affordability-rules, gse-limits, mip-pmi, tax-deductibility, spreadsheet-conventions); SKILL.md instructs Claude to ALWAYS shell out to scripts and includes the "run --help first; do not read source" doctrine
-**Plans:** 6/7 plans executed
-- [ ] 10-00-test-infrastructure-PLAN.md — Wave 0: tests/test_skill.py 13+ xfail stubs + tests/_skill_helpers.py tiktoken harness + skill_root fixture + tiktoken dev-dep (D-02 Nyquist gate)
-- [ ] 10-01-scripts-relocation-PLAN.md — Wave 1: git mv 4 CLIs (amortize/affordability/arm_simulate/_cli_helpers) into .claude/skills/mortgage-ops/scripts/ + update sys.path + 4 SCRIPT_PATH constants + pyproject.toml — closes SKLL-10 (D-01 + D-06 + D-08 cross-phase contract published)
-- [ ] 10-02-skill-md-scaffold-PLAN.md — Wave 2: SKILL.md (frontmatter + routing skeleton in first 200 lines + math discipline + run-help-first doctrine + progressive-disclosure table) + LICENSE.txt MIT — sets up SKLL-01..04 + SKLL-09 + SKLL-11..12 (Wave 5 wires CI)
-- [ ] 10-03-modes-PLAN.md — Wave 3: 9 mode files (_shared, _profile.example, evaluate, compare, refinance, affordability, stress, amortize, arm) + .gitignore + scripts/hooks/block-user-layer.py + DATA_CONTRACT.md User Layer enforcement — closes SKLL-05/06/07 (D-07 + D-10; UI-SPEC §b/§h/§i)
-- [ ] 10-04-references-PLAN.md — Wave 4: 9 reference files (5 full + 1 byte-equal copy of arm-mechanics + 2 forward-link stubs for refi-npv/apr-reg-z + 1 hybrid tax-deductibility) + assets/.gitkeep — closes SKLL-08 (D-08 forward-link strategy)
-- [ ] 10-05-ci-tests-PLAN.md — Wave 5: flip 11 Wave 0 xfails to PASS + 4 bonus tests (drift / envelope smoke / write-block / subagent forward-link) — closes SKLL-01..09 + SKLL-11..12 (SKLL-13 deferred to Phase 9)
-- [ ] 10-06-integration-smoke-PLAN.md — Wave 6: tests/test_skill_integration.py portability smoke (rsync copy + symlink-free walk + --help from copy) + token-headroom recheck + User Layer leak gate — verifies D-01 contract end-to-end
+**Plans:** 7/7 plans executed (PHASE COMPLETE — see 10-VERIFICATION.md, 5/5 SC PASS)
+- [x] 10-00-test-infrastructure-PLAN.md — Wave 0: tests/test_skill.py 16 xfail stubs + tests/_skill_helpers.py tiktoken harness + skill_root + repo_root fixtures + tiktoken>=0.7,<1.0 dev-dep
+- [x] 10-01-scripts-relocation-PLAN.md — Wave 1: git mv all 7 calc CLIs + _cli_helpers into .claude/skills/mortgage-ops/scripts/ + sys.path + 7 SCRIPT_PATH constants + pyproject.toml mypy_path — closes SKLL-10 / SC-3 full closure; D-08 retired
+- [x] 10-02-skill-md-scaffold-PLAN.md — Wave 2: SKILL.md 254 lines / 3386 cl100k tokens (1114 headroom) + LICENSE.txt MIT + ## Subagents (Phase 11) forward-link section per D-SUBA-FW-01 — sets up SKLL-01..04 + SKLL-09 + SKLL-11..12
+- [x] 10-03-modes-PLAN.md — Wave 3: 9 mode files (_shared 12 sections + _profile.example 4-key pure YAML per D-PROF-01 / Round-2 HIGH 4 + 7 mode files incl. stress.md D-SUBA-FW-02 existence-check seam + arm.md D-NUM-04) + .gitignore + block-user-layer.py + tests/test_block_user_layer.py + DATA_CONTRACT.md — closes SKLL-05/06/07
+- [x] 10-04-references-PLAN.md — Wave 4: 9 references (3 byte-equal mirrors arm-mechanics/refi-npv/apr-reg-z + 5 fresh + 1 hybrid tax-deductibility citing qualified_loan_limit) + assets/.gitkeep — closes SKLL-08
+- [x] 10-05-ci-tests-PLAN.md — Wave 5: flip 13 Wave 0 xfails to PASS + 7 bonus tests (3 drift mirrors / amortize envelope smoke / argv-based hook write-block / 2 subagent forward-link) — closes SKLL-01..09 + SKLL-11..13 (SKLL-13 closed in Phase 10 per D-13-01..05; Round-2 HIGH 2 real db-write.mjs CLI + HIGH 4 pure-YAML profile + HIGH 5 import housekeeping)
+- [x] 10-06-integration-smoke-PLAN.md — Wave 6: tests/test_skill_integration.py 4 tests (portability with PYTHONPATH=repo_root + token budget ≤ 4500 + User Layer leak gate + SKLL-13 7-step end-to-end real-CLI smoke)
 **UI hint**: yes
 
 ### Phase 11: Subagents
