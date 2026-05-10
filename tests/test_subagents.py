@@ -52,7 +52,8 @@ smoke tests assert the skill + bundled scripts exist at this path."""
 
 TRANSCRIPT_DIR: Path = Path(__file__).resolve().parent / "fixtures" / "subagent_transcripts"
 """Phase 11 Wave 5 ships recorded transcripts here. SUBA-06 reads
-stress_50_scenario_summary.md and pipes it through anthropic.count_tokens."""
+stress_50_scenarios.transcript.jsonl and pipes its content through
+anthropic.count_tokens."""
 
 # ---------------------------------------------------------------------------
 # Locked sets / contracts (Wave 0 ships; Wave 1+ asserts against)
