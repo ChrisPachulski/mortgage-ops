@@ -42,7 +42,9 @@ them in place when a new agent / model alias / required key is locked.
 
 from __future__ import annotations
 
+import json
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -251,21 +253,128 @@ def test_SUBA_03_stress_test_agent_frontmatter_model_is_haiku() -> None:
 
 
 # =========================================================================
-# SUBA-04 (1 stub, parametrized over 3 agents in Wave 5) — flipped in Wave 5
+# SUBA-04 (3 functions) — flipped in Wave 5 (Plan 11-05)
+#   1. test_SUBA_04_skills_field_resolves_for_each_agent (SC-5 smoke,
+#      parametrized over EXPECTED_AGENTS)
+#   2. test_SUBA_04_refi_handoff_returns_ranked_table (SC-4 refi via
+#      transcript fixture)
+#   3. test_SUBA_04_amort_handoff_returns_csv_or_markdown (SC-4 amort via
+#      transcript fixture)
 # =========================================================================
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 11-05 parametrizes")
-def test_SUBA_04_each_agent_skills_field_is_mortgage_ops() -> None:
-    """SUBA-04 + ROADMAP SC-5: every agent declares
-    `skills: [mortgage-ops]` (Phase 10 dependency — the named skill must
-    exist on disk under `.claude/skills/mortgage-ops/`).
+@pytest.mark.parametrize("agent_name", EXPECTED_AGENTS, ids=lambda n: n)
+def test_SUBA_04_skills_field_resolves_for_each_agent(agent_name: str) -> None:
+    """SUBA-04 + SC-5: each agent's skills field is ['mortgage-ops'] AND the bundled
+    scripts are reachable on the filesystem at the skill-resident path.
 
-    Wave 5 (Plan 11-05) will replace this body with a parametrize over
-    `EXPECTED_AGENTS`, calling `_split_frontmatter` on each agent file
-    and asserting `fm["skills"] == ["mortgage-ops"]`.
+    Per Plan 11-05 D-04: SC-5 smoke is a pytest-collection-time os.path.exists check.
+    Per RESEARCH Pitfall 1, skills: is NOT a script-bundling mechanism — bundled
+    scripts are filesystem files reached via Bash. So SC-5 verifies (a) the skills
+    frontmatter is correct, (b) the named scripts exist on disk at the path the
+    agent body references.
     """
-    pytest.fail("Wave 0 stub")
+    # Part (a): frontmatter skills field
+    path = AGENTS_DIR / f"{agent_name}.md"
+    assert path.exists(), f"SUBA-04: {path} must exist (Plans 11-01..11-03 dependency)"
+    fm = _split_frontmatter(path)
+    assert fm["skills"] == ["mortgage-ops"], (
+        f"SUBA-04: {agent_name}.md skills={fm['skills']!r} must equal ['mortgage-ops']"
+    )
+
+    # Part (b): bundled scripts reachable at skill-resident path
+    skill_scripts_dir = SKILLS_DIR / "scripts"
+    expected_script_for = {
+        "amortization-agent": "amortize.py",
+        "refi-npv-agent": "refi_npv.py",
+        "stress-test-agent": "stress_test.py",
+    }
+    expected_script = expected_script_for[agent_name]
+    script_path = skill_scripts_dir / expected_script
+
+    if not skill_scripts_dir.exists():
+        pytest.skip(
+            f"SUBA-04 SC-5 part (b): {skill_scripts_dir} does not exist yet — Phase 10 "
+            f"has not relocated scripts to the skill folder (SKLL-10). Test will pass once "
+            f"Phase 10 ships. Skip is intentional cross-phase tolerance per Plan 11-05 D-04."
+        )
+    assert script_path.exists(), (
+        f"SUBA-04 SC-5: {agent_name}.md references {expected_script} but {script_path} "
+        f"does not exist on the filesystem (Phase 10 SKLL-10 dependency)."
+    )
+
+
+def test_SUBA_04_refi_handoff_returns_ranked_table() -> None:
+    """SUBA-04 + SC-4 (refi): refi-npv-agent output is a ranked markdown table sorted
+    descending by NPV (per Plan 11-02 Hard rule #5).
+
+    Tested against the recorded synthetic transcript fixture per Plan 11-05 D-02.
+    """
+    path = TRANSCRIPT_DIR / "refi_3_offers.transcript.jsonl"
+    assert path.exists(), f"SUBA-04 refi: transcript fixture {path} must exist (Plan 11-05 Task 1)"
+    lines = [line for line in path.read_text().splitlines() if line.strip()]
+    assert len(lines) == 1, f"SUBA-04 refi: expected 1-line transcript, got {len(lines)}"
+    content = json.loads(lines[0])["content"]
+
+    # Shape assertion 1: markdown table with lender + NPV columns
+    assert "| lender " in content, (
+        f"SUBA-04 refi: transcript must contain a markdown table with a 'lender' "
+        f"column; got first 200 chars: {content[:200]!r}"
+    )
+    assert "| NPV " in content, (
+        f"SUBA-04 refi: transcript must contain a markdown table with an 'NPV' "
+        f"column; got first 200 chars: {content[:200]!r}"
+    )
+    # Shape assertion 2: at least 3 ranked rows (3-offer fixture; +1 header)
+    table_rows = [
+        line
+        for line in content.splitlines()
+        if line.startswith("| ") and "|" in line[2:] and "---" not in line
+    ]
+    assert len(table_rows) >= 4, (
+        f"SUBA-04 refi: expected >=4 table rows (1 header + >=3 data), got {len(table_rows)}"
+    )
+    # Shape assertion 3: descending-by-NPV ordering — NPV is LAST column per
+    # Plan 11-02 Hard rule #5
+    npv_values: list[float] = []
+    for row in table_rows[1:]:
+        cells = [c.strip() for c in row.split("|") if c.strip()]
+        npv_str = cells[-1].replace("$", "").replace(",", "")
+        npv_values.append(float(npv_str))
+    assert npv_values == sorted(npv_values, reverse=True), (
+        f"SUBA-04 refi: NPV column must be sorted descending; got {npv_values}"
+    )
+    # Shape assertion 4: citation discipline (Plans 11-02 + 11-03)
+    assert "Computed by:" in content, (
+        "SUBA-04 refi: transcript must contain a 'Computed by:' citation marker"
+    )
+    assert "refi_npv.py" in content, (
+        "SUBA-04 refi: transcript must reference refi_npv.py in the 'Computed by:' citation"
+    )
+
+
+def test_SUBA_04_amort_handoff_returns_csv_or_markdown() -> None:
+    """SUBA-04 + SC-4 (amort): amortization-agent output is a markdown table OR a CSV path
+    string under reports/{NNN}-amortization-{YYYY-MM-DD}.csv (per Plan 11-01 Hard rule #4).
+    """
+    path = TRANSCRIPT_DIR / "amort_single_loan.transcript.jsonl"
+    assert path.exists(), f"SUBA-04 amort: transcript fixture {path} must exist (Plan 11-05 Task 1)"
+    lines = [line for line in path.read_text().splitlines() if line.strip()]
+    assert len(lines) == 1, f"SUBA-04 amort: expected 1-line transcript, got {len(lines)}"
+    content = json.loads(lines[0])["content"]
+
+    has_markdown_table = "| month " in content and "| balance " in content
+    has_csv_path = bool(re.search(r"reports/\d{3}-amortization-\d{4}-\d{2}-\d{2}\.csv", content))
+    assert has_markdown_table or has_csv_path, (
+        f"SUBA-04 amort: transcript must contain EITHER a markdown table (|month|...|balance|) "
+        f"OR a CSV path (reports/NNN-amortization-YYYY-MM-DD.csv); got: {content[:200]!r}"
+    )
+    assert "Computed by:" in content, (
+        "SUBA-04 amort: transcript must contain a 'Computed by:' citation marker"
+    )
+    assert "amortize.py" in content, (
+        "SUBA-04 amort: transcript must reference amortize.py in the 'Computed by:' citation"
+    )
 
 
 # =========================================================================
@@ -313,27 +422,43 @@ def test_SUBA_05_stress_mode_routes_sweeps_over_5_to_subagent() -> None:
 # =========================================================================
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 11-05 ships fixture + count_tokens")
 @pytest.mark.skipif(
     not os.environ.get("ANTHROPIC_API_KEY"),
     reason=(
-        "SUBA-06 token-budget test requires ANTHROPIC_API_KEY (count_tokens is FREE "
-        "but requires the key per platform.claude.com/docs/en/build-with-claude/token-counting)"
+        "SC-3 SUBA-06 token-budget test requires ANTHROPIC_API_KEY for "
+        "anthropic.count_tokens (FREE — no content billing per Anthropic docs — "
+        "but requires network round-trip). Skip is intentional for local dev "
+        "without the key; CI must inject the key as a secret."
     ),
 )
-def test_SUBA_06_stress_summary_under_1k_tokens() -> None:
-    """SUBA-06 + ROADMAP SC-3: 50-scenario rate-shock summary fits under 1000 tokens.
+def test_SUBA_06_stress_summary_under_1000_tokens() -> None:
+    """SC-3: 50-scenario rate-shock summary fits under 1,000 tokens.
 
-    Uses anthropic.Anthropic().messages.count_tokens(model='claude-haiku-4-5', ...)
-    against tests/fixtures/subagent_transcripts/stress_50_scenario_summary.md.
-    Alternative tokenizers (OpenAI's BPE in particular) are explicitly REJECTED
-    per 11-RESEARCH.md — they are OpenAI-specific and drift on the order of
-    20 percent against the actual Claude tokenizer, which would mask real
-    overages on a 1000-token budget.
+    Per Plan 11-05 D-01: tokenizer = anthropic.Anthropic().messages.count_tokens (the
+    official Claude tokenizer; tiktoken explicitly REJECTED per RESEARCH Standard Stack
+    because it is OpenAI-specific and ~5-20% drift on the <1k boundary).
 
-    Wave 5 (Plan 11-05) will flip this stub by:
-      1. Authoring tests/fixtures/subagent_transcripts/stress_50_scenario_summary.md
-      2. Calling client.messages.count_tokens with role=assistant
-      3. Asserting response.input_tokens < 1000
+    Per Plan 11-05 D-03: budget threshold is exactly 1000 tokens (response.input_tokens
+    < 1000) — not 999, not 1001. Matches the literal SC-3 wording.
+
+    Per Plan 11-05 D-02: tested against the synthetic transcript fixture (committed at
+    tests/fixtures/subagent_transcripts/stress_50_scenarios.transcript.jsonl) for CI
+    determinism. Live capture for nightly eval is documented in the fixture README but
+    NOT run in CI.
     """
-    pytest.fail("Wave 0 stub")
+    anthropic = pytest.importorskip("anthropic")
+    path = TRANSCRIPT_DIR / "stress_50_scenarios.transcript.jsonl"
+    assert path.exists(), f"SC-3: transcript fixture {path} must exist (Plan 11-05 Task 1)"
+    content = json.loads(path.read_text().strip().splitlines()[0])["content"]
+
+    client = anthropic.Anthropic()
+    response = client.messages.count_tokens(
+        model="claude-haiku-4-5",
+        messages=[{"role": "assistant", "content": content}],
+    )
+    assert response.input_tokens < 1000, (
+        f"SC-3 SUBA-06: stress-test-agent summary returned {response.input_tokens} tokens, "
+        f"exceeds 1000-token budget (Plan 11-05 D-03 threshold; ROADMAP SC-3 verbatim). "
+        f"To diagnose: drop a highlight row or shorten the narrative in the fixture, OR if "
+        f"the agent output legitimately requires >1000 tokens, surface as a Phase 12 follow-up."
+    )
