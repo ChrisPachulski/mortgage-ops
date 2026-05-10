@@ -180,18 +180,16 @@ binds every emitted APR figure regardless of which mode produced it.
 
 ## Subagents (Phase 11)
 
-Three subagents will land in Phase 11 to provide context isolation for
-calc-heavy operations. Their files will be created at
-`.claude/agents/{agent}.md`:
+Three subagents provide context isolation for calc-heavy operations. Files
+live at `.claude/agents/{agent}.md`:
 
 - `amortization-agent` (Haiku) — single-loan ARM amortization requests
 - `refi-npv-agent` (Sonnet) — multi-step NPV reasoning, sweeps multiple offers
 - `stress-test-agent` (Haiku) — parameter-grid sweeps; returns < 1k token summary
 
-Phase 10 ships ONLY the forward-link. The skill does NOT delegate to these
-agents at Phase 10. When Phase 11 lands, `modes/stress.md` (D-SUBA-FW-02)
-will activate the dispatch automatically via an existence check on
-`.claude/agents/stress-test-agent.md` — no SKILL.md edit required.
+Dispatch is gated by `modes/stress.md` (D-SUBA-FW-02), which performs an
+existence check on `.claude/agents/stress-test-agent.md` and falls back
+to inline execution if the file is absent.
 
 ### SUBA-05 routing rule (stress mode)
 
