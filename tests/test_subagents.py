@@ -273,16 +273,39 @@ def test_SUBA_04_each_agent_skills_field_is_mortgage_ops() -> None:
 # =========================================================================
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 11-04 routing rule")
 def test_SUBA_05_stress_mode_routes_sweeps_over_5_to_subagent() -> None:
-    """SUBA-05 + ROADMAP SC-2: modes/stress.md documents the routing rule
-    'sweeps with > 5 scenarios route to stress-test-agent'.
+    """SUBA-05 + ROADMAP SC-2: modes/stress.md documents the >5 scenario dispatch rule.
 
-    Wave 4 (Plan 11-04) will flip this stub by inserting the routing
-    paragraph into modes/stress.md (Phase 10 owned file) and replacing
-    this body with a regex assertion against the file contents.
+    Per Plan 11-04 LOCKED DECISION D-01: threshold is strictly >5 (matches the literal SC-2
+    text); D-02: cross-phase update protocol (this branch executed because Phase 10 had
+    shipped at task time).
     """
-    pytest.fail("Wave 0 stub")
+    import re
+
+    stress_md_path = SKILLS_DIR / "modes" / "stress.md"
+    assert stress_md_path.exists(), (
+        f"SUBA-05: {stress_md_path} must exist (Phase 10 SKLL-05 dependency); "
+        "if Phase 10 has not yet shipped, see .planning/phases/11-subagents/11-04-SUBA-05-TODO.md"
+    )
+    stress_md = stress_md_path.read_text()
+    # Regex matches phrasings: "scenarios > 5", "more than 5 scenarios",
+    # "scenario_count > 5" — pinned by an explicit positive assertion.
+    pattern = re.compile(
+        r"(scenarios?\s*(>|more than|greater than)\s*5|scenario[_ ]count\s*>\s*5).*"
+        r"(stress-test-agent|subagent)",
+        re.IGNORECASE | re.DOTALL,
+    )
+    assert pattern.search(stress_md), (
+        "SUBA-05: modes/stress.md must document 'sweeps with > 5 scenarios route to stress-test-agent' "
+        "per the insertion contract in .planning/phases/11-subagents/11-04-SUBA-05-TODO.md"
+    )
+    # SKILL.md cross-reference assertion — Phase 10 surface MUST cite the agent name
+    # so the routing breadcrumb is followable from SKILL.md → modes/stress.md → agent file.
+    skill_md = (SKILLS_DIR / "SKILL.md").read_text()
+    assert "stress-test-agent" in skill_md, (
+        "SUBA-05: SKILL.md must cross-reference stress-test-agent in its routing block "
+        "(per Plan 11-04 SKILL.md insertion contract)"
+    )
 
 
 # =========================================================================
