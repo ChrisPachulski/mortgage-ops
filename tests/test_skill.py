@@ -39,6 +39,7 @@ adds these imports at module level when the flipped assertions consume them
 
 from __future__ import annotations
 
+import re
 from typing import TYPE_CHECKING
 
 import pytest
@@ -48,6 +49,66 @@ from tests._skill_helpers import count_tokens
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+# ---------------------------------------------------------------------------
+# Wave 5 (Plan 10-05) parametrize sources + section/example constants.
+# ---------------------------------------------------------------------------
+
+EXPECTED_MODES: frozenset[str] = frozenset(
+    {
+        "evaluate",
+        "compare",
+        "refinance",
+        "affordability",
+        "stress",
+        "amortize",
+        "arm",
+    }
+)
+"""SKLL-05 + ROADMAP SC-4: 7 mode files."""
+
+EXPECTED_REFERENCES: frozenset[str] = frozenset(
+    {
+        "amortization-formulas",
+        "apr-reg-z",
+        "arm-mechanics",
+        "refi-npv",
+        "affordability-rules",
+        "gse-limits",
+        "mip-pmi",
+        "tax-deductibility",
+        "spreadsheet-conventions",
+    }
+)
+"""SKLL-08 + ROADMAP SC-5: 9 reference files."""
+
+SHARED_MD_REQUIRED_SECTIONS: tuple[str, ...] = (
+    "Sources of Truth",
+    "Profile Loading",
+    "Money Discipline",
+    "Always Cite the Script",
+    "Never Invent Numbers",
+    "Estimated APR Literal Text",
+    "Script Invocation Doctrine",
+    "Error Narration Template",
+    "Output File Naming",
+    "Output Formatting",
+    "Save Report",
+    "Forbidden Behaviors",
+)
+"""SKLL-06 + UI-SPEC §i + Round-2 codex MEDIUM 7: 12 mandatory _shared.md
+section headings (9 UI-SPEC §i baseline + Profile Loading per D-PROF-04 +
+Output Formatting per D-NUM-01..06 + Save Report per D-13-01..05)."""
+
+SHARED_MD_DNUM_EXAMPLES: tuple[str, ...] = (
+    "$1,264.14",  # D-NUM-01 money: 2 decimals + comma + $ prefix
+    "6.500%",  # D-NUM-02 rate: 3 decimals + trailing zeros + %
+    "43.0%",  # D-NUM-03 ratio (DTI / LTV / CLTV): 1 decimal + %
+)
+"""D-NUM-01..06 example tokens (Round-2 codex MEDIUM 7). The Output
+Formatting section MUST cite at least one example per directive so the
+display contract is auditable. ARM bps formatting (D-NUM-04) is matched
+separately by the `<n> bps (<x>.<yy>%)` regex."""
 
 # ---------------------------------------------------------------------------
 # SKLL-01 (2 stubs) — flipped in Wave 5 (CI tests). Uses count_tokens helper
@@ -135,14 +196,11 @@ def test_license_txt_exists_in_skill_folder(skill_root: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Wave 0 stub — Plan 10-03 ships modes/*.md; Plan 10-05 wires parametrize",
-)
-def test_modes_exist(skill_root: Path) -> None:
-    """SKLL-05 + ROADMAP SC-4: 7 mode files (evaluate, compare, refinance, affordability,
-    stress, amortize, arm) exist under modes/."""
-    pytest.fail("Wave 0 stub")
+@pytest.mark.parametrize("mode", sorted(EXPECTED_MODES))
+def test_mode_file_exists(mode: str, skill_root: Path) -> None:
+    """SKLL-05 + ROADMAP SC-4: every expected mode has a modes/{mode}.md file."""
+    p = skill_root / "modes" / f"{mode}.md"
+    assert p.exists(), f"SKLL-05 mode file missing: modes/{mode}.md"
 
 
 # ---------------------------------------------------------------------------
@@ -150,14 +208,26 @@ def test_modes_exist(skill_root: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Wave 0 stub — Plan 10-03 ships modes/_shared.md; Plan 10-05 wires assertion",
-)
 def test_shared_mode_has_required_sections(skill_root: Path) -> None:
-    """SKLL-06 + ROADMAP SC-4: modes/_shared.md defines scoring + report structure
-    (career-ops pattern + UI-SPEC §i)."""
-    pytest.fail("Wave 0 stub")
+    """SKLL-06 + UI-SPEC §i + Round-2 codex MEDIUM 7: modes/_shared.md contains
+    all 12 mandatory section headings (9 UI-SPEC §i + Profile Loading per
+    D-PROF-04 + Output Formatting per D-NUM-01..06 + Save Report per
+    D-13-01..05) AND each D-NUM-XX directive cites at least one example
+    token so the display contract is auditable."""
+    text = (skill_root / "modes" / "_shared.md").read_text()
+    for section in SHARED_MD_REQUIRED_SECTIONS:
+        assert section in text, f"SKLL-06 _shared.md missing section: {section!r}"
+    # D-NUM-01..03 example tokens (Round-2 codex MEDIUM 7)
+    for example in SHARED_MD_DNUM_EXAMPLES:
+        assert example in text, (
+            f"D-NUM (Round-2 codex MEDIUM 7): _shared.md Output Formatting "
+            f"section must cite the example token {example!r}"
+        )
+    # D-NUM-04 ARM bps example: any `<n> bps (<x>.<yy>%)` token suffices
+    assert re.search(r"\d+\s*bps\s*\(\d+\.\d{2}%\)", text), (
+        "D-NUM-04 (Round-2 codex MEDIUM 7): _shared.md must include an ARM "
+        "bps example like `200 bps (2.00%)` or `250 bps (2.50%)`."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -165,13 +235,16 @@ def test_shared_mode_has_required_sections(skill_root: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Wave 0 stub — Plan 10-03 ships .example.md template + gitignore; Plan 10-05 wires assertion",
-)
-def test_profile_md_user_layer_gitignored(skill_root: Path) -> None:
-    """SKLL-07 + D-07: modes/_profile.md gitignored AND modes/_profile.example.md committed."""
-    pytest.fail("Wave 0 stub")
+def test_profile_md_user_layer_gitignored(skill_root: Path, repo_root: Path) -> None:
+    """SKLL-07 + D-07: modes/_profile.md is gitignored AND modes/_profile.example.md is committed."""
+    gitignore = (repo_root / ".gitignore").read_text()
+    profile_md_pattern = ".claude/skills/mortgage-ops/modes/_profile.md"
+    assert profile_md_pattern in gitignore, (
+        f"SKLL-07: .gitignore missing pattern '{profile_md_pattern}' "
+        f"(modes/_profile.md is User Layer per DATA_CONTRACT.md)"
+    )
+    example = skill_root / "modes" / "_profile.example.md"
+    assert example.is_file(), f"SKLL-07 + D-07: schema skeleton must exist at {example}"
 
 
 # ---------------------------------------------------------------------------
@@ -198,15 +271,11 @@ def test_profile_example_md_has_exact_four_keys(skill_root: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Wave 0 stub — Plan 10-04 ships references/*.md; Plan 10-05 wires parametrize",
-)
-def test_references_exist(skill_root: Path) -> None:
-    """SKLL-08 + ROADMAP SC-5: 9 reference files (amortization-formulas, apr-reg-z,
-    arm-mechanics, refi-npv, affordability-rules, gse-limits, mip-pmi,
-    tax-deductibility, spreadsheet-conventions) exist under references/."""
-    pytest.fail("Wave 0 stub")
+@pytest.mark.parametrize("ref", sorted(EXPECTED_REFERENCES))
+def test_reference_file_exists(ref: str, skill_root: Path) -> None:
+    """SKLL-08 + ROADMAP SC-5: all 9 reference docs are bundled."""
+    p = skill_root / "references" / f"{ref}.md"
+    assert p.is_file(), f"SKLL-08 reference missing: references/{ref}.md"
 
 
 # ---------------------------------------------------------------------------
@@ -214,14 +283,23 @@ def test_references_exist(skill_root: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Wave 0 stub — Plan 10-02 ships progressive-disclosure rule; Plan 10-05 wires assertion",
-)
 def test_skill_md_documents_progressive_disclosure(skill_root: Path) -> None:
-    """SKLL-09 + ROADMAP SC-5 + D-09: SKILL.md contains a topic→reference table
-    for on-demand reference loading."""
-    pytest.fail("Wave 0 stub")
+    """SKLL-09 + D-09 + ROADMAP SC-5: SKILL.md contains topic→reference table for on-demand reference loading."""
+    text = (skill_root / "SKILL.md").read_text()
+    text_lower = text.lower()
+    assert (
+        "load on demand" in text_lower
+        or "progressive disclosure" in text_lower
+        or "on demand" in text_lower
+    ), (
+        "SKLL-09: SKILL.md must mention on-demand reference loading "
+        "(D-09 progressive disclosure rule)"
+    )
+    # All 9 reference filenames must appear in SKILL.md (the topic→reference table)
+    for ref in EXPECTED_REFERENCES:
+        assert ref in text, (
+            f"SKLL-09: reference '{ref}' not listed in SKILL.md topic→reference table"
+        )
 
 
 # ---------------------------------------------------------------------------
