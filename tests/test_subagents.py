@@ -158,16 +158,39 @@ def test_SUBA_01_amortization_agent_frontmatter_parses_with_required_fields() ->
 # =========================================================================
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 11-02 ships agent file")
 def test_SUBA_02_refi_npv_agent_frontmatter_model_is_sonnet() -> None:
     """SUBA-02 + ROADMAP SC-4: refi-npv-agent.md frontmatter parses AND
-    `model` is `sonnet` (Sonnet for multi-step NPV ranking across multiple
-    refi offers; Haiku is too thin for compositional tradeoff reasoning
-    per the Augment Code 2026 routing guide cited in 11-RESEARCH.md).
-
-    Wave 2 (Plan 11-02) will flip this stub when the agent file lands.
-    """
-    pytest.fail("Wave 0 stub")
+    model=sonnet (Sonnet for multi-step NPV ranking)."""
+    path = AGENTS_DIR / "refi-npv-agent.md"
+    assert path.exists(), f"SUBA-02: {path} must exist (shipped by Plan 11-02)"
+    fm = _split_frontmatter(path)
+    missing = REQUIRED_FRONTMATTER_KEYS - fm.keys()
+    assert not missing, f"SUBA-02: {path.name} missing frontmatter keys: {missing}"
+    assert fm["name"] == "refi-npv-agent", (
+        f"SUBA-02: name={fm['name']!r} must equal 'refi-npv-agent' (filename stem)"
+    )
+    assert fm["model"] == "sonnet", (
+        f"SUBA-02: model={fm['model']!r} must equal 'sonnet' "
+        "(REQUIREMENTS SUBA-02 + 11-RESEARCH model selection — Sonnet for "
+        "multi-step NPV reasoning)"
+    )
+    assert fm["skills"] == ["mortgage-ops"], (
+        f"SUBA-02: skills={fm['skills']!r} must equal ['mortgage-ops']"
+    )
+    description = fm.get("description")
+    assert isinstance(description, str), (
+        f"SUBA-02: description must be a string, got {type(description).__name__}"
+    )
+    assert len(description) > 30, (
+        f"SUBA-02: description must be a non-trivial routing trigger "
+        f"(>30 chars), got {description!r}"
+    )
+    # RESEARCH Open Question 1 v1 decision — Write tool intentionally absent
+    tools = fm.get("tools") or []
+    assert "Write" not in tools, (
+        f"SUBA-02: Write tool must NOT be in refi-npv-agent tools list per "
+        f"11-RESEARCH.md Open Question 1 v1 decision; got tools={tools}"
+    )
 
 
 # =========================================================================
