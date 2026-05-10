@@ -18,6 +18,12 @@ dev = [
     "pytest>=9.0",
     "pytest-timeout>=2.3",
     "ruff>=0.15",
+    # tiktoken is used ONLY by tests/_skill_helpers.py for Phase 10 SKILL.md
+    # token-budget tests (cl100k_base encoder, per Phase 10 RESEARCH §(i) +
+    # LOCKED DECISION D-02). It is explicitly NOT used for Phase 11 subagent
+    # token budgeting — SUBA-06 uses anthropic.count_tokens (the official
+    # Claude tokenizer, per Plan 11-05 D-01); the "tiktoken REJECTED" note in
+    # tests/test_subagents.py refers specifically to that subagent context.
     "tiktoken>=0.7,<1.0",
 ]
 
