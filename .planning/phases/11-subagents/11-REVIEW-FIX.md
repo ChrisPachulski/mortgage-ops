@@ -2,28 +2,117 @@
 phase: 11-subagents
 fixed_at: 2026-05-10T00:00:00Z
 review_path: .planning/phases/11-subagents/11-REVIEW.md
-iteration: 1
-findings_in_scope: 9
-fixed: 9
+iteration: 2
+findings_in_scope: 13
+fixed: 13
 skipped: 0
 status: all_fixed
+iteration_1_fixed: 9
+iteration_2_fixed: 4
+total_fixed: 13
 ---
 
 # Phase 11: Code Review Fix Report
 
 **Fixed at:** 2026-05-10
 **Source review:** `.planning/phases/11-subagents/11-REVIEW.md`
-**Iteration:** 1
+**Iteration:** 2 (cumulative across iterations 1 + 2)
 
 **Summary:**
-- Findings in scope: 9 (3 Critical + 6 Warnings; Info skipped per scope)
-- Fixed: 9
+- Findings in scope: 13 (3 Critical + 6 Warnings + 4 Info)
+- Fixed: 13
 - Skipped: 0
+- Iteration 1: 9/9 (3 Critical + 6 Warnings)
+- Iteration 2: 4/4 (4 Info)
 
-**Test suite gate (post-fix):** 600 passed, 5 skipped, 1 xfailed, 0 failed
-(matches the pre-fix baseline; no regression).
+**Test suite gate (post-iteration-2 fix):** 600 passed, 5 skipped, 1 xfailed,
+0 failed — matches the pre-fix baseline; no regression across either
+iteration.
 
-## Fixed Issues
+## Iteration 2 — Info findings (4 new fixes)
+
+### IN-01: Future-tense roadmap prose in test_subagents.py docstring
+
+**Files modified:** `tests/test_subagents.py`
+**Commit:** 5fcca60
+**Applied fix:** Replaced the wave-by-wave "Wave 0 creates all 6 tests
+as xfail stubs; subsequent waves flip..." narrative with a final-state
+description. The new docstring records the locked outcome ("All
+SUBA-01..06 tests are live (no xfail decorators remain)") followed by
+a wave-provenance ledger that preserves historical traceability:
+SUBA-01 (Plan 11-01), SUBA-02 (Plan 11-02), SUBA-03 (Plan 11-03),
+SUBA-04+SUBA-06 (Plan 11-05), SUBA-05 (Plan 11-04). Also dropped the
+duplicative "Subsequent waves should NOT redefine any of the above"
+paragraph that became redundant with the new Module-structure intro.
+The `(constants are imported by sibling test files when present)`
+bullet captures the operative guidance in one line.
+
+### IN-02: TRANSCRIPT_DIR docstring references non-existent filename
+
+**Files modified:** `tests/test_subagents.py`
+**Commit:** f4ae83b
+**Applied fix:** Updated the `TRANSCRIPT_DIR` constant docstring to
+name the real fixture: `stress_50_scenarios.transcript.jsonl` (the
+file that actually lives at `tests/fixtures/subagent_transcripts/`)
+instead of `stress_50_scenario_summary.md` (which never landed). Also
+clarified that `anthropic.count_tokens` is called against the
+JSONL **content**, not the path, to remove a second reader-trap.
+
+### IN-03: `.gitkeep` is redundant once real fixtures landed
+
+**Files modified:**
+- `tests/fixtures/subagent_transcripts/.gitkeep` (deleted via `git rm`)
+- `tests/fixtures/subagent_transcripts/README.md` (updated narrative)
+
+**Commit:** 5114d5f
+**Applied fix:** Removed the 0-byte `.gitkeep` seam. The directory is
+now tracked through the real content files (`README.md` + three
+`*.transcript.jsonl` fixtures) that Wave 5 landed in the same
+directory, so the Wave 0 seam file is residue. Updated the directory
+README's Wave-history paragraph to record the cleanup ("The `.gitkeep`
+was removed in the Phase 11 code-review cleanup pass (IN-03) once the
+real fixtures landed alongside the README — git tracks the directory
+via those files now") so future readers don't look for a missing file.
+
+Safety checks performed:
+- `scripts/hooks/block-user-layer.py:31` ALLOWED_KEEP_FILES enumerates
+  only `reports/.gitkeep` and `data/reference/.gitkeep` — this
+  `.gitkeep` was NOT on the whitelist, so removal does not touch the
+  User-Layer seam contract or `tests/test_block_user_layer.py`.
+- `tests/test_orchestration/test_gitignore_phase09.py:100` asserts
+  only on `reports/.gitkeep`, not the transcripts seam.
+- `TRANSCRIPT_DIR` is a module-level `Path` constant evaluated at
+  import time (not at directory-emptiness check time); the SUBA-04
+  smoke test (`tests/test_subagents.py::test_transcript_dir_exists`
+  equivalent) reads the directory and the three real `.jsonl`
+  fixtures, all of which are still present.
+
+Post-removal directory listing: 4 files (README.md + 3 transcripts),
+all preserved.
+
+### IN-04: Fixture path date drifts from system date
+
+**Files modified:** `tests/fixtures/subagent_transcripts/amort_single_loan.transcript.jsonl`
+**Commit:** b20565e
+**Applied fix:** Single-character literal swap: `reports/001-amortization-2026-05-02.csv`
+-> `reports/001-amortization-2026-05-10.csv`. Today's date per
+`CLAUDE.md` is 2026-05-10 and the `amortization-agent` Hard rule #4
+specifies "today's ISO date" for the CSV path.
+
+Safety checks performed:
+- `grep -rn "2026-05-02"` confirmed no test asserts against the
+  literal date string. Other `2026-05-02` occurrences are unrelated
+  "verified 2026-05-02" citation timestamps in
+  `references/apr-reg-z.md` and `references/refi-npv.md` (both
+  Phase 7 / Phase 6 deliverables, untouched).
+- SUBA-04 amort assertion uses the regex
+  `reports/\d{3}-amortization-\d{4}-\d{2}-\d{2}\.csv`, which matches
+  both before and after the change.
+- The fixture's JSONL still parses (verified via `json.loads`).
+
+## Iteration 1 — Critical and Warning findings (9 fixes)
+
+[Preserved verbatim from iteration 1 report for cross-reference.]
 
 ### CR-01: Broken cross-link to non-existent `references/stress-tests.md`
 
@@ -160,28 +249,40 @@ the established pattern.
 
 ## Skipped Issues
 
-None — all 9 in-scope findings (3 Critical + 6 Warnings) were fixed.
-
-The 4 Info findings (IN-01..IN-04) are out of scope per the orchestrator
-configuration (`fix_scope: critical_warning`).
+None — all 13 findings (3 Critical + 6 Warnings + 4 Info) across both
+iterations were fixed.
 
 ## Constraints honored
 
-- No `Co-Authored-By` or AI-attribution markers in any of the 9 commits
-  (verified: each commit message ends with the trailing line of the body,
-  no Claude/Anthropic byline).
+- No `Co-Authored-By` or AI-attribution markers in any of the 13 fix
+  commits (verified across iterations 1 + 2; each commit message ends
+  with the trailing line of the body, no Claude/Anthropic byline).
 - READ-ONLY user-layer respected: no edits to `config/household.yml`,
   `config/profile.yml`, any `*.duckdb` file, or `data/`.
-- SUBA-05 threshold strictly `>5` preserved — verified by grep across
-  `modes/stress.md` (3 occurrences, all `> 5`) and `test_subagents.py`
-  (5 occurrences, all `>5`).
+- SUBA-05 threshold strictly `>5` preserved across both iterations
+  (no Info finding touched modes/stress.md routing prose).
 - SC-3 token budget assertion still strictly `< 1000` — verified at
-  `tests/test_subagents.py:477` (`response.input_tokens < 1000`).
+  `tests/test_subagents.py:471` (`response.input_tokens < 1000`;
+  line number shifted -1 in iteration 2 from docstring trimming, but
+  the assertion is unchanged).
 - Test suite green: 600 passed / 5 skipped / 1 xfailed / 0 failed
-  (matches pre-fix baseline; no regressions).
+  (matches pre-fix baseline across both iterations; no regressions
+  introduced by any of the 13 fixes).
+- Iteration 2 commits used `--no-verify` per orchestrator instruction
+  (avoids hook contention on main; the global no-Claude-attribution
+  rule was still honored manually in every commit message).
+
+## Iteration-2 commit ledger (chronological)
+
+| Commit  | Finding | Title                                                                        |
+|---------|---------|------------------------------------------------------------------------------|
+| 5fcca60 | IN-01   | collapse stale wave-by-wave narrative in test_subagents docstring             |
+| f4ae83b | IN-02   | correct TRANSCRIPT_DIR docstring filename reference                           |
+| 5114d5f | IN-03   | remove redundant subagent_transcripts/.gitkeep seam                           |
+| b20565e | IN-04   | align amort fixture CSV-path date with system date                            |
 
 ---
 
 _Fixed: 2026-05-10_
 _Fixer: gsd-code-fixer_
-_Iteration: 1_
+_Iteration: 2 (covering Info findings; iteration 1 covered Critical + Warning)_
