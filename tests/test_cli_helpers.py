@@ -13,10 +13,16 @@ import json
 import sys
 from pathlib import Path
 
-# scripts/ is intentionally not a Python package; inject project root for imports.
+# Phase 10 (Plan 10-01) relocation: scripts/_cli_helpers.py moved to
+# .claude/skills/mortgage-ops/scripts/_cli_helpers.py. Inject the SKILL ROOT
+# (parent of the colocated scripts/) so `from scripts._cli_helpers import ...`
+# resolves to the relocated module. The repo root is also injected to keep
+# any incidental top-level imports (e.g., lib.*) working.
 _PROJECT_ROOT = str(Path(__file__).resolve().parent.parent)
-if _PROJECT_ROOT not in sys.path:
-    sys.path.insert(0, _PROJECT_ROOT)
+_SKILL_ROOT = str(Path(__file__).resolve().parent.parent / ".claude" / "skills" / "mortgage-ops")
+for _p in (_PROJECT_ROOT, _SKILL_ROOT):
+    if _p not in sys.path:
+        sys.path.insert(0, _p)
 
 from scripts._cli_helpers import find_json_float_loc, make_decimal_type_envelope  # noqa: E402, I001
 

@@ -48,9 +48,17 @@ FOUR_ORACLE_IDS = [
     "computed_200k_15yr",
 ]
 AMORTIZE_MODULE_PATH: Path = Path(__file__).resolve().parent.parent / "lib" / "amortize.py"
-SCRIPT_PATH: Path = Path(__file__).resolve().parent.parent / "scripts" / "amortize.py"
-"""Phase 3 CLI lives at project root scripts/. Phase 10 will relocate to
-.claude/skills/mortgage-ops/scripts/; only this constant updates."""
+SCRIPT_PATH: Path = (
+    Path(__file__).resolve().parent.parent
+    / ".claude"
+    / "skills"
+    / "mortgage-ops"
+    / "scripts"
+    / "amortize.py"
+)
+"""Phase 3 CLI WAS at project-root scripts/. Phase 10 (Plan 10-01) RELOCATED to
+.claude/skills/mortgage-ops/scripts/; only this constant updates per Phase 3 D-17
+portability seam."""
 
 
 def assert_schedule_invariants(schedule: Schedule, original_principal: Decimal) -> None:

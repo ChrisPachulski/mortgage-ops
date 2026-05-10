@@ -47,9 +47,17 @@ from pydantic import ValidationError
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-SCRIPT_PATH: Path = Path(__file__).resolve().parent.parent / "scripts" / "refi_npv.py"
-"""Phase 6 CLI lives at project-root scripts/. Phase 10 will relocate to
-.claude/skills/mortgage-ops/scripts/; only this constant updates."""
+SCRIPT_PATH: Path = (
+    Path(__file__).resolve().parent.parent
+    / ".claude"
+    / "skills"
+    / "mortgage-ops"
+    / "scripts"
+    / "refi_npv.py"
+)
+"""Phase 6 CLI WAS at project-root scripts/. Phase 10 (Plan 10-01) RELOCATED to
+.claude/skills/mortgage-ops/scripts/; only this constant updates per Phase 6 D-17
+portability seam."""
 
 REFINANCE_MODULE_PATH: Path = Path(__file__).resolve().parent.parent / "lib" / "refinance.py"
 """For lazy-import test (D-18 inherited): assert lib.refinance is NOT imported by --help."""

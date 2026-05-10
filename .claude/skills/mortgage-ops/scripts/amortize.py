@@ -89,15 +89,18 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    # When invoked as a script (`python scripts/amortize.py ...`), Python puts
-    # `scripts/` on sys.path, NOT the project root, so `from lib.amortize import ...`
-    # fails with ModuleNotFoundError. Insert the project root (parent of this file's
-    # directory) at sys.path[0] so the lazy-import below resolves. Cheap (one Path
-    # operation + list insert) and runs only AFTER --help has already exited above,
-    # so D-18 (--help fast) is unaffected.
-    _project_root = str(Path(__file__).resolve().parent.parent)
-    if _project_root not in sys.path:
-        sys.path.insert(0, _project_root)
+    # Phase 10 relocation (D-01): script lives at
+    # .claude/skills/mortgage-ops/scripts/amortize.py (5 levels deep). Inject
+    # BOTH the repo root (so `from lib.amortize import ...` resolves) AND the
+    # skill root (so `from scripts._cli_helpers import ...` resolves to the
+    # colocated helper, NOT the project-root scripts/ which no longer hosts it).
+    # parents[4] = repo root; parents[1] = skill root. Runs AFTER --help has
+    # exited above, so D-18 (--help fast) is unaffected.
+    _skill_root = str(Path(__file__).resolve().parents[1])
+    _project_root = str(Path(__file__).resolve().parents[4])
+    for _p in (_project_root, _skill_root):
+        if _p not in sys.path:
+            sys.path.insert(0, _p)
 
     # Lazy-import per D-18: heavy deps (numpy_financial, dateutil, lib.amortize)
     # are NOT loaded on the --help fast path. argparse has already parsed by here,

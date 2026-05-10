@@ -216,23 +216,70 @@ def test_skill_md_documents_progressive_disclosure(skill_root: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Wave 0 stub — Plan 10-01 relocates 7 calc scripts (amortize, affordability, arm_simulate, refi_npv, apr_reg_z, stress_test, points_breakeven) + _cli_helpers; flipped same wave",
-)
-def test_seven_scripts_in_skill_folder_only(skill_root: Path) -> None:
-    """SKLL-10 + ROADMAP SC-3 + D-01 + D-06 + D-08: ALL SEVEN calc scripts —
+def test_seven_scripts_in_skill_folder_only(skill_root: Path, repo_root: Path) -> None:
+    """SKLL-10 + ROADMAP SC-3 + D-01 + D-06 + D-08: ALL SEVEN calc CLIs —
     amortize.py, affordability.py, arm_simulate.py, refi_npv.py, apr_reg_z.py,
     stress_test.py, points_breakeven.py — live ONLY in
-    .claude/skills/mortgage-ops/scripts/, NOT at project root scripts/.
-    _cli_helpers.py also relocates with them.
+    .claude/skills/mortgage-ops/scripts/, NOT at project-root scripts/.
+    _cli_helpers.py also lives in skill folder.
 
-    _generate_arm_fixtures.py + scripts/hooks/ STAY at project root (D-06,
-    dev tooling, not user-facing CLIs).
+    Stay-at-root files (D-06): _generate_arm_fixtures.py +
+    _generate_apr_oracle_fixtures.py + scripts/hooks/*.
 
-    STATE.md confirms Phases 6/7/8 COMPLETE — all 7 scripts exist at project
-    root and CAN be relocated together. SC-3 / SKLL-10 close FULLY in Phase 10."""
-    pytest.fail("Wave 0 stub")
+    SC-3 / SKLL-10 close FULLY in Phase 10 (all 7 scripts relocated together;
+    Phase 6/7/8 COMPLETE per STATE.md so all 7 scripts existed at root pre-move).
+
+    Round-2 codex HIGH 1: this test consumes the `repo_root` fixture from
+    Plan 10-00 Task 3 instead of chaining four .parent calls off skill_root.
+    Four chained .parent attribute accesses overshoot the repo root by one
+    level — .claude/skills/mortgage-ops is only 3 levels deep, so .parents[3]
+    lands above the repo. The correct equivalents are `repo_root` (this
+    fixture) or `skill_root.parents[2]`.
+    """
+    project_scripts = repo_root / "scripts"
+    skill_scripts = skill_root / "scripts"
+
+    # Sanity: confirm repo_root fixture resolves correctly. If it doesn't,
+    # everything below produces meaningless "missing file" errors instead of
+    # surfacing the real bug.
+    assert (repo_root / "pyproject.toml").is_file(), (
+        f"repo_root fixture broken: pyproject.toml not at {repo_root}; "
+        f"path arithmetic in tests/conftest.py needs review"
+    )
+
+    relocated = [
+        "amortize.py",
+        "affordability.py",
+        "arm_simulate.py",
+        "refi_npv.py",
+        "apr_reg_z.py",
+        "stress_test.py",
+        "points_breakeven.py",
+        "_cli_helpers.py",
+    ]
+    for name in relocated:
+        assert (skill_scripts / name).is_file(), (
+            f"SKLL-10 violation: {name} missing from skill folder "
+            f"(expected at {skill_scripts / name})"
+        )
+        assert not (project_scripts / name).is_file(), (
+            f"SKLL-10 + D-01 violation: {name} STILL at project-root scripts/ "
+            f"(should have been relocated). Re-run Plan 10-01 Task 2."
+        )
+
+    # D-06: stay-at-root files MUST still exist at project root
+    stay_at_root = ["_generate_arm_fixtures.py", "hooks/block-user-layer.py"]
+    for name in stay_at_root:
+        assert (project_scripts / name).is_file(), (
+            f"D-06 violation: {name} should remain at project-root scripts/ "
+            f"(it is dev tooling, not a user-facing CLI)"
+        )
+
+    # D-06: stay-at-root files MUST NOT have been duplicated to skill folder
+    for name in stay_at_root:
+        assert not (skill_scripts / name).exists(), (
+            f"D-06 violation: {name} should NOT exist in skill folder"
+        )
 
 
 # ---------------------------------------------------------------------------

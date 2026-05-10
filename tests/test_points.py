@@ -15,7 +15,17 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-SCRIPT_PATH: Path = Path(__file__).resolve().parent.parent / "scripts" / "points_breakeven.py"
+SCRIPT_PATH: Path = (
+    Path(__file__).resolve().parent.parent
+    / ".claude"
+    / "skills"
+    / "mortgage-ops"
+    / "scripts"
+    / "points_breakeven.py"
+)
+"""Phase 8 CLI WAS at project-root scripts/. Phase 10 (Plan 10-01) RELOCATED to
+.claude/skills/mortgage-ops/scripts/; only this constant updates per Phase 8 D-17
+portability seam."""
 
 
 def test_pnts_01_simple_breakeven_ceil_division() -> None:

@@ -31,9 +31,17 @@ if TYPE_CHECKING:
 
     from lib.arm import ARMRequest
 
-SCRIPT_PATH: Path = Path(__file__).resolve().parent.parent / "scripts" / "arm_simulate.py"
-"""Phase 5 CLI lives at project-root scripts/. Phase 10 will relocate to
-.claude/skills/mortgage-ops/scripts/; only this constant updates."""
+SCRIPT_PATH: Path = (
+    Path(__file__).resolve().parent.parent
+    / ".claude"
+    / "skills"
+    / "mortgage-ops"
+    / "scripts"
+    / "arm_simulate.py"
+)
+"""Phase 5 CLI WAS at project-root scripts/. Phase 10 (Plan 10-01) RELOCATED to
+.claude/skills/mortgage-ops/scripts/; only this constant updates per Phase 5 D-17
+portability seam."""
 
 ARM_MODULE_PATH: Path = Path(__file__).resolve().parent.parent / "lib" / "arm.py"
 """For lazy-import test (D-18 inherited): assert lib.arm is NOT imported by --help."""

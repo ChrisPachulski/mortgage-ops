@@ -83,13 +83,18 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    # When invoked as `python scripts/points_breakeven.py ...`, Python puts
-    # `scripts/` on sys.path, NOT the project root, so `from lib.points
-    # import ...` fails with ModuleNotFoundError. Insert the project root.
-    # Mirrors scripts/arm_simulate.py:64-66 + scripts/apr_reg_z.py:96-98.
-    _project_root = str(Path(__file__).resolve().parent.parent)
-    if _project_root not in sys.path:
-        sys.path.insert(0, _project_root)
+    # Phase 10 relocation (D-01): script lives at
+    # .claude/skills/mortgage-ops/scripts/points_breakeven.py (5 levels deep).
+    # Inject BOTH the repo root (so `from lib.points import ...` resolves) AND
+    # the skill root (so `from scripts._cli_helpers import ...` resolves to the
+    # colocated helper, NOT the project-root scripts/ which no longer hosts it).
+    # parents[4] = repo root; parents[1] = skill root. Runs AFTER --help has
+    # exited above, so D-18 (--help fast) is unaffected.
+    _skill_root = str(Path(__file__).resolve().parents[1])
+    _project_root = str(Path(__file__).resolve().parents[4])
+    for _p in (_project_root, _skill_root):
+        if _p not in sys.path:
+            sys.path.insert(0, _p)
 
     # Lazy-import per D-18 / D-13: heavy deps NOT loaded on the --help fast path.
     from lib.points import PointsRequest, evaluate

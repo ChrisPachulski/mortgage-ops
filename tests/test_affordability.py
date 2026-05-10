@@ -70,9 +70,17 @@ if TYPE_CHECKING:
 AFFORDABILITY_MODULE_PATH: Path = (
     Path(__file__).resolve().parent.parent / "lib" / "affordability.py"
 )
-SCRIPT_PATH: Path = Path(__file__).resolve().parent.parent / "scripts" / "affordability.py"
-"""Phase 4 CLI lives at project-root scripts/. Phase 10 will relocate to
-.claude/skills/mortgage-ops/scripts/; only this constant updates."""
+SCRIPT_PATH: Path = (
+    Path(__file__).resolve().parent.parent
+    / ".claude"
+    / "skills"
+    / "mortgage-ops"
+    / "scripts"
+    / "affordability.py"
+)
+"""Phase 4 CLI WAS at project-root scripts/. Phase 10 (Plan 10-01) RELOCATED to
+.claude/skills/mortgage-ops/scripts/; only this constant updates per Phase 4 D-17
+portability seam."""
 
 VA_RESIDUAL_YAML_PATH: Path = (
     Path(__file__).resolve().parent.parent / "data" / "reference" / "va-residual-income.yml"

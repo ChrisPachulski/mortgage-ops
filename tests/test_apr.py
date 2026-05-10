@@ -38,7 +38,17 @@ from lib.models import Loan
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-SCRIPT_PATH: Path = Path(__file__).resolve().parent.parent / "scripts" / "apr_reg_z.py"
+SCRIPT_PATH: Path = (
+    Path(__file__).resolve().parent.parent
+    / ".claude"
+    / "skills"
+    / "mortgage-ops"
+    / "scripts"
+    / "apr_reg_z.py"
+)
+"""Phase 7 CLI WAS at project-root scripts/. Phase 10 (Plan 10-01) RELOCATED to
+.claude/skills/mortgage-ops/scripts/; only this constant updates per Phase 7 D-17
+portability seam."""
 APR_MODULE_PATH: Path = Path(__file__).resolve().parent.parent / "lib" / "apr.py"
 
 

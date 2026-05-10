@@ -24,8 +24,17 @@ import pytest
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-SCRIPT_PATH: Path = Path(__file__).resolve().parent.parent / "scripts" / "stress_test.py"
-"""Phase 8 CLI lives at project-root scripts/. Phase 10 relocates."""
+SCRIPT_PATH: Path = (
+    Path(__file__).resolve().parent.parent
+    / ".claude"
+    / "skills"
+    / "mortgage-ops"
+    / "scripts"
+    / "stress_test.py"
+)
+"""Phase 8 CLI WAS at project-root scripts/. Phase 10 (Plan 10-01) RELOCATED to
+.claude/skills/mortgage-ops/scripts/; only this constant updates per Phase 8 D-17
+portability seam."""
 
 STRESS_MODULE_PATH: Path = Path(__file__).resolve().parent.parent / "lib" / "stress.py"
 """For lazy-import test (D-18 inherited): assert lib.stress is NOT imported by --help."""

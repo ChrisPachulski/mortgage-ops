@@ -30,7 +30,7 @@ packages = ["lib"]
 [tool.ruff]
 target-version = "py312"
 line-length = 100
-src = ["lib", "tests", "scripts"]
+src = ["lib", "tests", "scripts", ".claude/skills/mortgage-ops/scripts"]
 
 [tool.ruff.lint]
 select = [
@@ -51,7 +51,15 @@ quote-style = "double"
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["lib", "tests", "scripts"]
+files = ["lib", "tests", "scripts", ".claude/skills/mortgage-ops/scripts"]
+# Phase 10 (Plan 10-01) relocation: `from scripts._cli_helpers import ...` in the
+# relocated CLIs and tests/test_cli_helpers.py must resolve to the colocated
+# helper at .claude/skills/mortgage-ops/scripts/_cli_helpers.py. mypy_path adds
+# the skill root so mypy can find `scripts/` (namespace package) there. The
+# repo root `.` is implicit (cwd); listing it explicitly is safe.
+mypy_path = [".", ".claude/skills/mortgage-ops"]
+namespace_packages = true
+explicit_package_bases = true
 plugins = ["pydantic.mypy"]
 warn_unreachable = true
 warn_redundant_casts = true
@@ -72,4 +80,5 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 minversion = "9.0"
 testpaths = ["tests"]
+pythonpath = [".", ".claude/skills/mortgage-ops"]
 addopts = ["-ra", "--strict-markers", "--strict-config"]
