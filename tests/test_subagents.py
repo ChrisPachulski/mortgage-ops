@@ -363,10 +363,11 @@ def test_SUBA_04_amort_handoff_returns_csv_or_markdown() -> None:
     assert len(lines) == 1, f"SUBA-04 amort: expected 1-line transcript, got {len(lines)}"
     content = json.loads(lines[0])["content"]
 
-    has_markdown_table = "| month " in content and "| balance " in content
+    has_markdown_table = "| period " in content and "| balance " in content
     has_csv_path = bool(re.search(r"reports/\d{3}-amortization-\d{4}-\d{2}-\d{2}\.csv", content))
     assert has_markdown_table or has_csv_path, (
-        f"SUBA-04 amort: transcript must contain EITHER a markdown table (|month|...|balance|) "
+        f"SUBA-04 amort: transcript must contain EITHER a markdown table "
+        f"(|period|date|payment|principal|interest|balance| per amortization-agent.md:66) "
         f"OR a CSV path (reports/NNN-amortization-YYYY-MM-DD.csv); got: {content[:200]!r}"
     )
     assert "Computed by:" in content, (
