@@ -7,37 +7,25 @@ Claude tokenizer). All SUBA-01..05 stubs are filesystem-only
 (yaml.safe_load + regex on modes/stress.md + Path.exists smoke); they
 run unconditionally in CI without ANTHROPIC_API_KEY.
 
-Wave 0 (Plan 11-00) creates ALL 6 tests as xfail stubs. Subsequent waves
-flip the relevant xfail decorators to real assertions:
+All SUBA-01..06 tests are live (no xfail decorators remain). Wave
+provenance for historical traceability:
 
-- Wave 1 (Plan 11-01): SUBA-01 amortization-agent.md frontmatter parse
-- Wave 2 (Plan 11-02): SUBA-02 refi-npv-agent.md frontmatter (model=sonnet)
-- Wave 3 (Plan 11-03): SUBA-03 stress-test-agent.md frontmatter (model=haiku)
-- Wave 4 (Plan 11-04): SUBA-05 modes/stress.md routing rule (>5 scenarios)
-- Wave 5 (Plan 11-05): SUBA-04 (parametrized over 3 agents) + SUBA-06
-  (transcript fixture + count_tokens call); MAY add new non-stub tests
-  for skill-resolution smoke + refi/amortize transcript shape.
+- SUBA-01 (Plan 11-01): amortization-agent.md frontmatter parse
+- SUBA-02 (Plan 11-02): refi-npv-agent.md frontmatter (model=sonnet)
+- SUBA-03 (Plan 11-03): stress-test-agent.md frontmatter (model=haiku)
+- SUBA-04 + SUBA-06 (Plan 11-05): transcript-shape parametrization
+  over the 3 agents + count_tokens budget call
+- SUBA-05 (Plan 11-04): modes/stress.md routing-rule literal assertion
 
-Each xfail decorator carries `strict=True` so a passing test in xfail state
-raises XPASS at collection time — the wave that flips it MUST also remove
-the decorator. This prevents accidental "fixed but still marked xfail" drift.
-
-HARD DEPENDENCY: SUBA-04 and SUBA-05 cannot pass until Phase 10 ships
-.claude/skills/mortgage-ops/SKILL.md + modes/stress.md. Wave 0 only ships
-the stubs; flip happens in Waves 4 + 5 AFTER Phase 10 lands.
-
-Module structure (so Wave 1+ can drop in real assertions without
-rederiving constants):
+Module structure (constants are imported by sibling test files when
+present; extend in place when a new agent / model alias / required key
+is locked):
 
 - AGENTS_DIR / SKILLS_DIR / TRANSCRIPT_DIR — anchored Path constants
 - EXPECTED_AGENTS — locked agent name tuple per ROADMAP SC-1
 - VALID_MODELS — short-alias whitelist per PATTERNS CRITICAL #1a
 - REQUIRED_FRONTMATTER_KEYS — SUBA-01 contract per ROADMAP SC-1
 - _split_frontmatter() — YAML frontmatter helper (lazy yaml import)
-
-Subsequent waves should NOT redefine any of the above. They should
-import them from this module if a sibling test file is added, or extend
-them in place when a new agent / model alias / required key is locked.
 """
 
 from __future__ import annotations
