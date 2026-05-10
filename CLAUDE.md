@@ -101,6 +101,28 @@ See `.planning/research/ARCHITECTURE.md` for ASCII diagram, project structure, d
 No project skills found yet. Will populate as Phase 10 (Claude Skill Frontend) implements `.claude/skills/mortgage-ops/SKILL.md`.
 <!-- GSD:skills-end -->
 
+<!-- GSD:subagents-start source:agents/ -->
+## Project Subagents
+
+Three context-isolated Claude Code subagents under `.claude/agents/`:
+
+- **`amortization-agent`** (Haiku) — single-loan amortization schedules. Returns markdown
+  table or CSV path. Closes REQUIREMENTS SUBA-01.
+- **`refi-npv-agent`** (Sonnet) — ranks 2-5 competing refi offers by NPV (borrower
+  perspective). Returns ranked markdown table. Closes SUBA-02.
+- **`stress-test-agent`** (Haiku) — parameter-grid stress sweeps with >5 scenarios.
+  Returns ≤1,000-token summary. Closes SUBA-03.
+
+Browser-friendly per-agent summaries: `.claude/agents/README.md` (NOT loaded into agent
+context — for human repo-browsers).
+
+Routing-decision detail (when each agent fires, budget rationale, live-transcript capture
+recipe): `.claude/skills/mortgage-ops/references/subagent-routing.md` (loaded on-demand by
+Phase 10 progressive disclosure).
+
+See `.planning/phases/11-subagents/` for source plans (Plans 11-00..11-06).
+<!-- GSD:subagents-end -->
+
 <!-- GSD:workflow-start source:GSD defaults -->
 ## GSD Workflow Enforcement
 
