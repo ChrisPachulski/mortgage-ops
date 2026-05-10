@@ -193,6 +193,12 @@ agents at Phase 10. When Phase 11 lands, `modes/stress.md` (D-SUBA-FW-02)
 will activate the dispatch automatically via an existence check on
 `.claude/agents/stress-test-agent.md` — no SKILL.md edit required.
 
+### SUBA-05 routing rule (stress mode)
+
+Routes parameter-grid stress sweeps. Sweeps with `scenario_count > 5` dispatch
+to `stress-test-agent` per the SUBA-05 rule (full text in `modes/stress.md`);
+sweeps with 5 or fewer scenarios run inline on the main thread.
+
 ## Discovery Menu (no args)
 
 When invoked with no arguments (or with an unrecognized sub-command that

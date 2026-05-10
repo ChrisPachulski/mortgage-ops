@@ -149,3 +149,18 @@ percent-only narration for rate-shock and income-shock.
   "how does the reset work" (when ARM-reset mode is active)
 - `references/affordability-rules.md` — "explain the DTI cap" /
   "ATR/QM"
+
+## Subagent dispatch (SUBA-05)
+
+If `scenario_count > 5`, dispatch to `stress-test-agent` (see `.claude/agents/stress-test-agent.md`).
+The agent receives the sweep request, invokes `scripts/stress_test.py` once with the full grid,
+and returns a ≤1,000-token summary to the main context (Phase 11 SC-2 + SC-3 contract).
+
+Sweeps with 5 or fewer scenarios stay on the main thread — the dispatch overhead is not worth
+it for outputs that fit in main context (≤500 tokens for typical 5-scenario sweeps).
+
+The exact routing trigger Claude Code reads at dispatch time is the `description:` field of
+`.claude/agents/stress-test-agent.md`, which begins: "Use proactively for stress sweeps with
+>5 scenarios..." (Plan 11-03 LOCKED DECISION D-04). Do not duplicate the trigger phrasing
+here — describe the routing decision in plain prose so this mode file stays a routing map,
+not a copy of the agent file.
