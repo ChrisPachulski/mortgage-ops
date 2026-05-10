@@ -67,7 +67,9 @@ evaluation belongs on the main thread, not here.
       `5000.0`); all rates as strings (`"0.055"`); all cashflow
       `direction` fields exactly `"outflow"` or `"inflow"`.
    b. Write the input to
-      `/tmp/refi-input-{offer-idx}-{timestamp}.json`.
+      `/tmp/refi-input-{offer-idx}-{timestamp}.json` (Bash tool — use
+      a heredoc or `printf` to materialize the tmpfile; the Write tool
+      is NOT in this agent's toolset per Hard rule #5).
    c. Invoke `bash: python
       .claude/skills/mortgage-ops/scripts/refi_npv.py --input
       /tmp/refi-input-{offer-idx}-{timestamp}.json`.
