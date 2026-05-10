@@ -19,6 +19,7 @@ USER_LAYER_PATTERNS: tuple[str, ...] = (
     "config/household.yml",
     "config/profile.yml",
     "modes/_profile.md",
+    ".claude/skills/mortgage-ops/modes/_profile.md",
     # DuckDB and reports are gitignored, but block them as belt-and-suspenders
     # in case .gitignore is ever bypassed with `git add -f`.
 )

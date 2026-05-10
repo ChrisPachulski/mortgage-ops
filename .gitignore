@@ -17,6 +17,9 @@ config/household.yml
 config/profile.yml
 modes/_profile.md
 
+# Phase 10: skill user-layer override (DATA_CONTRACT.md User Layer)
+.claude/skills/mortgage-ops/modes/_profile.md
+
 # Data Layer (generated)
 data/*.duckdb
 data/market/

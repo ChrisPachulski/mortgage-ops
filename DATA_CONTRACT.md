@@ -16,7 +16,7 @@ These files contain personal data, customizations, and computed user-private sta
 |------|---------|
 | `config/household.yml` | Household income, applicants, joint-applicant credit scores, monthly debts, location |
 | `config/profile.yml` | User identity, preferences (mortgage display conventions, default loan term, etc.) |
-| `modes/_profile.md` | (Phase 10) user-specific narrative overrides for the Claude skill |
+| `.claude/skills/mortgage-ops/modes/_profile.md` | (Phase 10) user-specific narrative overrides for the Claude skill |
 | `data/mortgage-ops.duckdb` | (Phase 9) computed scenarios + reports |
 | `data/mortgage-ops.duckdb-wal` | (Phase 9) DuckDB write-ahead log sidecar |
 | `data/mortgage-ops.duckdb-shm` | (Phase 9) DuckDB shared-memory sidecar |

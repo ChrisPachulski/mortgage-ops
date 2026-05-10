@@ -39,6 +39,7 @@ main = _block_user_layer.main
         "config/household.yml",
         "config/profile.yml",
         "modes/_profile.md",
+        ".claude/skills/mortgage-ops/modes/_profile.md",
     ],
 )
 def test_user_layer_pattern_paths_are_blocked(path: str) -> None:
