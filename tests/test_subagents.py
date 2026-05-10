@@ -340,7 +340,18 @@ def test_SUBA_04_refi_handoff_returns_ranked_table() -> None:
     for row in table_rows[1:]:
         cells = [c.strip() for c in row.split("|") if c.strip()]
         npv_str = cells[-1].replace("$", "").replace(",", "")
-        npv_values.append(float(npv_str))
+        try:
+            npv_values.append(float(npv_str))
+        except ValueError:
+            pytest.fail(
+                f"SUBA-04 refi: last column of row {row!r} is not a numeric "
+                f"NPV (got {cells[-1]!r}). Verify the agent contract still "
+                f"places NPV as the LAST column per Plan 11-02 Hard rule #5. "
+                f"Note that breakeven_months CAN be 'n/a' for negative-NPV "
+                f"offers; if a column reorder placed breakeven_months last, "
+                f"this assertion catches the drift instead of failing with "
+                f"an opaque float() ValueError."
+            )
     assert npv_values == sorted(npv_values, reverse=True), (
         f"SUBA-04 refi: NPV column must be sorted descending; got {npv_values}"
     )
