@@ -42,6 +42,9 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
+import yaml
+
+from tests._skill_helpers import count_tokens
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -52,22 +55,21 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Wave 0 stub — Plan 10-02 ships SKILL.md; Plan 10-05 wires assertion",
-)
 def test_skill_md_under_token_budget(skill_root: Path) -> None:
-    """SKLL-01 + ROADMAP SC-1: SKILL.md ≤ 4500 cl100k tokens (10% under 5000 Anthropic spec)."""
-    pytest.fail("Wave 0 stub")
+    """SKLL-01 + ROADMAP SC-1 + D-02: SKILL.md ≤ 4500 cl100k tokens (10% under 5000 Anthropic spec)."""
+    skill_md = (skill_root / "SKILL.md").read_text()
+    n_tokens = count_tokens(skill_md)
+    assert n_tokens <= 4500, (
+        f"SKILL.md is {n_tokens} cl100k tokens (budget 4500 = 5000 Anthropic spec - 10% margin per D-02). "
+        f"Trim or move detail into modes/ or references/ (progressive disclosure SKLL-09). "
+        f"Compaction re-attach budget is 5000 tokens; tokenizer drift would breach it."
+    )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Wave 0 stub — Plan 10-02 ships SKILL.md; Plan 10-05 wires assertion",
-)
 def test_skill_md_under_line_budget(skill_root: Path) -> None:
-    """SKLL-01 + ROADMAP SC-1: SKILL.md ≤ 500 lines."""
-    pytest.fail("Wave 0 stub")
+    """SKLL-01 + ROADMAP SC-1: SKILL.md ≤ 500 lines per agentskills.io guidance."""
+    n_lines = (skill_root / "SKILL.md").read_text().count("\n") + 1
+    assert n_lines <= 500, f"SKILL.md is {n_lines} lines (cap 500)"
 
 
 # ---------------------------------------------------------------------------
@@ -76,13 +78,15 @@ def test_skill_md_under_line_budget(skill_root: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Wave 0 stub — Plan 10-02 ships routing skeleton; Plan 10-05 wires assertion",
-)
 def test_skill_routing_in_first_200_lines(skill_root: Path) -> None:
-    """SKLL-02 + D-12: '## Mode Routing' + 7 mode names appear in first 200 lines of SKILL.md."""
-    pytest.fail("Wave 0 stub")
+    """SKLL-02 + D-12: '## Mode Routing' heading + 7 mode names appear in first 200 lines."""
+    head = "\n".join((skill_root / "SKILL.md").read_text().splitlines()[:200])
+    assert "## Mode Routing" in head, (
+        "SKLL-02: '## Mode Routing' must appear in first 200 lines — survives "
+        "Anthropic compaction re-attach (5000-token / first-200-line window)."
+    )
+    for mode in ("evaluate", "compare", "refinance", "affordability", "stress", "amortize", "arm"):
+        assert mode in head, f"SKLL-02: mode '{mode}' not dispatched in first 200 lines"
 
 
 # ---------------------------------------------------------------------------
@@ -90,13 +94,25 @@ def test_skill_routing_in_first_200_lines(skill_root: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Wave 0 stub — Plan 10-02 ships frontmatter; Plan 10-05 wires assertion",
-)
 def test_skill_md_frontmatter_required_fields(skill_root: Path) -> None:
-    """SKLL-03 + ROADMAP SC-2: frontmatter has name, description, license, compatibility."""
-    pytest.fail("Wave 0 stub")
+    """SKLL-03 + ROADMAP SC-2 + D-03: frontmatter has name + description + license + compatibility per agentskills.io spec."""
+    skill_md = (skill_root / "SKILL.md").read_text()
+    parts = skill_md.split("---\n", 2)
+    assert len(parts) >= 3, "SKILL.md missing YAML frontmatter delimiters"
+    fm = yaml.safe_load(parts[1])
+
+    for key in ("name", "description", "license", "compatibility"):
+        assert key in fm, f"SKLL-03 frontmatter missing key '{key}'"
+
+    assert fm["name"] == "mortgage-ops", (
+        f"frontmatter 'name' must equal parent dir 'mortgage-ops'; got {fm['name']!r}"
+    )
+    assert len(fm["description"]) <= 1024, (
+        f"description {len(fm['description'])} chars > 1024 spec cap"
+    )
+    assert len(fm["compatibility"]) <= 500, (
+        f"compatibility {len(fm['compatibility'])} chars > 500 spec cap"
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -104,13 +120,14 @@ def test_skill_md_frontmatter_required_fields(skill_root: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Wave 0 stub — Plan 10-02 ships LICENSE.txt; Plan 10-05 wires assertion",
-)
 def test_license_txt_exists_in_skill_folder(skill_root: Path) -> None:
-    """SKLL-04 + ROADMAP SC-2: LICENSE.txt bundled inside skill folder (D-04 = MIT default)."""
-    pytest.fail("Wave 0 stub")
+    """SKLL-04 + ROADMAP SC-2 + D-04: LICENSE.txt bundled inside skill folder; references MIT per default."""
+    license_path = skill_root / "LICENSE.txt"
+    assert license_path.is_file(), f"SKLL-04: LICENSE.txt missing from {license_path}"
+    text = license_path.read_text()
+    assert "MIT License" in text or "Apache" in text or "BSD" in text or "Copyright" in text, (
+        "LICENSE.txt should contain a recognizable license header"
+    )
 
 
 # ---------------------------------------------------------------------------
