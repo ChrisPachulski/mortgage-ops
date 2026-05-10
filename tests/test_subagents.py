@@ -44,12 +44,9 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import pytest
-
-if TYPE_CHECKING:
-    pass
 
 # ---------------------------------------------------------------------------
 # Module-level path constants
@@ -112,7 +109,7 @@ def _split_frontmatter(md_path: Path) -> dict[str, Any]:
         ValueError: If the file does not start with the opening '---'
             delimiter, or if the closing '---' delimiter is absent.
     """
-    import yaml  # noqa: PLC0415 — intentional lazy import for collect-only speed
+    import yaml
 
     text = md_path.read_text()
     if not text.startswith("---\n"):
@@ -128,7 +125,7 @@ def _split_frontmatter(md_path: Path) -> dict[str, Any]:
 # =========================================================================
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 11-01 ships .claude/agents/amortization-agent.md")
+@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 11-01 ships agent file")
 def test_SUBA_01_amortization_agent_frontmatter_parses_with_required_fields() -> None:
     """SUBA-01 + ROADMAP SC-1: amortization-agent.md frontmatter parses
     cleanly via `_split_frontmatter` AND declares all four required keys
@@ -149,7 +146,7 @@ def test_SUBA_01_amortization_agent_frontmatter_parses_with_required_fields() ->
 # =========================================================================
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 11-02 ships .claude/agents/refi-npv-agent.md")
+@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 11-02 ships agent file")
 def test_SUBA_02_refi_npv_agent_frontmatter_model_is_sonnet() -> None:
     """SUBA-02 + ROADMAP SC-4: refi-npv-agent.md frontmatter parses AND
     `model` is `sonnet` (Sonnet for multi-step NPV ranking across multiple
@@ -166,7 +163,7 @@ def test_SUBA_02_refi_npv_agent_frontmatter_model_is_sonnet() -> None:
 # =========================================================================
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 11-03 ships .claude/agents/stress-test-agent.md")
+@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 11-03 ships agent file")
 def test_SUBA_03_stress_test_agent_frontmatter_model_is_haiku() -> None:
     """SUBA-03: stress-test-agent.md frontmatter parses AND model=haiku.
 
@@ -185,7 +182,7 @@ def test_SUBA_03_stress_test_agent_frontmatter_model_is_haiku() -> None:
 # =========================================================================
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 11-05 parametrizes over EXPECTED_AGENTS")
+@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 11-05 parametrizes")
 def test_SUBA_04_each_agent_skills_field_is_mortgage_ops() -> None:
     """SUBA-04 + ROADMAP SC-5: every agent declares
     `skills: [mortgage-ops]` (Phase 10 dependency — the named skill must
@@ -203,7 +200,7 @@ def test_SUBA_04_each_agent_skills_field_is_mortgage_ops() -> None:
 # =========================================================================
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 11-04 lands the >5 routing rule in modes/stress.md (Phase 10 file)")
+@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 11-04 routing rule")
 def test_SUBA_05_stress_mode_routes_sweeps_over_5_to_subagent() -> None:
     """SUBA-05 + ROADMAP SC-2: modes/stress.md documents the routing rule
     'sweeps with > 5 scenarios route to stress-test-agent'.
@@ -220,7 +217,7 @@ def test_SUBA_05_stress_mode_routes_sweeps_over_5_to_subagent() -> None:
 # =========================================================================
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 11-05 ships stress_50_scenario_summary.md + count_tokens assertion")
+@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 11-05 ships fixture + count_tokens")
 @pytest.mark.skipif(
     not os.environ.get("ANTHROPIC_API_KEY"),
     reason=(
