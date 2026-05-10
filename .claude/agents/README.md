@@ -86,15 +86,19 @@ self-correcting (the agent returns immediately without doing the work).
 
 ## Where to learn more
 
-- Routing decisions in detail: `../skills/mortgage-ops/references/subagent-routing.md`
+All paths below are repo-rooted (the convention used by sibling
+`.claude/skills/mortgage-ops/references/*.md` — see e.g.
+`apr-reg-z.md:484`, `arm-mechanics.md:25`, `subagent-routing.md:6,163`).
+
+- Routing decisions in detail: `.claude/skills/mortgage-ops/references/subagent-routing.md`
   (loaded on-demand by Phase 10 progressive disclosure).
-- SUBA-05 routing seam (>5 scenarios → stress-test-agent): `../skills/mortgage-ops/modes/stress.md`
+- SUBA-05 routing seam (>5 scenarios → stress-test-agent): `.claude/skills/mortgage-ops/modes/stress.md`
   (Plan 11-04 wires the rule there; cross-phase contract at
-  `../../.planning/phases/11-subagents/11-04-SUBA-05-TODO.md`).
-- Phase 11 success criteria: `../../.planning/ROADMAP.md` Phase 11 section (SC-1..SC-5).
-- Per-requirement traceability: `../../.planning/REQUIREMENTS.md` SUBA-01..SUBA-06.
-- Test gates: `../../tests/test_subagents.py` + the synthetic transcripts at
-  `../../tests/fixtures/subagent_transcripts/` (live-capture recipe in that directory's
+  `.planning/phases/11-subagents/11-04-SUBA-05-TODO.md`).
+- Phase 11 success criteria: `.planning/ROADMAP.md` Phase 11 section (SC-1..SC-5).
+- Per-requirement traceability: `.planning/REQUIREMENTS.md` SUBA-01..SUBA-06.
+- Test gates: `tests/test_subagents.py` + the synthetic transcripts at
+  `tests/fixtures/subagent_transcripts/` (live-capture recipe in that directory's
   README).
 
 ## No AI attribution
