@@ -7,10 +7,13 @@ hand-authored to match the canonical agent-output shape from Plans
 that CI runs are deterministic, free of API charges, and reproducible
 across machines.
 
-Wave 0 (Plan 11-00) shipped this README plus a `.gitkeep`; Wave 5 (Plan
-11-05) populates the directory with three `.transcript.jsonl` files and
-extends this README with the live-capture recipe + synthetic-vs-live
-rationale (D-02).
+Wave 0 (Plan 11-00) shipped this README plus a `.gitkeep` seam; Wave 5
+(Plan 11-05) populated the directory with three `.transcript.jsonl`
+files and extended this README with the live-capture recipe +
+synthetic-vs-live rationale (D-02). The `.gitkeep` was removed in the
+Phase 11 code-review cleanup pass (IN-03) once the real fixtures
+landed alongside the README — git tracks the directory via those
+files now.
 
 ## Files
 
