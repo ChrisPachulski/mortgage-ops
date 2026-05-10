@@ -198,18 +198,56 @@ def test_SUBA_02_refi_npv_agent_frontmatter_model_is_sonnet() -> None:
 # =========================================================================
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 11-03 ships agent file")
 def test_SUBA_03_stress_test_agent_frontmatter_model_is_haiku() -> None:
-    """SUBA-03: stress-test-agent.md frontmatter parses AND model=haiku.
+    """SUBA-03 + ROADMAP SC-1 + SC-3 setup: stress-test-agent.md frontmatter
+    parses AND model=haiku.
 
-    REQUIREMENTS.md SUBA-03 originally said Haiku; orchestrator brief said
-    'TBD'; PATTERNS.md CRITICAL #1a surfaced the discrepancy. RESEARCH
-    recommended Haiku because the reasoning load is 'compress table to
-    representative shape', not multi-step composition. PINNED HAIKU here.
-
-    Wave 3 (Plan 11-03) will flip this stub when the agent file lands.
+    Model selection LOCKED via Plan 11-03 D-01: Haiku, resolving the SUBA-03
+    model-discrepancy surfaced in 11-PATTERNS.md Critical Issue #1a item 2
+    (REQUIREMENTS.md says Haiku; orchestrator scratch said TBD; this plan
+    locks Haiku per the original requirement and per RESEARCH Architectural
+    Responsibility Map — Phase 8 owns the math, this agent only summarizes).
     """
-    pytest.fail("Wave 0 stub")
+    path = AGENTS_DIR / "stress-test-agent.md"
+    assert path.exists(), f"SUBA-03: {path} must exist (shipped by Plan 11-03)"
+    fm = _split_frontmatter(path)
+    missing = REQUIRED_FRONTMATTER_KEYS - fm.keys()
+    assert not missing, f"SUBA-03: {path.name} missing frontmatter keys: {missing}"
+    assert fm["name"] == "stress-test-agent", (
+        f"SUBA-03: name={fm['name']!r} must equal 'stress-test-agent' (filename stem)"
+    )
+    assert fm["model"] == "haiku", (
+        f"SUBA-03: model={fm['model']!r} must equal 'haiku' "
+        "(REQUIREMENTS SUBA-03 + Plan 11-03 LOCKED DECISION D-01 — Haiku for "
+        "summarization; Phase 8 owns the math, no multi-step reasoning required)"
+    )
+    assert fm["skills"] == ["mortgage-ops"], (
+        f"SUBA-03: skills={fm['skills']!r} must equal ['mortgage-ops']"
+    )
+    description = fm.get("description")
+    assert isinstance(description, str), (
+        f"SUBA-03: description must be a string, got {type(description).__name__}"
+    )
+    assert len(description) > 30, (
+        f"SUBA-03: description must be a non-trivial routing trigger "
+        f"(>30 chars), got {description!r}"
+    )
+    # D-04 — description MUST start with the proactive-dispatch trigger phrase
+    # so Claude Code's auto-delegation routes >5-scenario sweeps here without
+    # ambiguity.
+    assert description.lower().startswith("use proactively for stress sweeps with >5 scenarios"), (
+        f"SUBA-03: description must start with 'Use proactively for stress sweeps "
+        f"with >5 scenarios' per Plan 11-03 D-04; got: {description[:80]!r}"
+    )
+    # Write tool MUST be present — needed for the CSV escape hatch (Hard rule
+    # #5 + Workflow Step 6 in the agent body); Read+Bash+Write per RESEARCH
+    # Code Example 3.
+    tools = fm.get("tools") or []
+    for required in ("Read", "Bash", "Write"):
+        assert required in tools, (
+            f"SUBA-03: tools must include {required!r} "
+            f"(Write needed for CSV escape hatch); got tools={tools}"
+        )
 
 
 # =========================================================================
