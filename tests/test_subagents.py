@@ -125,20 +125,32 @@ def _split_frontmatter(md_path: Path) -> dict[str, Any]:
 # =========================================================================
 
 
-@pytest.mark.xfail(strict=True, reason="Wave 0 stub — Plan 11-01 ships agent file")
 def test_SUBA_01_amortization_agent_frontmatter_parses_with_required_fields() -> None:
-    """SUBA-01 + ROADMAP SC-1: amortization-agent.md frontmatter parses
-    cleanly via `_split_frontmatter` AND declares all four required keys
-    (`name`, `description`, `model`, `skills`) AND `name` matches the file
-    stem AND `model` resolves to a `VALID_MODELS` alias AND `skills` is
-    `["mortgage-ops"]`.
-
-    Wave 1 will replace the body with real assertions when Plan 11-01
-    ships the agent file. Wave 0 only proves that this test name exists,
-    is collectible by pytest, and reports XFAIL (not ERROR) without an
-    agent file present.
-    """
-    pytest.fail("Wave 0 stub")
+    """SUBA-01 + ROADMAP SC-1: amortization-agent.md frontmatter has model:,
+    skills: [mortgage-ops], description, name (matches filename stem)."""
+    path = AGENTS_DIR / "amortization-agent.md"
+    assert path.exists(), f"SUBA-01: {path} must exist (shipped by Plan 11-01)"
+    fm = _split_frontmatter(path)
+    missing = REQUIRED_FRONTMATTER_KEYS - fm.keys()
+    assert not missing, f"SUBA-01: {path.name} missing frontmatter keys: {missing}"
+    assert fm["name"] == "amortization-agent", (
+        f"SUBA-01: name={fm['name']!r} must equal 'amortization-agent' (filename stem)"
+    )
+    assert fm["model"] == "haiku", (
+        f"SUBA-01: model={fm['model']!r} must equal 'haiku' "
+        "(REQUIREMENTS SUBA-01 + 11-RESEARCH model selection)"
+    )
+    assert fm["skills"] == ["mortgage-ops"], (
+        f"SUBA-01: skills={fm['skills']!r} must equal ['mortgage-ops']"
+    )
+    description = fm.get("description")
+    assert isinstance(description, str), (
+        f"SUBA-01: description must be a string, got {type(description).__name__}"
+    )
+    assert len(description) > 30, (
+        f"SUBA-01: description must be a non-trivial routing trigger "
+        f"(>30 chars), got {description!r}"
+    )
 
 
 # =========================================================================
