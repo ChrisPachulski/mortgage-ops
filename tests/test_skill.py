@@ -40,6 +40,8 @@ adds these imports at module level when the flipped assertions consume them
 from __future__ import annotations
 
 import re
+import subprocess
+import sys
 from typing import TYPE_CHECKING
 
 import pytest
@@ -382,15 +384,17 @@ def test_seven_scripts_in_skill_folder_only(skill_root: Path, repo_root: Path) -
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Wave 0 stub — Plan 10-02 ships math-discipline doctrine in SKILL.md; Plan 10-05 wires assertion",
-)
 def test_skill_md_shell_out_doctrine(skill_root: Path) -> None:
-    """SKLL-11 + ROADMAP SC-5 + UI-SPEC §g: SKILL.md contains the literal substring
-    'ALWAYS shell out' (or near-equivalent — assert by regex match per UI-SPEC
-    narration template)."""
-    pytest.fail("Wave 0 stub")
+    """SKLL-11 + ROADMAP SC-5 + UI-SPEC §g: SKILL.md instructs Claude to ALWAYS shell out for math; never compute inline."""
+    text = (skill_root / "SKILL.md").read_text()
+    # The exact substring is placed by Plan 10-02 Task 2; assert literal presence.
+    canonical = "ALWAYS shell out to scripts/ for math; NEVER compute numbers inline."
+    assert canonical in text, (
+        f"SKLL-11 violation: substring not found in SKILL.md.\n"
+        f"Expected: {canonical!r}\n"
+        f"This is the load-bearing math-discipline doctrine; if you reword it, "
+        f"reword test+SKILL.md together to keep the contract auditable."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -398,16 +402,54 @@ def test_skill_md_shell_out_doctrine(skill_root: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Wave 0 stub — Plan 10-02 ships --help-first doctrine; Plan 10-05 wires assertion",
-)
 def test_each_script_has_help_and_doctrine_documented(skill_root: Path) -> None:
-    """SKLL-12 + ROADMAP SC-5: each relocated script's `--help` exits 0 in < 200ms,
-    AND SKILL.md contains 'run --help first; do not read source' (or near-equivalent
-    literal text). Wave 5 covers all 7 relocated calc scripts (Round-2 codex MEDIUM
-    6: SKLL-12 closure NOT split between waves)."""
-    pytest.fail("Wave 0 stub")
+    """SKLL-12 + ROADMAP SC-5 + webapp-testing exemplar: each of the SEVEN
+    relocated calc scripts has a working `--help` (D-18 fast --help inherited
+    from Phase 3) AND SKILL.md has the run-help-first doctrine substring.
+
+    Round-2 codex MEDIUM 6: prior draft only ran --help for 3 of 7 scripts
+    (amortize, affordability, arm_simulate) and the commit message claimed
+    SKLL-12 closure. That overstates coverage. This Wave 5 test runs --help
+    for all 7 relocated calc scripts (amortize, affordability, arm_simulate,
+    refi_npv, apr_reg_z, stress_test, points_breakeven). _cli_helpers.py is
+    NOT in the list — it has no argparse main."""
+    text = (skill_root / "SKILL.md").read_text()
+    # Doctrine substring (paraphrased from webapp-testing per Plan 10-02 Task 2).
+    assert "run `--help` first" in text or "Always run scripts with `--help` first" in text, (
+        "SKLL-12: SKILL.md must instruct 'run --help first; do not read source' "
+        "(doctrine lifted from anthropics/skills/skills/webapp-testing/SKILL.md per RESEARCH §b)"
+    )
+
+    # Each of the 7 relocated user-facing calc scripts must --help exit 0
+    relocated = [
+        "amortize.py",
+        "affordability.py",
+        "arm_simulate.py",
+        "refi_npv.py",
+        "apr_reg_z.py",
+        "stress_test.py",
+        "points_breakeven.py",
+    ]
+    for name in relocated:
+        script = skill_root / "scripts" / name
+        assert script.is_file(), (
+            f"{name} missing from skill folder (Plan 10-01 should have relocated)"
+        )
+        result = subprocess.run(
+            [sys.executable, str(script), "--help"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        )
+        assert result.returncode == 0, (
+            f"SKLL-12: {name} --help failed (exit {result.returncode}). "
+            f"stderr: {result.stderr[:500]}"
+        )
+        # --help output should mention "--input" (the JSON-in CLI shape) — sanity check
+        assert "--input" in result.stdout or "--input" in result.stderr, (
+            f"{name} --help should document the --input flag"
+        )
 
 
 # ---------------------------------------------------------------------------
