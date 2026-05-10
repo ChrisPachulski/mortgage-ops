@@ -257,15 +257,27 @@ def test_profile_md_user_layer_gitignored(skill_root: Path, repo_root: Path) -> 
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Wave 0 stub — Plan 10-03 ships D-PROF-01 schema; Plan 10-05 wires assertion",
-)
 def test_profile_example_md_has_exact_four_keys(skill_root: Path) -> None:
-    """D-PROF-01 + D-PROF-02: _profile.example.md YAML body has EXACTLY these
-    four top-level keys: verbosity, citation_density, save_report, disambiguation.
-    No extras (calc inputs stay in config/household.yml + config/profile.yml)."""
-    pytest.fail("Wave 0 stub")
+    """D-PROF-01 + D-PROF-02 + Round-2 codex HIGH 4 Option A:
+    _profile.example.md is pure YAML (no fenced block) so the
+    user's `cp _profile.example.md _profile.md` produces a
+    directly-parseable file. Parse the entire body and assert
+    EXACTLY four top-level keys.
+    """
+    raw = (skill_root / "modes" / "_profile.example.md").read_text()
+    assert "```yaml" not in raw, (
+        "Round-2 codex HIGH 4: _profile.example.md must NOT contain a "
+        "fenced ```yaml block — it must be pure YAML so the user's `cp` "
+        "to _profile.md produces a yaml.safe_load-parseable file."
+    )
+    parsed = yaml.safe_load(raw)
+    assert isinstance(parsed, dict), "_profile.example.md must parse as a YAML mapping (D-PROF-01)."
+    expected = {"verbosity", "citation_density", "save_report", "disambiguation"}
+    actual = set(parsed.keys())
+    assert actual == expected, (
+        f"D-PROF-01: must have EXACTLY 4 top-level keys {expected}; "
+        f"got {actual}. Extras violate D-PROF-02."
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -465,35 +477,225 @@ def test_each_script_has_help_and_doctrine_documented(skill_root: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Wave 0 stub — Plan 10-03 ships Save Report step in _shared.md (D-13-01..05); Plan 10-05 wires assertion (modes/_shared.md grep for the real CLI invocation)",
-)
 def test_report_filename_format(skill_root: Path) -> None:
-    """SKLL-13 + D-13-02: report filenames follow reports/{NNN:03d}-{mode}-{YYYY-MM-DD}.md
-    convention (3-digit zero-padded sequence, mode slug from {evaluate, compare,
-    refinance, affordability, stress, amortize, arm}, ISO date). Wave 5 wires
-    by parsing modes/_shared.md for the convention regex. Plan 10-06 adds an
-    end-to-end smoke that actually writes a report file under the convention."""
-    pytest.fail("Wave 0 stub")
+    """SKLL-13 + D-13-02: Phase 10 closes SKLL-13. modes/_shared.md MUST
+    document the filename convention `reports/{NNN:03d}-{mode}-{YYYY-MM-DD}.md`
+    so future report writes match. This test parses _shared.md for the
+    convention regex pattern; Plan 10-06 adds an end-to-end smoke that
+    actually writes a report and re-asserts the regex against the filename."""
+    shared = (skill_root / "modes" / "_shared.md").read_text()
+    # Per CONTEXT.md D-13-02 the filename pattern is
+    # reports/{NNN:03d}-{mode}-{YYYY-MM-DD}.md. Assert _shared.md contains
+    # a literal pattern token that documents the convention.
+    pattern_tokens = [
+        r"reports/\{NNN:03d\}-\{mode\}-\{YYYY-MM-DD\}\.md",
+        r"reports/\{NNN\}-\{mode\}-\{YYYY-MM-DD\}\.md",
+        r"reports/042-stress-2026-05-\d{2}\.md",  # CONTEXT.md D-13-02 example
+    ]
+    matched = any(re.search(tok, shared) for tok in pattern_tokens)
+    assert matched, (
+        "SKLL-13 D-13-02: modes/_shared.md must document the filename convention "
+        f"(any of: {pattern_tokens}). Per CONTEXT.md Phase 10 CLOSES SKLL-13; "
+        f"the convention must be in _shared.md verbatim."
+    )
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Wave 0 stub — Plan 10-03 ships db-write.mjs insert-report integration (D-13-04); Plan 10-05 wires assertion (Plan 10-06 adds end-to-end smoke)",
-)
 def test_report_persisted_to_duckdb(skill_root: Path) -> None:
-    """SKLL-13 + D-13-04: after writing reports/{NNN}-{mode}-{date}.md, the
-    skill calls `node orchestration/db-write.mjs insert-report --scenario-id
-    <int> --file <path>` (the REAL Phase 9 CLI per orchestration/db-write.mjs
-    usage block lines 296-310). The reports table schema has no filename
-    column — the persistence step stores `(scenario_id, markdown_blob)` and
-    the file on disk is the durable filename anchor.
+    """SKLL-13 + D-13-04: Phase 10 closes SKLL-13. modes/_shared.md MUST
+    invoke the REAL `node orchestration/db-write.mjs insert-report
+    --scenario-id <int> --file <path>` subcommand after each report write.
+    This test asserts the literal CLI invocation appears in _shared.md.
+    Plan 10-06 adds an end-to-end smoke that actually exercises init-db +
+    insert-loan + insert-scenario + insert-report and queries
+    `SELECT scenario_id, markdown_blob FROM reports WHERE scenario_id = ?`.
 
-    Wave 5 ships the unit-level assertion that modes/_shared.md documents the
-    REAL CLI invocation literal (`node orchestration/db-write.mjs
-    insert-report`). Plan 10-06 ships an end-to-end smoke that actually
-    invokes init-db + insert-loan + insert-scenario + insert-report and
-    queries `SELECT scenario_id, markdown_blob FROM reports WHERE
-    scenario_id = ?` returning 1 row."""
-    pytest.fail("Wave 0 stub")
+    Round-2 codex HIGH 2: prior draft asserted the fictional flag form
+    `--insert-report --json` and queried by a `filename` column that does
+    not exist on the schema. Both are forbidden here."""
+    shared = (skill_root / "modes" / "_shared.md").read_text()
+    assert "node orchestration/db-write.mjs insert-report --scenario-id" in shared, (
+        "SKLL-13 D-13-04: modes/_shared.md must invoke the REAL CLI "
+        "`node orchestration/db-write.mjs insert-report --scenario-id <int> "
+        "--file <path>` (per orchestration/db-write.mjs:296-310 usage block) "
+        "to persist the report markdown to DuckDB after writing the .md file."
+    )
+    # Forbidden-substring guards (Round-2 codex HIGH 2: prior fictional CLI
+    # forms must never re-appear in _shared.md)
+    assert "--insert-report --json" not in shared, (
+        "Round-2 codex HIGH 2: `--insert-report --json` is NOT a real flag on "
+        "orchestration/db-write.mjs. Use the `insert-report --scenario-id <int> "
+        "--file <path>` subcommand instead."
+    )
+    assert "db-write.mjs --query" not in shared, (
+        "Round-2 codex HIGH 2: `--query` is NOT a real flag. The real "
+        'subcommand is `query --sql "SELECT ..."`.'
+    )
+    # Also assert the override knob per D-13-05
+    assert "save_report: false" in shared, (
+        "SKLL-13 D-13-05: modes/_shared.md must document the user-override "
+        "knob `save_report: false` (the only escape hatch from D-13-03 unconditional save)."
+    )
+
+
+# ---------------------------------------------------------------------------
+# Wave 5 BONUS cross-cutting tests:
+#   - 3 drift-protection (byte-equality) tests for arm-mechanics, refi-npv,
+#     apr-reg-z mirrors (10-PATTERNS CRITICAL #4 §5)
+#   - 1 envelope smoke test (Phase 3 WR-02 contract surviving relocation)
+#   - 1 _profile.md write-block test (DATA_CONTRACT FND-10 / D-PROF-03)
+#   - 2 subagent forward-link tests (D-SUBA-FW-01 SKILL.md + D-SUBA-FW-02
+#     modes/stress.md)
+# ---------------------------------------------------------------------------
+
+
+def test_arm_mechanics_skill_mirror_in_sync(skill_root: Path, repo_root: Path) -> None:
+    """10-PATTERNS CRITICAL #4 §5: <repo>/references/arm-mechanics.md MUST stay
+    byte-identical to .claude/skills/mortgage-ops/references/arm-mechanics.md
+    so Phase 5 docstring path (project root) and SKLL-08 progressive disclosure
+    (skill folder) cannot drift apart silently."""
+    project_copy = repo_root / "references" / "arm-mechanics.md"
+    skill_copy = skill_root / "references" / "arm-mechanics.md"
+    assert project_copy.exists(), "Phase 5 source-of-truth missing"
+    assert skill_copy.exists(), "Plan 10-04 Task 1 should have copied; SKLL-08 fails"
+    assert project_copy.read_bytes() == skill_copy.read_bytes(), (
+        f"DRIFT: {project_copy} and {skill_copy} are not byte-identical. "
+        f"Update both copies in the same commit (10-PATTERNS CRITICAL #4)."
+    )
+
+
+def test_refi_npv_skill_mirror_in_sync(skill_root: Path, repo_root: Path) -> None:
+    """Plan 10-04 Task 2 byte-lift: <repo>/references/refi-npv.md MUST stay
+    byte-identical to .claude/skills/mortgage-ops/references/refi-npv.md.
+    Phase 6 lib/refinance.py docstring cites the project-root path; Phase 10
+    progressive disclosure cites the skill-folder path. Both must agree."""
+    project_copy = repo_root / "references" / "refi-npv.md"
+    skill_copy = skill_root / "references" / "refi-npv.md"
+    assert project_copy.exists(), "Phase 6 source-of-truth missing"
+    assert skill_copy.exists(), "Plan 10-04 Task 2 should have copied; SKLL-08 fails"
+    assert project_copy.read_bytes() == skill_copy.read_bytes(), (
+        "DRIFT: refi-npv.md project-root and skill-folder copies diverge. "
+        "Update both in the same commit, OR re-cp from project root."
+    )
+
+
+def test_apr_reg_z_skill_mirror_in_sync(skill_root: Path, repo_root: Path) -> None:
+    """Plan 10-04 Task 2 byte-lift: <repo>/references/apr-reg-z.md MUST stay
+    byte-identical to .claude/skills/mortgage-ops/references/apr-reg-z.md.
+    Phase 7 lib/apr.py docstring cites the project-root path; Phase 10
+    progressive disclosure cites the skill-folder path. Both must agree."""
+    project_copy = repo_root / "references" / "apr-reg-z.md"
+    skill_copy = skill_root / "references" / "apr-reg-z.md"
+    assert project_copy.exists(), "Phase 7 source-of-truth missing"
+    assert skill_copy.exists(), "Plan 10-04 Task 2 should have copied; SKLL-08 fails"
+    assert project_copy.read_bytes() == skill_copy.read_bytes(), (
+        "DRIFT: apr-reg-z.md project-root and skill-folder copies diverge."
+    )
+
+
+def test_amortize_envelope_smoke(skill_root: Path, tmp_path: Path) -> None:
+    """Cross-cutting (relocation regression): the Phase 3 WR-02 6-key Pydantic
+    envelope contract must SURVIVE the Plan 10-01 relocation. Smoke-tests
+    amortize.py only — name renamed honestly per codex review (prior
+    `test_relocated_scripts_envelope_smoke` overstated coverage). The other
+    relocated scripts have richer JSON shapes; their envelope contracts are
+    covered by the per-script test files (test_affordability.py / test_arm.py /
+    test_apr.py / test_refinance.py / test_stress.py / test_points.py)."""
+    bad_input = tmp_path / "bad.json"
+    bad_input.write_text(
+        '{"loan": {"principal": 400000.0, "annual_rate": "0.065000", '
+        '"term_months": 360, "origination_date": "2026-05-01"}}'
+    )
+    script = skill_root / "scripts" / "amortize.py"
+    result = subprocess.run(
+        [sys.executable, str(script), "--input", str(bad_input)],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    assert result.returncode != 0, "float-in-money should fail; got exit 0"
+    for key in ("type", "loc", "msg", "input", "url", "ctx"):
+        assert key in result.stderr, (
+            f"6-key envelope missing key '{key}' in stderr (Phase 3 WR-02 contract)"
+        )
+
+
+def test_profile_md_write_attempt_blocked(repo_root: Path) -> None:
+    """DATA_CONTRACT + UI-SPEC §f: scripts/hooks/block-user-layer.py MUST
+    reject any argv invocation that names .claude/skills/mortgage-ops/modes/_profile.md
+    as a staged path.
+
+    Round-2 codex HIGH 3: the hook reads `argv[1:]` (verified by reading
+    scripts/hooks/block-user-layer.py:46-67 — `def main(argv): offenders =
+    [a for a in argv[1:] if is_user_layer(a)]; if not offenders: return 0`).
+    To trigger the rejection path the test passes the candidate path AS argv.
+    No git staging is required; the pre-commit shim invokes the hook with
+    staged paths as argv at commit time, which is what we simulate here.
+    """
+    hook = repo_root / "scripts" / "hooks" / "block-user-layer.py"
+    assert hook.is_file(), f"hook missing at {hook}"
+
+    target = ".claude/skills/mortgage-ops/modes/_profile.md"
+    result = subprocess.run(
+        [sys.executable, str(hook), target],
+        cwd=str(repo_root),
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    assert result.returncode == 1, (
+        f"DATA_CONTRACT violation: hook should reject {target!r} with exit 1; "
+        f"got {result.returncode}. stdout: {result.stdout[:500]} stderr: {result.stderr[:500]}"
+    )
+    # Hook MUST name the offending file in stderr
+    assert "_profile.md" in result.stderr, (
+        f"hook stderr should name the offending file; got: {result.stderr[:500]}"
+    )
+
+    # Sanity: the hook should also accept a clean staging (positive control —
+    # confirms the hook is not just always rejecting everything)
+    clean_result = subprocess.run(
+        [sys.executable, str(hook), "lib/money.py", "pyproject.toml"],
+        cwd=str(repo_root),
+        capture_output=True,
+        text=True,
+        timeout=10,
+        check=False,
+    )
+    assert clean_result.returncode == 0, (
+        f"hook false-rejected clean staging; got exit {clean_result.returncode}"
+    )
+
+
+def test_modes_stress_md_subagent_forward_link(skill_root: Path) -> None:
+    """D-SUBA-FW-02 (CONTEXT.md): modes/stress.md MUST contain the literal
+    phrase `if it exists` AND the literal path `.claude/agents/stress-test-agent.md`.
+    Phase 11 lands by writing the agent file; modes/stress.md doesn't need
+    a follow-up commit — same routing logic activates automatically."""
+    text = (skill_root / "modes" / "stress.md").read_text()
+    assert "stress-test-agent" in text, (
+        "modes/stress.md must reference 'stress-test-agent' (D-SUBA-FW-02)"
+    )
+    assert "if it exists" in text, (
+        "D-SUBA-FW-02: modes/stress.md must contain the LITERAL phrase "
+        "'if it exists' (existence-check seam)"
+    )
+    assert ".claude/agents/stress-test-agent.md" in text, (
+        "D-SUBA-FW-02: modes/stress.md must contain the LITERAL path "
+        "'.claude/agents/stress-test-agent.md' (Phase 11 forward-link)"
+    )
+
+
+def test_skill_md_subagent_section_present(skill_root: Path) -> None:
+    """D-SUBA-FW-01 (CONTEXT.md): SKILL.md MUST contain a `## Subagents (Phase 11)`
+    section naming all THREE Phase 11 subagent filenames as forward-links."""
+    text = (skill_root / "SKILL.md").read_text()
+    assert "## Subagents (Phase 11)" in text, (
+        "D-SUBA-FW-01: SKILL.md must contain the literal heading '## Subagents (Phase 11)'"
+    )
+    for name in ("amortization-agent", "refi-npv-agent", "stress-test-agent"):
+        assert name in text, (
+            f"D-SUBA-FW-01: SKILL.md Subagents section must name '{name}' "
+            f"as a forward-link (Phase 11 will create the file)"
+        )
