@@ -390,24 +390,30 @@ def test_SUBA_05_stress_mode_routes_sweeps_over_5_to_subagent() -> None:
     text); D-02: cross-phase update protocol (this branch executed because Phase 10 had
     shipped at task time).
     """
-    import re
-
     stress_md_path = SKILLS_DIR / "modes" / "stress.md"
     assert stress_md_path.exists(), (
         f"SUBA-05: {stress_md_path} must exist (Phase 10 SKLL-05 dependency); "
         "if Phase 10 has not yet shipped, see .planning/phases/11-subagents/11-04-SUBA-05-TODO.md"
     )
     stress_md = stress_md_path.read_text()
-    # Regex matches phrasings: "scenarios > 5", "more than 5 scenarios",
-    # "scenario_count > 5" — pinned by an explicit positive assertion.
-    pattern = re.compile(
-        r"(scenarios?\s*(>|more than|greater than)\s*5|scenario[_ ]count\s*>\s*5).*"
-        r"(stress-test-agent|subagent)",
-        re.IGNORECASE | re.DOTALL,
+    # Pin the canonical literal sentence verbatim. modes/stress.md:155 is the
+    # contract; matching the exact phrasing prevents false positives where an
+    # earlier mention of "scenario_count > 5" + a later, unrelated mention of
+    # "stress-test-agent" would have satisfied a permissive regex with .* +
+    # re.DOTALL spanning the whole file. Per Plan 11-04 LOCKED DECISION D-01
+    # the threshold is strictly >5 (matches literal SC-2 wording); per
+    # Plan 11-04 D-02 cross-phase update protocol this branch executed because
+    # Phase 10 had shipped at task time.
+    canonical_sentence = (
+        "If `scenario_count > 5`, dispatch to `stress-test-agent`"
     )
-    assert pattern.search(stress_md), (
-        "SUBA-05: modes/stress.md must document 'sweeps with > 5 scenarios route to stress-test-agent' "
-        "per the insertion contract in .planning/phases/11-subagents/11-04-SUBA-05-TODO.md"
+    assert canonical_sentence in stress_md, (
+        "SUBA-05: modes/stress.md must contain the canonical sentence "
+        f"{canonical_sentence!r} verbatim (per Plan 11-04 LOCKED DECISION "
+        "D-01 + the insertion contract in "
+        ".planning/phases/11-subagents/11-04-SUBA-05-TODO.md). The threshold "
+        "is strictly >5 (NOT >=5, NOT >3) — matches the literal SC-2 / "
+        "SUBA-05 wording in ROADMAP.md and REQUIREMENTS.md."
     )
     # SKILL.md cross-reference assertion — Phase 10 surface MUST cite the agent name
     # so the routing breadcrumb is followable from SKILL.md → modes/stress.md → agent file.
