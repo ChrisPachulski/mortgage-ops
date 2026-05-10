@@ -205,3 +205,37 @@ def node_orchestration_run(
         timeout=timeout,
         check=check,
     )
+
+
+@pytest.fixture
+def skill_root() -> Path:
+    """Return the absolute path to .claude/skills/mortgage-ops/ for cross-test reuse.
+
+    Phase 10 ships this fixture so every Phase 10/11/12 test that introspects
+    the skill folder (SKILL.md, modes/, references/, scripts/, LICENSE.txt)
+    has a single source of truth for the path. The folder may not exist at
+    Wave 0 time (Plans 10-01 through 10-05 create it); tests that depend on
+    existence MUST assert that explicitly.
+
+    Per LOCKED DECISION D-01: the skill folder lives at
+    .claude/skills/mortgage-ops/ (project-relative).
+    """
+    return Path(__file__).resolve().parent.parent / ".claude" / "skills" / "mortgage-ops"
+
+
+@pytest.fixture
+def repo_root() -> Path:
+    """Return the absolute path to the repo root for cross-test reuse.
+
+    Round-2 codex HIGH 1: prior Wave 5/6 drafts used
+    `skill_root.parent.parent.parent.parent` (four chained .parent calls)
+    to derive the repo root. That goes one level too high — `.claude/skills/
+    mortgage-ops` is only THREE levels deep (mortgage-ops → skills → .claude
+    → repo root). The correct equivalents are `skill_root.parents[2]` or
+    this `repo_root` fixture. Wave 5/6 tests MUST use one of these two
+    forms.
+
+    Implementation: `Path(__file__).resolve().parents[1]` (conftest.py lives
+    in tests/, so parents[0] = tests/, parents[1] = repo root).
+    """
+    return Path(__file__).resolve().parents[1]
