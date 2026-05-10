@@ -12,6 +12,7 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "anthropic==0.100.0",
     "mypy>=1.20",
     "pre-commit>=4.6",
     "pytest>=9.0",
