@@ -234,7 +234,16 @@ User selected **fine** (8-12 phases). This roadmap is **12 phases** — each cal
   3. `evals/runner.py evals/prompts/` executes all benchmark prompts and asserts each report's reported numbers trace back to a recorded `scripts/` invocation (Pitfall #2 detection — no LLM-hallucinated numbers)
   4. Eval harness reports `route_match_rate` (% of prompts where the right mode + scripts were invoked) and `numeric_match_rate` (% where reported numbers match expected within tolerance); both ≥ 95% on the v1 prompt set
   5. `evals/expected/` contains expected calc-routes + numeric outputs for at least one prompt per mode (evaluate, compare, refinance, affordability, stress, amortize, arm)
-**Plans**: TBD
+**Plans:** 9 plans
+- [ ] 12-00-PLAN.md — Wave 0 test infrastructure: 5 strict-xfail test files + evals/ tree + tests/fixtures/fred/ + freezegun + python-frontmatter dev-deps
+- [ ] 12-01-PLAN.md — Wave 1 FRED CLI: HTTP wrapper canonical per D-12-LIVE01-01 at .claude/skills/mortgage-ops/scripts/fred_cli.py; always-exit-0 envelope (LIVE-01 + LIVE-04)
+- [ ] 12-02-PLAN.md — Wave 2 cache: lib/fred_cache.py 7-day TTL strict-< boundary + orchestration/lockfile.mjs Python port (LIVE-03)
+- [ ] 12-03-PLAN.md — Wave 3 SKILL.md injection: `## Live Mortgage Rates` verbatim section per D-12-LIVE02-01 Pattern A prose-only (LIVE-02)
+- [ ] 12-04-PLAN.md — Wave 4 eval harness: evals/runner.py HarnessReport three-bucket gate (D-12-SC4-01) + evals/metrics.py STDOUT-only sourcing (D-12-SC3-01); EVAL-01..EVAL-03 + EVAL-04
+- [ ] 12-05-PLAN.md — Wave 5 prompts: 22 eval prompts (13 anchored + 9 TBD-skip per D-12-SC4-01) covering all 7 modes + live-rate-injection-01 per D-12-SC1-01 + 2 fixture caches (EVAL-01)
+- [ ] 12-06-PLAN.md — Wave 6 oracles: 22 paired oracle JSONs + citation-coverage meta-test + end-to-end gate (13/0/9 -> 1.0) (EVAL-02)
+- [ ] 12-07-PLAN.md — Wave 7 CI + closure: eval gate step in ci.yml + REQUIREMENTS.md LIVE-01/LIVE-02 wording rewrites + ROADMAP.md Phase 12 closure
+- [ ] 12-08-PLAN.md — Wave 8 references: references/fred-context.md (HTTP canonical + MCP optional) + SKILL.md/CLAUDE.md/.claude/agents/README.md cross-links
 
 ## Progress
 
