@@ -22,7 +22,7 @@ Phase 12 wires live FRED data (MORTGAGE30US, MORTGAGE15US) into SKILL.md and shi
 - **D-12-SC4-01:** TBD-Phase-N prompts (those with `expected_numbers: []`) go into a `numeric_skip` third bucket — neither pass nor fail. The 95% gate computes on `numeric_pass / (numeric_pass + numeric_fail)`. Eval runner reports must show `numeric_pass=N`, `numeric_fail=N`, `numeric_skip=N` explicitly so future-you sees the real shape of the eval set.
   - Plan 12-04 `evals/metrics.score_numeric_match` must return one of three states (`pass | fail | skip`) per prompt. The aggregator in `evals/runner.py` filters skip out of the gate denominator.
   - Plan 12-05 prompt frontmatter must include a non-empty `expected_numbers:` list OR explicit `numeric_status: skip` (with a `defer_until_phase: N` pointer to the phase that will fill it).
-  - Tests must assert: a TBD prompt is reported as `skipped` not `passed`; the gate at 100% pass on 12 anchored prompts + 9 skipped passes (`12/(12+0) = 100% ≥ 95%`); a single fail among the 12 anchored fails the gate (`11/(11+1) = 91.7% < 95%`).
+  - Tests must assert: a TBD prompt is reported as `skipped` not `passed`; the gate at 100% pass on 13 anchored prompts + 9 skipped passes (`13/(13+0) = 100% ≥ 95%`); a single fail among the 13 anchored fails the gate (`12/(12+1) = 92.3% < 95%`). NOTE: 13 anchored = 12 mode-coverage anchored + 1 live-rate-injection-01 per D-12-SC1-01 below.
 
 ### LIVE-01 scope (CONCERN — upstream MCP has no `fred-cli` binary)
 
