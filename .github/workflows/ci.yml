@@ -38,6 +38,12 @@ jobs:
       - name: Pytest
         run: uv run pytest
 
+      - name: Eval gate (replay-stub mode, deterministic; D-12-SC4-01 three-bucket)
+        # Phase 12 SC-4: numeric_match_rate >= 0.95 over (pass + fail), skip excluded
+        # from the denominator. v1 ships 13 anchored + 9 TBD-skip → 13/(13+0) = 100%.
+        # The harness exits 0 on pass, 1 on fail; CI propagates the exit code.
+        run: uv run python -m evals.runner --gate 0.95
+
       - name: User-Layer commit guard (server-side belt-and-suspenders)
         # Re-runs scripts/hooks/block-user-layer.py against every changed file in
         # the PR / push range. Closes the `git commit --no-verify` bypass per

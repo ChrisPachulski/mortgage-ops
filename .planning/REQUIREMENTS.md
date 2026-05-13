@@ -155,14 +155,14 @@ User selected "all" scope; everything below is in v1.
 
 ### Live Data + Eval Harness
 
-- [ ] **LIVE-01**: FRED MCP integration via `stefanoamorelli/fred-mcp-server` for MORTGAGE30US weekly rate
-- [ ] **LIVE-02**: SKILL.md uses inline `!\`...\`` shell injection for current rate context at invocation
-- [ ] **LIVE-03**: Cache FRED responses for 7 days max (FRED publishes weekly)
-- [ ] **LIVE-04**: Optional FRED MORTGAGE15US for 15-year context
-- [ ] **EVAL-01**: `evals/prompts/` with benchmark queries (one per mode minimum)
-- [ ] **EVAL-02**: `evals/expected/` with expected calc routes + numeric outputs
-- [ ] **EVAL-03**: `evals/runner.py` executes prompts against the skill, asserts route + output match
-- [ ] **EVAL-04**: Eval harness regression-tests: every reported number traces back to a `scripts/` invocation (Pitfall #2 detection)
+- [x] **LIVE-01**: FRED API integration via HTTP wrapper (canonical) at `.claude/skills/mortgage-ops/scripts/fred_cli.py` with optional `stefanoamorelli/fred-mcp-server` registration documented as secondary path in `.claude/skills/mortgage-ops/references/fred-context.md` (per D-12-LIVE01-01)
+- [x] **LIVE-02**: SKILL.md cites cache-file paths for `MORTGAGE30US` and `MORTGAGE15US` in a `## Live Mortgage Rates` section; cache refreshed by `scripts/fred_cli.py` with 7-day TTL (Pattern A prose-only injection per D-12-LIVE02-01 — Anthropic `!`...`` shell-injection syntax NOT used)
+- [x] **LIVE-03**: Cache FRED responses for 7 days max (FRED publishes weekly)
+- [x] **LIVE-04**: Optional FRED MORTGAGE15US for 15-year context
+- [x] **EVAL-01**: `evals/prompts/` with benchmark queries (one per mode minimum)
+- [x] **EVAL-02**: `evals/expected/` with expected calc routes + numeric outputs
+- [x] **EVAL-03**: `evals/runner.py` executes prompts against the skill, asserts route + output match
+- [x] **EVAL-04**: Eval harness regression-tests: every reported number traces back to a `scripts/` invocation (Pitfall #2 detection)
 
 ## v2 Requirements
 
@@ -319,14 +319,14 @@ Mapped 2026-04-26 by gsd-roadmapper. Every v1 requirement is assigned to exactly
 | SUBA-04 | Phase 11 | Pending |
 | SUBA-05 | Phase 11 | Pending |
 | SUBA-06 | Phase 11 | Pending |
-| LIVE-01 | Phase 12 | Pending |
-| LIVE-02 | Phase 12 | Pending |
-| LIVE-03 | Phase 12 | Pending |
-| LIVE-04 | Phase 12 | Pending |
-| EVAL-01 | Phase 12 | Pending |
-| EVAL-02 | Phase 12 | Pending |
-| EVAL-03 | Phase 12 | Pending |
-| EVAL-04 | Phase 12 | Pending |
+| LIVE-01 | Phase 12 | Done (12-01 + 12-08 — HTTP wrapper at .claude/skills/mortgage-ops/scripts/fred_cli.py canonical per D-12-LIVE01-01; MCP server documented as optional secondary path in references/fred-context.md; 4 tests in tests/test_fred_cli.py all green; always-exit-0 envelope per Pitfall 1 + D-12-LIVE02-01 recovery contract verified by test_fred_cli_missing_api_key_returns_exit_0_with_error_envelope) |
+| LIVE-02 | Phase 12 | Done (12-03 — Pattern A prose-only injection per D-12-LIVE02-01 verbatim section at SKILL.md `## Live Mortgage Rates`; 3 grep tests in tests/test_skill_md_fred.py all green; forbidden `!`...`` shell-injection syntax pinned absent by test_skill_md_does_not_use_shell_injection_syntax) |
+| LIVE-03 | Phase 12 | Done (12-02 — lib/fred_cache.py 7-day TTL strict-< boundary; 4 freezegun boundary tests in tests/test_fred_cache.py all green at 6d23h59m fresh / 7d exact stale / 8d stale; orchestration/lockfile.mjs Python port via with_cache_lock + 60s stale recovery) |
+| LIVE-04 | Phase 12 | Done (12-01 — MORTGAGE15US in allowlist alongside MORTGAGE30US; parametrized test_fred_cli_supports_both_series covers both series_ids) |
+| EVAL-01 | Phase 12 | Done (12-05 — 22 prompts in evals/prompts/ — 21 mode-coverage (3 × 7 modes per SC-5) + 1 live-rate-injection-01 per D-12-SC1-01; 13 anchored + 9 TBD-skip per D-12-SC4-01) |
+| EVAL-02 | Phase 12 | Done (12-06 — 22 paired oracles in evals/expected/ — 1:1 stem-matched with prompts; 13 anchored with provenance: stdout (or static for live-rate-injection); 9 skipped with defer_until_phase: 13.0) |
+| EVAL-03 | Phase 12 | Done (12-04 + 12-06 — evals/runner.py three-bucket gate per D-12-SC4-01; python -m evals.runner on the v1 set returns numeric_match_rate=1.0 (13 pass / 0 fail / 9 skip) and exit 0; CI gate wired in .github/workflows/ci.yml per Plan 12-07) |
+| EVAL-04 | Phase 12 | Done (12-04 — evals/metrics.detect_hallucinations STDOUT-only per D-12-SC3-01; score_route_match Pitfall #2b cross-check fails when numeric_output present + no subprocess invocation; provenance: static exempts IRS-Pub-936-style citations; 5 tests in tests/test_evals_metrics.py all green) |
 
 **Coverage:**
 
