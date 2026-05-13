@@ -6,9 +6,12 @@ Per LIVE-01 + LIVE-04 + D-12-LIVE01-01:
   - 7-day TTL cache at data/cache/fred_{series_id}.json (Plan 12-02 ships lib.fred_cache)
   - Allowlist: series_id ∈ {MORTGAGE30US, MORTGAGE15US}
   - --help works without importing urllib / lib.fred_cache (lazy-import per D-18 inherited)
-  - Always exits 0; failures emit {value: null, error: "..."} envelope on stdout
-    (per Pitfall 1 + D-12-LIVE02-01 recovery contract — SKILL.md prose-only
-    injection reads the envelope's `error` field, NOT a non-zero exit)
+  - Always exits 0 once arguments parse; argparse exits 2 on parse errors per
+    stdlib convention. Post-parse failures emit {value: null, error: "..."}
+    envelope on stdout (per Pitfall 1 + D-12-LIVE02-01 recovery contract —
+    SKILL.md prose-only injection reads the envelope's `error` field, NOT a
+    non-zero exit). SKILL.md only invokes with allowlisted args so argparse
+    parse errors never fire in production.
 
 Output JSON shape (stdout, one line — NOT pretty-printed):
   {
@@ -57,7 +60,8 @@ def main() -> int:
             '   "error": null|str}\n'
             "All money/rate fields are JSON STRINGS (D-19 inherited).\n"
             "FRED_API_KEY env var required; falls back to {error: ...} envelope when absent.\n"
-            "Always exits 0; check envelope.error field for failure mode."
+            "Always exits 0 once arguments parse; argparse exits 2 on parse errors "
+            "per stdlib convention. Check envelope.error field for failure mode."
         ),
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
