@@ -150,6 +150,7 @@ eagerly read references):
 | "what are MIP rules", "when does PMI drop off", "FHA insurance" | `references/mip-pmi.md` |
 | "is mortgage interest deductible", "tax implications", "Pub 936" | `references/tax-deductibility.md` |
 | "why don't your numbers match Excel", "how do you round", "spreadsheet tradition" | `references/spreadsheet-conventions.md` |
+| "what's the current rate", "FRED", "MORTGAGE30US", "how do live rates work" | `references/fred-context.md` |
 
 If the user does NOT use one of these phrases, do NOT load any reference
 file. The mode file + `_shared.md` + `_profile.md` together provide enough

@@ -101,6 +101,36 @@ All paths below are repo-rooted (the convention used by sibling
   `tests/fixtures/subagent_transcripts/` (live-capture recipe in that directory's
   README).
 
+## Phase 12: FRED MCP Server (optional)
+
+Phase 12 ships `scripts/fred_cli.py` as the **canonical** FRED integration path
+(HTTP wrapper, stdlib `urllib` only, no extra runtime deps). The
+`stefanoamorelli/fred-mcp-server` MCP server is documented as an **OPTIONAL
+secondary path** for users who want session-scoped MCP-tool dispatch to FRED
+from inside an interactive Claude Code session.
+
+The skill does NOT depend on the MCP server being registered:
+- CI evals (`evals/runner.py`) use HTTP-canonical for determinism.
+- SKILL.md `## Live Mortgage Rates` section cites the cache file directly
+  (`data/cache/fred_MORTGAGE30US.json`, `data/cache/fred_MORTGAGE15US.json`),
+  NOT an MCP tool.
+- If the MCP server is unavailable (no Node, no Smithery install), the skill
+  still works — the HTTP wrapper has zero MCP-runtime coupling.
+
+To register the MCP server (optional):
+
+```bash
+npx -y @smithery/cli install @stefanoamorelli/fred-mcp-server --client claude
+# OR manually edit .mcp.json — see references/fred-context.md §2 for the
+# project-scoped MCP entry recipe + FRED_API_KEY env-var wiring.
+```
+
+Full rationale + recipe:
+`.claude/skills/mortgage-ops/references/fred-context.md` §2 (MCP server
+optional secondary path per D-12-LIVE01-01). That reference is loaded
+on-demand by the skill (Phase 10 D-09 progressive disclosure) when the
+borrower asks about "current rate" / "FRED" / "MORTGAGE30US".
+
 ## No AI attribution
 
 Per project CLAUDE.md global rule: do NOT include any AI attribution in any commit message
