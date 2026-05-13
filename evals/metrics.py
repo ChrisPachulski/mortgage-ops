@@ -135,20 +135,29 @@ def score_route_match(
 
     D-12-SC3-01 Pitfall #2b cross-check: if model_response contains ANY numeric
     output AND no subprocess invocation occurred, route_match FAILS (the model
-    parroted a number without computing it).
+    parroted a number without computing it). EXEMPT: oracles where every
+    expected_number is provenance=static AND expected_scripts is empty — these
+    are static-citation prompts (e.g., FRED cache file lookup, IRS Pub 936 cap)
+    where the rate/cap is read from a file or doc, not computed.
 
     Returns True iff:
       - every expected_route_keyword appears in response OR in some subprocess.cmd[*]
       - AND every expected_scripts entry has a matching subprocess invocation
         (script name in cmd AND args_must_include flags all present)
       - AND Pitfall #2b check passes: numeric output present → subprocess invocation present
+        (skipped for all-static oracles)
     """
     sub_calls = [c for c in subprocess_calls if c.get("type") == "subprocess"]
 
-    # D-12-SC3-01 Pitfall #2b cross-check
+    # D-12-SC3-01 Pitfall #2b cross-check (exempt all-static oracles)
+    expected_nums = expected.get("expected_numbers", []) or []
+    expected_scripts = expected.get("expected_scripts", []) or []
+    all_static = bool(expected_nums) and not expected_scripts and all(
+        e.get("provenance") == "static" for e in expected_nums
+    )
     has_numeric_output = bool(extract_numbers(model_response))
     has_any_subprocess = len(sub_calls) > 0
-    if has_numeric_output and not has_any_subprocess:
+    if has_numeric_output and not has_any_subprocess and not all_static:
         return False
 
     # Keyword check (substring match against response OR cmd args)

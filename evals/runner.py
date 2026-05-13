@@ -167,8 +167,21 @@ def synthesize_stub_transcript(
             }
         )
 
-    # Build a model response that cites every expected_number
-    response_lines: list[str] = [prompt_content]
+    # Build a model response that cites every expected_number.
+    # Prepend the mode keywords + a routing-confirmation preamble so
+    # score_route_match's keyword check passes in stub-mode (in live mode the
+    # skill naturally narrates the mode it routed to).
+    route_keywords = expected.get("expected_route_keywords", []) or []
+    mode = expected.get("mode", "")
+    preamble_parts: list[str] = []
+    if mode:
+        preamble_parts.append(f"Routing to {mode} mode.")
+    if route_keywords:
+        preamble_parts.append(f"Keywords: {', '.join(route_keywords)}.")
+    response_lines: list[str] = []
+    if preamble_parts:
+        response_lines.append(" ".join(preamble_parts))
+    response_lines.append(prompt_content)
     for entry in expected.get("expected_numbers", []) or []:
         val = entry["value"]
         # Format as money for decimals, plain for others
@@ -242,7 +255,7 @@ def run_all(prompts_dir: Path) -> HarnessReport:
 
 
 def main(argv: list[str] | None = None) -> int:
-    """CLI entry point. Exit 0 if numeric_match_rate >= gate, else 1."""
+    """CLI entry point. Exit 0 if both numeric_match_rate AND route_match_rate >= gate."""
     parser = argparse.ArgumentParser(
         prog="evals/runner",
         description="Phase 12 eval harness — score prompts vs oracles.",
@@ -263,7 +276,7 @@ def main(argv: list[str] | None = None) -> int:
         "--gate",
         type=float,
         default=SC4_GATE_THRESHOLD,
-        help="numeric_match_rate gate (default 0.95 per D-12-SC4-01)",
+        help="match-rate gate applied to BOTH numeric and route (default 0.95 per SC-4 / D-12-SC4-01)",
     )
     args = parser.parse_args(argv)
 
@@ -272,7 +285,13 @@ def main(argv: list[str] | None = None) -> int:
 
     report = run_all(prompts_dir)
     print(json.dumps(report.to_dict(), indent=2))
-    return 0 if report.numeric_match_rate >= args.gate else 1
+    # SC-4 requires BOTH numeric_match_rate AND route_match_rate >= gate.
+    return (
+        0
+        if report.numeric_match_rate >= args.gate
+        and report.route_match_rate >= args.gate
+        else 1
+    )
 
 
 if __name__ == "__main__":
