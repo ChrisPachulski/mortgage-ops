@@ -1,7 +1,7 @@
-"""Phase 12 Wave-0 stubs for evals/metrics.py — D-12-SC3-01 STDOUT-only sourcing
-+ D-12-SC4-01 three-state score_numeric_match enum.
+"""Phase 12 Wave-4 live tests: EVAL-04 + D-12-SC3-01 + D-12-SC4-01 closed at the
+metrics layer.
 
-Plan 12-04 ships evals/metrics.py with:
+Plan 12-04 shipped evals/metrics.py with:
   - NumericScore enum (PASS | FAIL | SKIP) per D-12-SC4-01
   - score_numeric_match() returning the three-state enum
   - score_route_match() with Pitfall #2b cross-check (numeric_output present
@@ -9,8 +9,6 @@ Plan 12-04 ships evals/metrics.py with:
   - detect_hallucinations() crediting numbers as sourced ONLY if they appear
     in STDOUT of a scripts/*.py invocation (D-12-SC3-01 — diverges from
     RESEARCH §Pattern 6 which unioned cmd args + stdin + stdout).
-
-All tests in this module are decorated `@pytest.mark.xfail(strict=True)`.
 
 Requirements covered:
   - EVAL-04 + D-12-SC3-01: STDOUT-only number provenance (prose-only fails;
@@ -22,18 +20,12 @@ Requirements covered:
 
 from __future__ import annotations
 
-import pytest
 
-
-@pytest.mark.xfail(
-    reason="Plan 12-04 ships evals/metrics.py — D-12-SC3-01 STDOUT-only",
-    strict=True,
-)
 def test_prose_only_number_fails_both_gates() -> None:
     """D-12-SC3-01: a transcript citing $1,264.14 from prose with NO script invocation
     fails BOTH numeric_match (Pitfall #2: hallucinated number) AND route_match
     (Pitfall #2b: parroted number with no script)."""
-    from evals.metrics import (  # type: ignore[import-not-found]
+    from evals.metrics import (
         NumericScore,
         score_numeric_match,
         score_route_match,
@@ -61,10 +53,6 @@ def test_prose_only_number_fails_both_gates() -> None:
     )
 
 
-@pytest.mark.xfail(
-    reason="Plan 12-04 ships evals/metrics.py — D-12-SC3-01 stdout-sourced pass",
-    strict=True,
-)
 def test_stdout_sourced_number_passes_both_gates() -> None:
     """D-12-SC3-01: number cited AFTER scripts/amortize.py stdout passes."""
     from evals.metrics import (
@@ -112,10 +100,6 @@ def test_stdout_sourced_number_passes_both_gates() -> None:
     )
 
 
-@pytest.mark.xfail(
-    reason="Plan 12-04 ships evals/metrics.py — D-12-SC3-01 cmd-arg-only fail",
-    strict=True,
-)
 def test_cmd_arg_only_number_fails_numeric_match() -> None:
     """D-12-SC3-01: a number that appears ONLY in cmd args (NOT stdout) must NOT
     be credited. Diverges from RESEARCH §Pattern 6 which accepted cmd args. This
@@ -159,10 +143,6 @@ def test_cmd_arg_only_number_fails_numeric_match() -> None:
     )
 
 
-@pytest.mark.xfail(
-    reason="Plan 12-04 ships evals/metrics.py — D-12-SC3-01 static-provenance exempt",
-    strict=True,
-)
 def test_static_provenance_number_exempt_from_stdout_rule() -> None:
     """D-12-SC3-01 exception: numbers tagged `provenance: static` are exempt
     (e.g. IRS Pub 936 $750k cap)."""
@@ -190,10 +170,6 @@ def test_static_provenance_number_exempt_from_stdout_rule() -> None:
     )
 
 
-@pytest.mark.xfail(
-    reason="Plan 12-04 ships score_numeric_match — D-12-SC4-01 three-state enum",
-    strict=True,
-)
 def test_score_numeric_match_returns_three_state_enum() -> None:
     """D-12-SC4-01: score_numeric_match returns one of NumericScore.{PASS, FAIL, SKIP}."""
     from evals.metrics import NumericScore

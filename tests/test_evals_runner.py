@@ -1,11 +1,13 @@
-"""Phase 12 Wave-0 stubs for evals/runner.py — EVAL-01..03 + D-12-SC4-01 gate.
+"""Phase 12 Wave-4 partial: HarnessReport + three-bucket gate live; 22-prompt
++ paired-oracle stubs deferred to Plans 12-05 + 12-06.
 
-Plan 12-04 ships HarnessReport + three-bucket aggregator (pass | fail | skip
-per D-12-SC4-01). Plan 12-05 ships 22 prompt files (21 mode-coverage + 1
+Plan 12-04 shipped HarnessReport + three-bucket aggregator (pass | fail | skip
+per D-12-SC4-01). Plan 12-05 will ship 22 prompt files (21 mode-coverage + 1
 live-rate-injection per D-12-SC1-01). Plan 12-06 pairs every prompt with an
 oracle JSON file (EVAL-02).
 
-All tests in this module are decorated `@pytest.mark.xfail(strict=True)`.
+3 tests still xfailed (waiting on Plans 12-05 + 12-06 fixtures);
+3 tests flipped to passing by this plan (HarnessReport gate math + TBD-skip).
 
 Requirements covered:
   - EVAL-01 + D-12-SC1-01: 22 prompts total (21 mode-coverage + 1 live-rate-injection)
@@ -86,16 +88,9 @@ def test_every_prompt_has_paired_oracle() -> None:
         assert oracle.is_file(), f"missing oracle for {prompt.stem}: {oracle}"
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Plan 12-04 ships HarnessReport with three-bucket gate per "
-        "D-12-SC4-01 — EVAL-03"
-    ),
-    strict=True,
-)
 def test_gate_passes_with_13_anchored_pass_and_9_skip() -> None:
     """D-12-SC4-01: 13/(13+0) = 100% >= 95% — gate PASSES (with 9 TBD skipped)."""
-    from evals.runner import HarnessReport  # type: ignore[import-not-found]
+    from evals.runner import HarnessReport
 
     report = HarnessReport(
         n_prompts=22,
@@ -109,10 +104,6 @@ def test_gate_passes_with_13_anchored_pass_and_9_skip() -> None:
     assert report.numeric_match_rate >= 0.95
 
 
-@pytest.mark.xfail(
-    reason="Plan 12-04 ships HarnessReport — D-12-SC4-01 fail case",
-    strict=True,
-)
 def test_gate_fails_with_one_anchored_fail_among_13() -> None:
     """D-12-SC4-01: 12/(12+1) = 92.3% < 95% — gate FAILS."""
     from evals.runner import HarnessReport
@@ -130,14 +121,10 @@ def test_gate_fails_with_one_anchored_fail_among_13() -> None:
     assert abs(report.numeric_match_rate - (12.0 / 13.0)) < 1e-9
 
 
-@pytest.mark.xfail(
-    reason="Plan 12-04 ships score_numeric_match — D-12-SC4-01 skip semantics",
-    strict=True,
-)
 def test_tbd_prompt_reported_as_skipped_not_passed() -> None:
     """D-12-SC4-01: a prompt with numeric_status='skip' must be reported as SKIP
     (not PASS)."""
-    from evals.metrics import (  # type: ignore[import-not-found]
+    from evals.metrics import (
         NumericScore,
         score_numeric_match,
     )
