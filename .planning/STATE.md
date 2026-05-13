@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: executing
-stopped_at: Plan 08-05 complete (Wave 5 fixtures + tests; 14 hand-calc fixtures shipped 11 stress + 3 points; 2 final xfails flipped + citation-coverage meta-test added; full suite 521/4/1 zero-regression; Phase 8 closed at the test layer with 0 xfails in Phase-8 test files; 3 deviations 2 Rule-1 plan-spec validate_python->validate_json + meta-test scope extension for STRS-04/PNTS-03 CLI requirements + 1 Rule-3 hygiene PT018 split + unused-pytest-import; D-05-01..D-05-07 LOCKED honored verbatim; SC-1..SC-5 all verifiable verbatim by tests; STRS-01..04 + PNTS-01..03 closed; only Plan 08-06 references doc remains for Phase 8 closure)
-last_updated: "2026-05-13T17:40:22.997Z"
-last_activity: 2026-05-13 -- Phase 12 execution started
+status: milestone_complete
+stopped_at: Phase 12 complete; v1.0 milestone ready to archive (9/9 plans shipped Wave 0..8; LIVE-01..04 + EVAL-01..04 closed; ROADMAP SC-1..SC-5 verified by gsd-verifier with route_match_rate=numeric_match_rate=1.0; 639 passed + 5 skipped + 1 xfailed; 7 advisory code-review findings — 2 BLOCKERs addressable via /gsd-code-review-fix 12)
+last_updated: "2026-05-13T20:00:00.000Z"
+last_activity: 2026-05-13 -- Phase 12 + v1.0 milestone complete
 progress:
   total_phases: 12
-  completed_phases: 11
-  total_plans: 87
-  completed_plans: 78
-  percent: 90
+  completed_phases: 12
+  total_plans: 96
+  completed_plans: 96
+  percent: 100
 ---
 
 # Project State
@@ -21,16 +21,39 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-26)
 
 **Core value:** Math correctness first — every dollar figure traces to a tested, deterministic Python function; the LLM is a router and narrator that never owns numbers.
-**Current focus:** Phase 12 — fred-eval
+**Current focus:** v1.0 milestone complete — ready to archive via `/gsd-complete-milestone`
 
 ## Current Position
 
-Phase: 12 (fred-eval) — EXECUTING
-Plan: 1 of 9
-Status: Executing Phase 12
-Last activity: 2026-05-13 -- Phase 12 execution started
+Phase: 12 (fred-eval) — COMPLETE → v1.0 milestone done
+Plan: 9 of 9 (all shipped)
+Status: Phase 12 verifier PASSED 5/5; code-review issues_found (2 BLOCKERs, 5 WARNINGs) routed to /gsd-code-review-fix 12. v1.0 milestone closure receipt below.
+Last activity: 2026-05-13 -- Phase 12 + v1.0 milestone complete
 
-Progress: [████████▍░] 80.7% (71/88 plans complete; Phase 6 7/7; Phase 7 8/8; Phase 8 7/7; Phase 9 8/8; Phase 10 6/6; Phase 11 7/7)
+Progress: [██████████] 100% (96/96 plans complete across 12 phases)
+
+### v1.0 Milestone Closure Receipt
+
+- Phase 1 Foundations (Decimal money discipline, Pydantic v2, strict CI, DATA_CONTRACT): ✓
+- Phase 2 Regulatory Reference Data + Rules Predicates (11 predicates + 10 YAMLs): ✓
+- Phase 3 Core Amortization (numpy-financial wrapper, fixed/biweekly/extra-principal): ✓
+- Phase 4 Affordability (DTI/LTV/CLTV/PITI + household-aware joint model): ✓
+- Phase 5 ARM Modeling (5/1, 7/1, 10/1, 5/6 with caps/floor/margin/reset): ✓
+- Phase 6 Refinance NPV (rate-and-term + cash-out, breakeven, sign-convention): ✓
+- Phase 7 Estimated APR (Newton-Raphson against Reg Z App. J + 20 oracles): ✓
+- Phase 8 Stress Tests + Points Breakeven (parameter sweeps + discount NPV): ✓
+- Phase 9 DuckDB Persistence + Node Orchestration (schema + lockfile + db-write.mjs): ✓
+- Phase 10 Claude Skill Frontend (SKILL.md + modes/ + references/ + scripts/): ✓
+- Phase 11 Subagents (amortization-agent + refi-npv-agent + stress-test-agent): ✓
+- Phase 12 FRED Live Rates + Eval Harness (HTTP wrapper + 22-prompt regression): ✓
+
+**Test surface:** 639 passed + 5 skipped + 1 xfailed (pre-existing Phase 5 ARM oracle Bankrate/Vertex42 deferral — outside v1.0 scope).
+**Eval gate:** `uv run python -m evals.runner --gate 0.95` exits 0 with route_match_rate=1.0 + numeric_match_rate=1.0 (13 anchored pass / 0 fail / 9 numeric_skip).
+**Code quality:** mypy --strict clean; ruff check + ruff format --check clean across the entire repo.
+**No AI attribution:** zero `Co-Authored-By` / `🤖` / `claude.com` markers across all commits in milestone history per global rule.
+**Outstanding advisory items:** Phase 12 has 2 BLOCKERs (CR-01 + CR-02 cache-error envelope) + 5 WARNINGs from gsd-code-review — addressable via `/gsd-code-review-fix 12 --all` before v1.0 archive.
+
+Next: `/gsd-code-review-fix 12 --all` to close advisory findings, then `/gsd-complete-milestone` to archive v1.0 and (optionally) start v1.1 / v2.0 planning.
 
 ### Parallel Planning Sweep — 2026-05-02
 
