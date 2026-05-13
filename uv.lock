@@ -184,6 +184,18 @@ wheels = [
 ]
 
 [[package]]
+name = "freezegun"
+version = "1.5.5"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "python-dateutil" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/95/dd/23e2f4e357f8fd3bdff613c1fe4466d21bfb00a6177f238079b17f7b1c84/freezegun-1.5.5.tar.gz", hash = "sha256:ac7742a6cc6c25a2c35e9292dfd554b897b517d2dec26891a2e8debf205cb94a", size = 35914, upload-time = "2025-08-09T10:39:08.338Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5e/2e/b41d8a1a917d6581fc27a35d05561037b048e47df50f27f8ac9c7e27a710/freezegun-1.5.5-py3-none-any.whl", hash = "sha256:cd557f4a75cf074e84bc374249b9dd491eaeacd61376b9eb3c423282211619d2", size = 19266, upload-time = "2025-08-09T10:39:06.636Z" },
+]
+
+[[package]]
 name = "h11"
 version = "0.16.0"
 source = { registry = "https://pypi.org/simple" }
@@ -393,10 +405,12 @@ dependencies = [
 [package.dev-dependencies]
 dev = [
     { name = "anthropic" },
+    { name = "freezegun" },
     { name = "mypy" },
     { name = "pre-commit" },
     { name = "pytest" },
     { name = "pytest-timeout" },
+    { name = "python-frontmatter" },
     { name = "ruff" },
     { name = "tiktoken" },
 ]
@@ -412,10 +426,12 @@ requires-dist = [
 [package.metadata.requires-dev]
 dev = [
     { name = "anthropic", specifier = "==0.100.0" },
+    { name = "freezegun", specifier = ">=1.5" },
     { name = "mypy", specifier = ">=1.20" },
     { name = "pre-commit", specifier = ">=4.6" },
     { name = "pytest", specifier = ">=9.0" },
     { name = "pytest-timeout", specifier = ">=2.3" },
+    { name = "python-frontmatter", specifier = ">=1.1" },
     { name = "ruff", specifier = ">=0.15" },
     { name = "tiktoken", specifier = ">=0.7,<1.0" },
 ]
@@ -756,6 +772,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/de/ef/3bae0e537cfe91e8431efcba4434463d2c5a65f5a89edd47c6cf2f03c55f/python_discovery-1.2.2.tar.gz", hash = "sha256:876e9c57139eb757cb5878cbdd9ae5379e5d96266c99ef731119e04fffe533bb", size = 58872, upload-time = "2026-04-07T17:28:49.249Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/d8/db/795879cc3ddfe338599bddea6388cc5100b088db0a4caf6e6c1af1c27e04/python_discovery-1.2.2-py3-none-any.whl", hash = "sha256:e1ae95d9af875e78f15e19aed0c6137ab1bb49c200f21f5061786490c9585c7a", size = 31894, upload-time = "2026-04-07T17:28:48.09Z" },
+]
+
+[[package]]
+name = "python-frontmatter"
+version = "1.1.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pyyaml" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/96/de/910fa208120314a12f9a88ea63e03707261692af782c99283f1a2c8a5e6f/python-frontmatter-1.1.0.tar.gz", hash = "sha256:7118d2bd56af9149625745c58c9b51fb67e8d1294a0c76796dafdc72c36e5f6d", size = 16256, upload-time = "2024-01-16T18:50:04.052Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/49/87/3c8da047b3ec5f99511d1b4d7a5bc72d4b98751c7e78492d14dc736319c5/python_frontmatter-1.1.0-py3-none-any.whl", hash = "sha256:335465556358d9d0e6c98bbeb69b1c969f2a4a21360587b9873bfc3b213407c1", size = 9834, upload-time = "2024-01-16T18:50:00.911Z" },
 ]
 
 [[package]]
