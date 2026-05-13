@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "entries": {
+    "MORTGAGE15US": {
+      "value": "5.85",
+      "observation_date": "2026-05-07",
+      "fetched_at": "2026-05-13T12:00:00Z",
+      "source_url": "https://api.stlouisfed.org/fred/series/observations?series_id=MORTGAGE15US&api_key=***&file_type=json&sort_order=desc&limit=1",
+      "fred_realtime_start": "2026-05-13",
+      "fred_realtime_end": "2026-05-13",
+      "error": null
+    }
+  }
+}
