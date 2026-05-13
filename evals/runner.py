@@ -281,7 +281,15 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     target = Path(args.prompts)
-    prompts_dir = target if target.is_dir() else target.parent
+    # WR-05: pre-fix, a single-file target silently expanded to ``target.parent``
+    # and re-scored ALL 22 prompts — surprising behavior with no warning. v1
+    # ships fail-loudly; single-file scoring is deferred to v1.1 once the
+    # plumbing (per-stem filter through ``run_all``) lands.
+    if not target.is_dir():
+        parser.error(
+            f"single-file scoring not supported in v1; pass a directory. Got: {target}"
+        )
+    prompts_dir = target
 
     report = run_all(prompts_dir)
     print(json.dumps(report.to_dict(), indent=2))

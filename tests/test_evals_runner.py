@@ -122,3 +122,23 @@ def test_tbd_prompt_reported_as_skipped_not_passed() -> None:
         subprocess_calls=[],
     )
     assert score == NumericScore.SKIP
+
+
+def test_runner_main_fails_loudly_on_single_file_input(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """WR-05 regression: passing a single ``.md`` file used to silently
+    expand to its parent directory and re-score all prompts in it. v1
+    fails loudly via ``parser.error()`` (exit 2 + stderr message).
+    Single-file scoring is deferred to v1.1."""
+    from evals.runner import main
+
+    fake_prompt = tmp_path / "fake.md"
+    fake_prompt.write_text("---\nmode: evaluate\n---\nbody")
+    with pytest.raises(SystemExit) as excinfo:
+        main([str(fake_prompt)])
+    # argparse's ``parser.error`` raises SystemExit(2)
+    assert excinfo.value.code == 2
+    captured = capsys.readouterr()
+    assert "single-file scoring not supported" in captured.err
