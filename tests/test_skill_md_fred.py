@@ -63,10 +63,12 @@ def test_skill_md_does_not_use_shell_injection_syntax() -> None:
         "Plan 12-03 has not shipped the FRED section yet; "
         "shell-injection guard is not yet load-bearing."
     )
-    # Match the specific shell-injection pattern: literal !` followed by a command
-    # mentioning fred (in prose, backtick-code-spans are fine; only the inline-shell
-    # form is forbidden).
-    forbidden = re.findall(r"!`[^`]*fred[^`]*`", body, flags=re.IGNORECASE)
+    # WR-03 broadening: D-12-LIVE02-01 forbids ALL `!`...`` shell-injection
+    # syntax (not just the fred-mentioning variant). A future edit introducing
+    # `!`bash scripts/foo.sh`` (no fred mention) must also fail this guard.
+    # The negative-lookbehind `(?<![\\])` skips escaped `\!` so prose can
+    # discuss the syntax safely.
+    forbidden = re.findall(r"(?<![\\])!`[^`\n]+`", body)
     assert not forbidden, f"forbidden shell-injection syntax in SKILL.md: {forbidden}"
 
 
