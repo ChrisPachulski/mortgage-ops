@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "id": "amortize-02",
+  "mode": "amortize",
+  "numeric_status": "anchored",
+  "expected_scripts": [
+    {
+      "script": "amortize.py",
+      "args_must_include": ["--input"]
+    }
+  ],
+  "expected_numbers": [
+    {
+      "label": "monthly_pi",
+      "value": "1797.66",
+      "tolerance": "0.005",
+      "source_script": "amortize.py",
+      "provenance": "stdout"
+    }
+  ],
+  "expected_route_keywords": ["amortize", "amortize.py"],
+  "v1_frozen_at": "2026-05-10"
+}

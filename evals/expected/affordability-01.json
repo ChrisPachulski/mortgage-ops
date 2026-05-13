@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "id": "affordability-01",
+  "mode": "affordability",
+  "numeric_status": "anchored",
+  "expected_scripts": [
+    {
+      "script": "affordability.py",
+      "args_must_include": ["--input"]
+    }
+  ],
+  "expected_numbers": [
+    {
+      "label": "monthly_pi",
+      "value": "2528.27",
+      "tolerance": "0.005",
+      "source_script": "affordability.py",
+      "provenance": "stdout"
+    }
+  ],
+  "expected_route_keywords": ["affordability", "affordability.py"],
+  "v1_frozen_at": "2026-05-10"
+}

@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "id": "stress-02",
+  "mode": "stress",
+  "numeric_status": "skip",
+  "defer_until_phase": "13.0",
+  "expected_scripts": [
+    {
+      "script": "stress_test.py",
+      "args_must_include": ["--input"]
+    }
+  ],
+  "expected_numbers": [],
+  "expected_route_keywords": ["stress", "stress_test.py", "stress-test-agent"],
+  "v1_frozen_at": "2026-05-10"
+}

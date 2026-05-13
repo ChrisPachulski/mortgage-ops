@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "id": "affordability-03",
+  "mode": "affordability",
+  "numeric_status": "skip",
+  "defer_until_phase": "13.0",
+  "expected_scripts": [
+    {
+      "script": "affordability.py",
+      "args_must_include": ["--input"]
+    }
+  ],
+  "expected_numbers": [],
+  "expected_route_keywords": ["affordability", "affordability.py", "blocked_by"],
+  "v1_frozen_at": "2026-05-10"
+}
