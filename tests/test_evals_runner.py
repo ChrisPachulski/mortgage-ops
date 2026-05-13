@@ -1,19 +1,16 @@
-"""Phase 12 Wave-5 partial: 22 prompts live; paired oracles pending Plan 12-06.
+"""Phase 12 Wave-6 complete: 22 prompts + 22 oracles + three-bucket gate end-to-end.
 
 Plan 12-04 shipped HarnessReport + three-bucket aggregator (pass | fail | skip
-per D-12-SC4-01). Plan 12-05 ships 22 prompt files (21 mode-coverage + 1
-live-rate-injection per D-12-SC1-01) and flips the 22-count + per-mode xfails.
-Plan 12-06 pairs every prompt with an oracle JSON file (EVAL-02) and flips the
-last xfail.
+per D-12-SC4-01). Plan 12-05 shipped 22 prompt files (21 mode-coverage + 1
+live-rate-injection per D-12-SC1-01) and flipped the 22-count + per-mode xfails.
+Plan 12-06 ships 22 paired oracle JSON files (EVAL-02) and flips the final xfail.
 
-1 test still xfailed (waiting on Plan 12-06 oracles);
-5 tests live by this plan (HarnessReport gate math + TBD-skip + 22-count +
-per-mode coverage).
+0 tests xfailed in this module — Wave 0..6 all green end-to-end.
 
 Requirements covered:
   - EVAL-01 + D-12-SC1-01: 22 prompts total (21 mode-coverage + 1 live-rate-injection)
   - SC-5: every one of 7 modes has >=1 prompt
-  - EVAL-02: every prompt has a paired oracle
+  - EVAL-02: every prompt has a paired oracle (1:1 by stem)
   - EVAL-03 + D-12-SC4-01: three-bucket gate denominator excludes numeric_skip
   - D-12-SC4-01: TBD prompts surface as SKIP, not PASS
 """
@@ -63,17 +60,11 @@ def test_each_mode_has_at_least_one_prompt(mode: str) -> None:
     assert matches, f"no prompts for mode {mode!r}"
 
 
-@pytest.mark.xfail(
-    reason="Plan 12-06 pairs every prompt with its oracle — EVAL-02",
-    strict=True,
-)
 def test_every_prompt_has_paired_oracle() -> None:
     """EVAL-02: every evals/prompts/{id}.md has a evals/expected/{id}.json
-    (1:1 by stem)."""
+    (1:1 by stem). Flipped from xfail by Plan 12-06."""
     prompts = [p for p in PROMPTS_DIR.glob("*.md") if p.stem != ".gitkeep"]
-    # Anchor the xfail until Plan 12-05 ships the prompt set — otherwise the
-    # empty loop below would vacuously pass and trigger XPASS(strict).
-    assert prompts, f"no prompts present yet in {PROMPTS_DIR}"
+    assert prompts, f"no prompts present in {PROMPTS_DIR}"
     for prompt in prompts:
         oracle = EXPECTED_DIR / f"{prompt.stem}.json"
         assert oracle.is_file(), f"missing oracle for {prompt.stem}: {oracle}"

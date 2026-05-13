@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "id": "affordability-02",
+  "mode": "affordability",
+  "numeric_status": "anchored",
+  "expected_scripts": [
+    {
+      "script": "affordability.py",
+      "args_must_include": ["--input"]
+    }
+  ],
+  "expected_numbers": [
+    {
+      "label": "max_loan_amount",
+      "value": "646322.54",
+      "tolerance": "0.01",
+      "source_script": "affordability.py",
+      "provenance": "stdout"
+    }
+  ],
+  "expected_route_keywords": ["affordability", "affordability.py"],
+  "v1_frozen_at": "2026-05-10"
+}

@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "id": "arm-01",
+  "mode": "arm",
+  "numeric_status": "anchored",
+  "expected_scripts": [
+    {
+      "script": "arm_simulate.py",
+      "args_must_include": ["--input"]
+    }
+  ],
+  "expected_numbers": [
+    {
+      "label": "initial_period_monthly_pi",
+      "value": "2398.20",
+      "tolerance": "0.01",
+      "source_script": "arm_simulate.py",
+      "provenance": "stdout"
+    }
+  ],
+  "expected_route_keywords": ["arm", "arm_simulate.py"],
+  "v1_frozen_at": "2026-05-10"
+}

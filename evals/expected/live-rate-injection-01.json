@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "id": "live-rate-injection-01",
+  "mode": "evaluate",
+  "numeric_status": "anchored",
+  "expected_scripts": [],
+  "expected_numbers": [
+    {
+      "label": "current_30yr_rate",
+      "value": "6.50",
+      "tolerance": "0.01",
+      "source_script": "fixture_cache",
+      "provenance": "static"
+    }
+  ],
+  "expected_route_keywords": ["data/cache/fred_MORTGAGE30US.json", "6.50"],
+  "v1_frozen_at": "2026-05-10"
+}

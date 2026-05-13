@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "id": "stress-01",
+  "mode": "stress",
+  "numeric_status": "anchored",
+  "expected_scripts": [
+    {
+      "script": "stress_test.py",
+      "args_must_include": ["--input"]
+    }
+  ],
+  "expected_numbers": [
+    {
+      "label": "monthly_pi_at_6_5pct",
+      "value": "2528.27",
+      "tolerance": "0.005",
+      "source_script": "stress_test.py",
+      "provenance": "stdout"
+    }
+  ],
+  "expected_route_keywords": ["stress", "stress_test.py"],
+  "v1_frozen_at": "2026-05-10"
+}

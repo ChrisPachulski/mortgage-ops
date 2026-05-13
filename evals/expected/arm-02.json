@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "id": "arm-02",
+  "mode": "arm",
+  "numeric_status": "skip",
+  "defer_until_phase": "13.0",
+  "expected_scripts": [
+    {
+      "script": "arm_simulate.py",
+      "args_must_include": ["--input"]
+    }
+  ],
+  "expected_numbers": [],
+  "expected_route_keywords": ["arm", "arm_simulate.py"],
+  "v1_frozen_at": "2026-05-10"
+}

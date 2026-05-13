@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "id": "compare-02",
+  "mode": "compare",
+  "numeric_status": "anchored",
+  "expected_scripts": [
+    {
+      "script": "amortize.py",
+      "args_must_include": ["--input"]
+    }
+  ],
+  "expected_numbers": [
+    {
+      "label": "offer_a_monthly_pi",
+      "value": "761.78",
+      "tolerance": "0.005",
+      "source_script": "amortize.py",
+      "provenance": "stdout"
+    },
+    {
+      "label": "offer_b_monthly_pi",
+      "value": "1264.14",
+      "tolerance": "0.005",
+      "source_script": "amortize.py",
+      "provenance": "stdout"
+    }
+  ],
+  "expected_route_keywords": ["compare", "amortize.py"],
+  "v1_frozen_at": "2026-05-10"
+}

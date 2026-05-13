@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "id": "refinance-03",
+  "mode": "refinance",
+  "numeric_status": "skip",
+  "defer_until_phase": "13.0",
+  "expected_scripts": [
+    {
+      "script": "refi_npv.py",
+      "args_must_include": ["--input"]
+    }
+  ],
+  "expected_numbers": [],
+  "expected_route_keywords": ["refinance", "refi_npv.py"],
+  "v1_frozen_at": "2026-05-10"
+}
