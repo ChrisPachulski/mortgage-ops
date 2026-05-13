@@ -1,13 +1,14 @@
-"""Phase 12 Wave-4 partial: HarnessReport + three-bucket gate live; 22-prompt
-+ paired-oracle stubs deferred to Plans 12-05 + 12-06.
+"""Phase 12 Wave-5 partial: 22 prompts live; paired oracles pending Plan 12-06.
 
 Plan 12-04 shipped HarnessReport + three-bucket aggregator (pass | fail | skip
-per D-12-SC4-01). Plan 12-05 will ship 22 prompt files (21 mode-coverage + 1
-live-rate-injection per D-12-SC1-01). Plan 12-06 pairs every prompt with an
-oracle JSON file (EVAL-02).
+per D-12-SC4-01). Plan 12-05 ships 22 prompt files (21 mode-coverage + 1
+live-rate-injection per D-12-SC1-01) and flips the 22-count + per-mode xfails.
+Plan 12-06 pairs every prompt with an oracle JSON file (EVAL-02) and flips the
+last xfail.
 
-3 tests still xfailed (waiting on Plans 12-05 + 12-06 fixtures);
-3 tests flipped to passing by this plan (HarnessReport gate math + TBD-skip).
+1 test still xfailed (waiting on Plan 12-06 oracles);
+5 tests live by this plan (HarnessReport gate math + TBD-skip + 22-count +
+per-mode coverage).
 
 Requirements covered:
   - EVAL-01 + D-12-SC1-01: 22 prompts total (21 mode-coverage + 1 live-rate-injection)
@@ -39,27 +40,17 @@ ALL_MODES = (
 """SC-5: every mode in the v1 prompt set must have >=1 prompt."""
 
 
-@pytest.mark.xfail(
-    reason=(
-        "Plan 12-05 ships 22 prompts (21 mode-coverage + 1 live-rate-injection "
-        "per D-12-SC1-01) — EVAL-01"
-    ),
-    strict=True,
-)
 def test_evals_prompts_dir_has_22_prompts() -> None:
     """EVAL-01 + D-12-SC1-01: 22 prompts total. 21 mode-coverage (3 x 7) + 1
-    live-rate-injection."""
+    live-rate-injection. Flipped from xfail by Plan 12-05."""
     md_files = [p for p in PROMPTS_DIR.glob("*.md") if p.stem != ".gitkeep"]
     assert len(md_files) == 22, f"expected 22 prompts, got {len(md_files)}"
 
 
-@pytest.mark.xfail(
-    reason="Plan 12-05 ships prompts grouped by mode — SC-5",
-    strict=True,
-)
 @pytest.mark.parametrize("mode", ALL_MODES)
 def test_each_mode_has_at_least_one_prompt(mode: str) -> None:
-    """SC-5: every one of 7 modes must have >=1 prompt with `mode: {name}` frontmatter."""
+    """SC-5: every one of 7 modes must have >=1 prompt with `mode: {name}` frontmatter.
+    Flipped from xfail by Plan 12-05."""
     import frontmatter  # type: ignore[import-untyped]
 
     matches = []

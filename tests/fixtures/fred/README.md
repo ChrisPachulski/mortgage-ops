@@ -7,8 +7,8 @@ fixture is hand-authored to match the canonical cache schema from
 FRED API charges, and reproducible across machines.
 
 Wave 0 (Plan 12-00) ships this README plus a `.gitkeep` seam; Wave 5
-(Plan 12-05) populates the directory with `MORTGAGE30US-2026-05-10.json`
-and `MORTGAGE15US-2026-05-10.json` to back the `live-rate-injection-01`
+(Plan 12-05) populates the directory with `MORTGAGE30US-2026-05-13.json`
+and `MORTGAGE15US-2026-05-13.json` to back the `live-rate-injection-01`
 eval per D-12-SC1-01.
 
 ## Why synthetic, not live (D-02 inherited from Phase 11)
@@ -29,8 +29,8 @@ give us the four properties we need:
 
 | Fixture | Used by | Schema |
 |---------|---------|--------|
-| `MORTGAGE30US-2026-05-10.json` | Plan 12-05 `live-rate-injection-01.md` | lib/fred_cache.py cache schema (single-entry) |
-| `MORTGAGE15US-2026-05-10.json` | Plan 12-05 live-rate-injection (companion) | same |
+| `MORTGAGE30US-2026-05-13.json` | Plan 12-05 `live-rate-injection-01.md` | lib/fred_cache.py cache schema (single-entry) |
+| `MORTGAGE15US-2026-05-13.json` | Plan 12-05 live-rate-injection (companion) | same |
 | `stale_8_day_cache.json` | Plan 12-02 test_fred_cache.py (TTL boundary) | same — `fetched_at` 8 days before "now" |
 
 ## Live-capture recipe (NOT run in CI)
@@ -47,7 +47,7 @@ FRED_API_KEY=xxx python .claude/skills/mortgage-ops/scripts/fred_cli.py \
 
 # 2. Diff against committed
 diff -u \
-  tests/fixtures/fred/MORTGAGE30US-2026-05-10.json \
+  tests/fixtures/fred/MORTGAGE30US-2026-05-13.json \
   tests/fixtures/fred/MORTGAGE30US-$(date +%Y-%m-%d).json.NEW
 
 # 3. If acceptable, promote and update evals/expected/live-rate-injection-*.json
