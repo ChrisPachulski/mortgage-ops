@@ -61,6 +61,15 @@ POLL_INTERVAL: Final[float] = 0.1
 SCHEMA_VERSION: Final[int] = 1
 """Bump if the cache JSON shape changes; Plan 12-02 ships ``schema_version=1``."""
 
+REQUIRED_ENTRY_FIELDS: Final[tuple[str, ...]] = ("value", "fetched_at")
+"""Minimum fields an entry must carry for ``is_fresh`` to succeed.
+
+A cache file whose entry is missing one of these is treated as malformed and
+returned as ``None`` from ``_load_cache`` (falling through to the fetcher path
+per CR-01 — see ``get_cached_or_fetch``). Defending in ``_load_cache`` keeps
+``is_fresh`` simple and matches the "shape-validate on read" pattern in
+``_read_lock``."""
+
 
 # ---------------------------------------------------------------------------
 # Exceptions / Warnings
@@ -268,7 +277,12 @@ def _load_cache(series_id: str, cache_dir: Path = CACHE_DIR) -> dict[str, Any] |
         return None
     entries = payload.get("entries", {})
     entry = entries.get(series_id)
-    if isinstance(entry, dict):
+    # CR-01: shape-validate before returning. A malformed entry (missing
+    # ``fetched_at`` or ``value``) used to raise ``KeyError`` deep inside
+    # ``is_fresh`` → traceback out of ``fred_cli.py:main()`` → non-zero exit,
+    # breaking D-12-LIVE02-01 + Pitfall 1 (always-exit-0 envelope contract).
+    # Returning ``None`` here falls through to the fetcher refetch path.
+    if isinstance(entry, dict) and all(k in entry for k in REQUIRED_ENTRY_FIELDS):
         result: dict[str, Any] = entry
         return result
     return None

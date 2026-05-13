@@ -179,3 +179,98 @@ def test_get_cached_or_fetch_invokes_fetcher_when_stale(tmp_path: Path) -> None:
     # Cache updated:
     reread = json.loads((tmp_path / "fred_MORTGAGE30US.json").read_text())
     assert reread["entries"]["MORTGAGE30US"]["value"] == "6.92"
+
+
+# ---------------------------------------------------------------------------
+# CR-01 regression: malformed cache entries fall through to fetcher (not crash)
+# ---------------------------------------------------------------------------
+
+
+def test_malformed_cache_entry_missing_fetched_at_falls_through_to_fetcher(
+    tmp_path: Path,
+) -> None:
+    """CR-01 regression: an entry missing ``fetched_at`` MUST NOT raise ``KeyError``
+    out of ``get_cached_or_fetch``. Pre-fix, ``is_fresh`` would dereference
+    ``entry["fetched_at"]`` and propagate to ``fred_cli.py:main()`` as a traceback,
+    breaking the D-12-LIVE02-01 always-exit-0 envelope contract."""
+    from lib.fred_cache import get_cached_or_fetch
+
+    cache_file = tmp_path / "fred_MORTGAGE30US.json"
+    cache_file.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "entries": {
+                    "MORTGAGE30US": {
+                        # NB: no ``fetched_at`` key — simulates a partial write
+                        # or schema-drift artifact on disk.
+                        "value": "6.84",
+                        "observation_date": "2026-04-25",
+                    },
+                },
+            }
+        )
+    )
+
+    fetcher_calls: list[str] = []
+
+    def stub_fetcher(sid: str) -> dict[str, Any]:
+        fetcher_calls.append(sid)
+        return {
+            "series_id": sid,
+            "value": "6.99",
+            "observation_date": "2026-05-03",
+            "fetched_at": "2026-05-03T12:00:00Z",
+            "source_url": "...api_key=***...",
+            "fred_realtime_start": "2026-05-03",
+            "fred_realtime_end": "2026-05-03",
+            "error": None,
+        }
+
+    result = get_cached_or_fetch("MORTGAGE30US", cache_dir=tmp_path, fetcher=stub_fetcher)
+    assert fetcher_calls == ["MORTGAGE30US"], (
+        "malformed entry should be ignored; fetcher must be invoked"
+    )
+    assert result["value"] == "6.99"
+
+
+def test_malformed_cache_entry_missing_value_falls_through_to_fetcher(
+    tmp_path: Path,
+) -> None:
+    """CR-01 regression: an entry missing ``value`` is also malformed and must
+    fall through to the fetcher (REQUIRED_ENTRY_FIELDS pins both keys)."""
+    from lib.fred_cache import get_cached_or_fetch
+
+    cache_file = tmp_path / "fred_MORTGAGE30US.json"
+    cache_file.write_text(
+        json.dumps(
+            {
+                "schema_version": 1,
+                "entries": {
+                    "MORTGAGE30US": {
+                        "fetched_at": "2026-05-03T12:00:00Z",
+                        "observation_date": "2026-04-25",
+                    },
+                },
+            }
+        )
+    )
+
+    fetcher_calls: list[str] = []
+
+    def stub_fetcher(sid: str) -> dict[str, Any]:
+        fetcher_calls.append(sid)
+        return {
+            "series_id": sid,
+            "value": "7.00",
+            "observation_date": "2026-05-03",
+            "fetched_at": "2026-05-03T12:00:00Z",
+            "source_url": "...api_key=***...",
+            "fred_realtime_start": "2026-05-03",
+            "fred_realtime_end": "2026-05-03",
+            "error": None,
+        }
+
+    result = get_cached_or_fetch("MORTGAGE30US", cache_dir=tmp_path, fetcher=stub_fetcher)
+    assert fetcher_calls == ["MORTGAGE30US"]
+    assert result["value"] == "7.00"
