@@ -13,10 +13,12 @@ dependencies = [
 [dependency-groups]
 dev = [
     "anthropic==0.100.0",
+    "freezegun>=1.5",            # Phase 12 SC-2 cache TTL mocking (LIVE-03)
     "mypy>=1.20",
     "pre-commit>=4.6",
     "pytest>=9.0",
     "pytest-timeout>=2.3",
+    "python-frontmatter>=1.1",   # Phase 12 evals/prompts/*.md frontmatter parsing (EVAL-01)
     "ruff>=0.15",
     # tiktoken is used ONLY by tests/_skill_helpers.py for Phase 10 SKILL.md
     # token-budget tests (cl100k_base encoder, per Phase 10 RESEARCH §(i) +

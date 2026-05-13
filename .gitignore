@@ -50,3 +50,11 @@ data/scenarios.md
 # Production lockfile is the short name above; this entry catches any future
 # rename to the longer per-DB convention without breaking Reference Layer commits.
 data/.mortgage-ops.duckdb.lock
+
+# Phase 12: FRED cache (Data Layer — generated, never committed)
+data/cache/fred_*.json
+data/cache/.fred-cache.lock
+
+# Phase 12: eval runs (System Layer write target — generated)
+evals/runs/*
+!evals/runs/.gitkeep
