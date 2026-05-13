@@ -22,9 +22,9 @@ Output JSON shape (stdout, one line — NOT pretty-printed):
     "error": null | "<message>"
   }
 
-Cache integration TODO (Plan 12-02): when lib.fred_cache.get_cached_or_fetch ships,
-the network path below collapses to a single get_cached_or_fetch(series_id) call.
-Wave 1 (this plan) always performs the live fetch (cache miss every time).
+Cache integration (Plan 12-02): the network path below is dispatched through
+``lib.fred_cache.get_cached_or_fetch`` so subsequent fetches within the 7-day TTL
+window hit the cache file instead of the FRED API.
 
 MCP server registration (stefanoamorelli/fred-mcp-server) is documented as an
 OPTIONAL secondary path in references/fred-context.md per D-12-LIVE01-01.
@@ -123,23 +123,14 @@ def main() -> int:
             }
         )
 
-    # Cache-first path: Plan 12-02 ships lib.fred_cache with read-through semantics
-    # at data/cache/fred_{series_id}.json (per-series file shape pinned by
-    # D-12-LIVE02-01 SKILL.md citations, NOT the RESEARCH §Example 1 combined
-    # `fred-cache.json`). Wave 1 (this plan) ships the network path; cache
-    # integration happens at Plan 12-02 when `from lib.fred_cache import
-    # get_cached_or_fetch` replaces the body of the fetch path below with a
-    # single get_cached_or_fetch(series_id) call.
-    qs = urllib.parse.urlencode(
-        {
-            "series_id": series_id,
-            "api_key": api_key,
-            "file_type": "json",
-            "sort_order": "desc",
-            "limit": 1,
-        }
-    )
-    url = f"https://api.stlouisfed.org/fred/series/observations?{qs}"
+    # D-12-LIVE02-01 cache-first: Plan 12-02 wires through lib.fred_cache with
+    # read-through semantics at data/cache/fred_{series_id}.json (per-series
+    # file shape pinned by SKILL.md citations, NOT the RESEARCH §Example 1
+    # combined `fred-cache.json`). The fetcher closure below is invoked only on
+    # cache miss / stale; subsequent invocations within the 7-day TTL window
+    # skip the urllib call entirely.
+    from lib.fred_cache import get_cached_or_fetch
+
     # T-12-01-02 mitigation: redacted source_url ALWAYS uses the hand-built
     # `api_key=***` form; the real key is never str-interpolated into any output
     # channel. Constructed independently of `url` so a future refactor cannot
@@ -149,21 +140,34 @@ def main() -> int:
         "&api_key=***&file_type=json&sort_order=desc&limit=1"
     )
 
-    try:
-        # T-12-01-04 mitigation: 10s timeout caps Slowloris-style worst-case at
-        # 10 seconds (RESEARCH §Pitfall: Slowloris cap). SKILL.md prose-only
-        # injection (Plan 12-03) does not block on this script — cache-first
-        # read in Plan 12-02 means the live fetch is on the refresh cron path.
-        with urllib.request.urlopen(url, timeout=10) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        obs = data["observations"][0]
-        now_iso = datetime.now(UTC).isoformat().replace("+00:00", "Z")
-        # FRED returns "value" as a string (e.g., "6.84"). Defensive coercion:
-        # if it ever returns a number, str() preserves the digits for D-19
-        # compliance (money/rate fields are JSON strings at the boundary).
-        return _emit(
+    def _fetcher(sid: str) -> dict[str, Any]:
+        """urllib-based FRED fetcher. ALWAYS returns an envelope; NEVER raises.
+
+        Closure captures ``api_key`` + ``redacted_url`` from the enclosing
+        ``main()`` scope so the lib.fred_cache module stays pure (no urllib
+        / no HTTP / no env-var coupling).
+        """
+        qs = urllib.parse.urlencode(
             {
-                "series_id": series_id,
+                "series_id": sid,
+                "api_key": api_key,
+                "file_type": "json",
+                "sort_order": "desc",
+                "limit": 1,
+            }
+        )
+        url = f"https://api.stlouisfed.org/fred/series/observations?{qs}"
+        try:
+            # T-12-01-04 mitigation: 10s timeout caps Slowloris-style worst-case.
+            with urllib.request.urlopen(url, timeout=10) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            obs = data["observations"][0]
+            now_iso = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+            # FRED returns "value" as a string (e.g., "6.84"). Defensive coercion:
+            # if it ever returns a number, str() preserves the digits for D-19
+            # compliance (money/rate fields are JSON strings at the boundary).
+            return {
+                "series_id": sid,
                 "value": str(obs["value"]),
                 "observation_date": obs["date"],
                 "fetched_at": now_iso,
@@ -172,15 +176,12 @@ def main() -> int:
                 "fred_realtime_end": obs["realtime_end"],
                 "error": None,
             }
-        )
-    except (urllib.error.URLError, urllib.error.HTTPError, OSError, TimeoutError) as exc:
-        # T-12-01-03 mitigation: repr(URLError) does NOT include the request URL
-        # by default in Python 3.12 — URLError doesn't carry the URL; HTTPError
-        # carries response, not request URL. So FRED_API_KEY cannot leak via
-        # exception repr. Verified by the always-exit-0 stub test.
-        return _emit(
-            {
-                "series_id": series_id,
+        except (urllib.error.URLError, urllib.error.HTTPError, OSError, TimeoutError) as exc:
+            # T-12-01-03 mitigation: URLError doesn't carry the request URL;
+            # HTTPError carries the response, not request URL. FRED_API_KEY
+            # cannot leak via exception repr.
+            return {
+                "series_id": sid,
                 "value": None,
                 "observation_date": None,
                 "fetched_at": None,
@@ -189,14 +190,11 @@ def main() -> int:
                 "fred_realtime_end": None,
                 "error": f"FRED fetch failed: {exc!r}",
             }
-        )
-    except (KeyError, IndexError, json.JSONDecodeError) as exc:
-        # T-12-01-05 mitigation: malformed FRED response never propagates to the
-        # caller; envelope.error explains the shape mismatch. Plan 12-02 layers
-        # Pydantic validation on top.
-        return _emit(
-            {
-                "series_id": series_id,
+        except (KeyError, IndexError, json.JSONDecodeError) as exc:
+            # T-12-01-05 mitigation: malformed FRED response never propagates;
+            # envelope.error explains the shape mismatch.
+            return {
+                "series_id": sid,
                 "value": None,
                 "observation_date": None,
                 "fetched_at": None,
@@ -205,7 +203,8 @@ def main() -> int:
                 "fred_realtime_end": None,
                 "error": f"FRED response shape unexpected: {exc!r}",
             }
-        )
+
+    return _emit(get_cached_or_fetch(series_id, fetcher=_fetcher))
 
 
 if __name__ == "__main__":
