@@ -8,6 +8,23 @@ Personal-use mortgage analysis tool for the Pachulski household — a sibling to
 
 **Math correctness first.** Every dollar figure that exits this system must be traceable to a tested, deterministic Python function. The LLM frontend is a router and narrator — it never owns numbers.
 
+## Current State
+
+**Shipped:** v1.0 (2026-05-13)
+**Status:** Deterministic Python calc engine + Claude skill frontend live. 12 phases, 87 plans, 116 requirements, 644 pytest passing. Eval gate at `route_match=numeric_match=1.0`. See [v1.0 milestone archive](milestones/v1.0-ROADMAP.md) for the full closure receipt.
+
+### Highlights
+- Money discipline locked (Decimal-from-strings, ROUND_HALF_UP, condecimal)
+- 11 regulatory predicates cited 1:1 (HMDA Platform pattern)
+- 7 calc primitives with hand-calc fixtures: amortize, affordability, ARM, refi-NPV, APR (Reg Z App. J), stress, points
+- DuckDB persistence + Node orchestration (`db-write.mjs` + `lockfile.mjs`)
+- Claude skill frontend with 7 modes + 3 subagents (Haiku/Sonnet split for context isolation)
+- Live FRED data + 22-prompt eval harness with 3-bucket gate (pass/fail/skip)
+
+## Next Milestone Goals
+
+_No next milestone defined yet. Start one with `/gsd-new-milestone`._
+
 ## Requirements
 
 ### Validated

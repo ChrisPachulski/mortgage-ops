@@ -2,10 +2,11 @@
 gsd_state_version: 1.0
 milestone: v1.0
 milestone_name: milestone
-status: milestone_complete
-stopped_at: Phase 12 complete; v1.0 milestone ready to archive (9/9 plans shipped Wave 0..8; LIVE-01..04 + EVAL-01..04 closed; ROADMAP SC-1..SC-5 verified by gsd-verifier with route_match_rate=numeric_match_rate=1.0; 639 passed + 5 skipped + 1 xfailed; 7 advisory code-review findings — 2 BLOCKERs addressable via /gsd-code-review-fix 12)
-last_updated: "2026-05-13T20:00:00.000Z"
-last_activity: 2026-05-13 -- Phase 12 + v1.0 milestone complete
+status: milestone_archived
+archived_at: "2026-05-13"
+stopped_at: v1.0 milestone archived (12/12 phases, 87 plans, 116 requirements, 644 tests; audit passed; tagged v1.0)
+last_updated: "2026-05-13T20:30:00.000Z"
+last_activity: 2026-05-13 -- v1.0 milestone archived
 progress:
   total_phases: 12
   completed_phases: 12
@@ -25,35 +26,14 @@ See: .planning/PROJECT.md (updated 2026-04-26)
 
 ## Current Position
 
-Phase: 12 (fred-eval) — COMPLETE → v1.0 milestone done
+Phase: v1.0 milestone ARCHIVED
 Plan: 9 of 9 (all shipped)
-Status: Phase 12 verifier PASSED 5/5; code-review issues_found (2 BLOCKERs, 5 WARNINGs) routed to /gsd-code-review-fix 12. v1.0 milestone closure receipt below.
-Last activity: 2026-05-13 -- Phase 12 + v1.0 milestone complete
+Status: All 12 phases shipped and archived to .planning/milestones/v1.0-ROADMAP.md. REQUIREMENTS.md deleted; will be recreated by /gsd-new-milestone.
+Last activity: 2026-05-13 -- v1.0 milestone archived
 
 Progress: [██████████] 100% (96/96 plans complete across 12 phases)
 
-### v1.0 Milestone Closure Receipt
-
-- Phase 1 Foundations (Decimal money discipline, Pydantic v2, strict CI, DATA_CONTRACT): ✓
-- Phase 2 Regulatory Reference Data + Rules Predicates (11 predicates + 10 YAMLs): ✓
-- Phase 3 Core Amortization (numpy-financial wrapper, fixed/biweekly/extra-principal): ✓
-- Phase 4 Affordability (DTI/LTV/CLTV/PITI + household-aware joint model): ✓
-- Phase 5 ARM Modeling (5/1, 7/1, 10/1, 5/6 with caps/floor/margin/reset): ✓
-- Phase 6 Refinance NPV (rate-and-term + cash-out, breakeven, sign-convention): ✓
-- Phase 7 Estimated APR (Newton-Raphson against Reg Z App. J + 20 oracles): ✓
-- Phase 8 Stress Tests + Points Breakeven (parameter sweeps + discount NPV): ✓
-- Phase 9 DuckDB Persistence + Node Orchestration (schema + lockfile + db-write.mjs): ✓
-- Phase 10 Claude Skill Frontend (SKILL.md + modes/ + references/ + scripts/): ✓
-- Phase 11 Subagents (amortization-agent + refi-npv-agent + stress-test-agent): ✓
-- Phase 12 FRED Live Rates + Eval Harness (HTTP wrapper + 22-prompt regression): ✓
-
-**Test surface:** 639 passed + 5 skipped + 1 xfailed (pre-existing Phase 5 ARM oracle Bankrate/Vertex42 deferral — outside v1.0 scope).
-**Eval gate:** `uv run python -m evals.runner --gate 0.95` exits 0 with route_match_rate=1.0 + numeric_match_rate=1.0 (13 anchored pass / 0 fail / 9 numeric_skip).
-**Code quality:** mypy --strict clean; ruff check + ruff format --check clean across the entire repo.
-**No AI attribution:** zero `Co-Authored-By` / `🤖` / `claude.com` markers across all commits in milestone history per global rule.
-**Outstanding advisory items:** Phase 12 has 2 BLOCKERs (CR-01 + CR-02 cache-error envelope) + 5 WARNINGs from gsd-code-review — addressable via `/gsd-code-review-fix 12 --all` before v1.0 archive.
-
-Next: `/gsd-code-review-fix 12 --all` to close advisory findings, then `/gsd-complete-milestone` to archive v1.0 and (optionally) start v1.1 / v2.0 planning.
+Run /gsd-new-milestone to start the next cycle (v1.1 polish or v2.0 expansion).
 
 ### Parallel Planning Sweep — 2026-05-02
 
