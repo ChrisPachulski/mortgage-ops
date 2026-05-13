@@ -397,7 +397,7 @@ prose-only injection, NOT only via a structural grep test.
 The eval pins to a FIXTURE cache value (NOT live FRED) so CI runs are
 deterministic and cost-free:
 
-- **Fixture cache:** `tests/fixtures/fred/MORTGAGE30US-2026-05-10.json`
+- **Fixture cache:** `tests/fixtures/fred/MORTGAGE30US-2026-05-13.json`
   contains `"value": "6.50"` (synthetic; representative-of-2026-range; not
   an actual PMMS observation).
 - **Oracle:** `evals/expected/live-rate-injection-01.json` pins
