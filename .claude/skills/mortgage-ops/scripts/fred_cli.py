@@ -204,7 +204,29 @@ def main() -> int:
                 "error": f"FRED response shape unexpected: {exc!r}",
             }
 
-    return _emit(get_cached_or_fetch(series_id, fetcher=_fetcher))
+    # CR-02: D-12-LIVE02-01 + Pitfall 1 always-exit-0 contract. Three uncaught
+    # exception paths used to propagate from lib.fred_cache:
+    #   1. FredCacheLockError from _acquire_lock after 30s timeout
+    #   2. OSError / PermissionError from Path.write_text in _save_cache
+    #   3. OSError from cache_dir.mkdir in _acquire_lock
+    # Any of these would emit a Python traceback + non-zero exit, defeating
+    # the SKILL.md prose-only recovery path that reads envelope.error. The
+    # outermost catch-all here converts them to the standard error envelope.
+    try:
+        return _emit(get_cached_or_fetch(series_id, fetcher=_fetcher))
+    except Exception as exc:  # load-bearing always-exit-0 contract per D-12-LIVE02-01
+        return _emit(
+            {
+                "series_id": series_id,
+                "value": None,
+                "observation_date": None,
+                "fetched_at": None,
+                "source_url": redacted_url,
+                "fred_realtime_start": None,
+                "fred_realtime_end": None,
+                "error": f"FRED cache failure: {exc!r}",
+            }
+        )
 
 
 if __name__ == "__main__":

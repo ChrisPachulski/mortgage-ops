@@ -322,7 +322,22 @@ def get_cached_or_fetch(
         ``fred_cli.py`` injects its own urllib-based fetcher; ``lib.fred_cache``
         stays pure.
 
-    Returns the envelope dict. Never raises (delegates to fetcher's error envelope).
+    Returns the envelope dict.
+
+    Raises:
+      - ``NotImplementedError`` — when ``fetcher`` is ``None`` and the cache
+        is cold/stale. Callers (``fred_cli.py``) always inject a fetcher.
+      - ``FredCacheLockError`` — when ``_save_cache`` cannot acquire
+        ``.fred-cache.lock`` within 30s. Caller is responsible for catching
+        and converting to an error envelope per the D-12-LIVE02-01 always-
+        exit-0 contract; ``fred_cli.py:main()`` does this via an outermost
+        ``try/except Exception`` (CR-02).
+      - ``OSError`` / ``PermissionError`` — from ``Path.write_text`` in
+        ``_save_cache`` or ``cache_dir.mkdir`` in ``_acquire_lock``. Same
+        upstream-catch contract as above.
+
+    Note: CR-01 fixed a prior ``KeyError`` path from malformed cache entries;
+    ``_load_cache`` now returns ``None`` for shape-invalid entries instead.
     """
     entry = _load_cache(series_id, cache_dir)
     if entry is not None and is_fresh(entry):
