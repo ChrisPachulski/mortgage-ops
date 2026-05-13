@@ -51,6 +51,25 @@ When precedence is tied, ask ONE clarifying question (not two):
 > "I can read this two ways: (a) refinance analysis with an ARM target, or
 > (b) standalone ARM modeling. Which did you mean?"
 
+## Live Mortgage Rates
+
+Latest weekly rates (refreshed via `scripts/fred_cli.py` on weekly cron;
+cached 7 days max in `data/cache/fred_MORTGAGE30US.json`):
+
+- 30-yr fixed (MORTGAGE30US): see cache file `data/cache/fred_MORTGAGE30US.json`
+  field `value`
+- 15-yr fixed (MORTGAGE15US): see cache file `data/cache/fred_MORTGAGE15US.json`
+
+Skill loads these via Read tool when borrower asks 'what's the current rate?'
+
+If the cache file is absent or stale (>7 days old), invoke
+`python ${CLAUDE_SKILL_DIR}/scripts/fred_cli.py MORTGAGE30US --latest`
+yourself to refresh; the script writes the cache and emits the value to stdout.
+The script ALWAYS exits 0 — if the envelope's `error` field is non-null
+(e.g., FRED_API_KEY missing), narrate the error and ask the user for the
+current rate manually. Per D-12-LIVE02-01 + Pitfall 1, the envelope `error`
+field is the recovery contract; non-zero exit codes are NOT expected here.
+
 ## Math Discipline (load-bearing — read carefully)
 
 Every dollar figure, rate, breakeven, or schedule entry in your response MUST
