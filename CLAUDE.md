@@ -24,7 +24,7 @@ See `.planning/PROJECT.md` for full context, requirements, and key decisions.
 - `duckdb-async`, `js-yaml` — Mirror `career-ops/scripts/db-write.mjs` and `lockfile.mjs` patterns.
 
 **External integrations:**
-- FRED MCP (`stefanoamorelli/fred-mcp-server`) — Live `MORTGAGE30US`/`MORTGAGE15US` rate data (mirrors PMMS).
+- FRED API via `scripts/fred_cli.py` HTTP wrapper (canonical path per D-12-LIVE01-01) — Live `MORTGAGE30US`/`MORTGAGE15US` rate data (mirrors Freddie Mac PMMS). The `stefanoamorelli/fred-mcp-server` MCP server is documented as an optional secondary path; see `.claude/skills/mortgage-ops/references/fred-context.md` for HTTP/MCP recipes, cache schema, and routing rules.
 
 **What NOT to use:**
 - `mortgage` PyPI / `mortgage` (jbmohler) / `amortization` PyPI — abandoned, float-based, or no license.

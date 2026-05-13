@@ -97,3 +97,41 @@ def test_skill_md_section_appears_before_math_discipline() -> None:
     live_idx = body.index("## Live Mortgage Rates")
     math_idx = body.index("## Math Discipline")
     assert live_idx < math_idx, "`## Live Mortgage Rates` must precede `## Math Discipline`"
+
+
+def test_skill_md_references_table_includes_fred_context() -> None:
+    """Plan 12-08: SKILL.md references table MUST point at references/fred-context.md
+    with trigger phrases for current-rate / FRED / MORTGAGE30US questions."""
+    body = SKILL_MD.read_text()
+    assert "references/fred-context.md" in body, (
+        "SKILL.md missing references/fred-context.md row in topic-to-reference table"
+    )
+    # Trigger phrases must appear nearby (within the references-table region)
+    table_start = body.find("Loading Additional Context")
+    table_end = body.find("## Number Formatting", table_start)
+    table_region = body[table_start:table_end]
+    for trigger in ("FRED", "MORTGAGE30US"):
+        assert trigger in table_region, (
+            f"SKILL.md references-table region missing trigger phrase {trigger!r}"
+        )
+
+
+def test_fred_context_reference_doc_has_required_sections() -> None:
+    """Plan 12-08: references/fred-context.md MUST have 6 numbered sections per
+    arm-mechanics.md template + Citation Index appendix."""
+    doc_path = (
+        Path(__file__).resolve().parent.parent
+        / ".claude" / "skills" / "mortgage-ops" / "references" / "fred-context.md"
+    )
+    body = doc_path.read_text()
+    required_headings = [
+        "## 1. HTTP API (canonical path",
+        "## 2. MCP Server (optional secondary path",
+        "## 3. Cache Schema",
+        "## 4. SKILL.md Routing Rule",
+        "## 5. Eval Harness Integration",
+        "## 6. Pitfalls",
+        "## Appendix: Citation Index",
+    ]
+    for heading in required_headings:
+        assert heading in body, f"references/fred-context.md missing required heading: {heading!r}"
