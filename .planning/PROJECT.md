@@ -21,9 +21,32 @@ Personal-use mortgage analysis tool for the Pachulski household — a sibling to
 - Claude skill frontend with 7 modes + 3 subagents (Haiku/Sonnet split for context isolation)
 - Live FRED data + 22-prompt eval harness with 3-bucket gate (pass/fail/skip)
 
-## Next Milestone Goals
+## Current Milestone: v1.1 Property Analysis Mode
 
-_No next milestone defined yet. Start one with `/gsd-new-milestone`._
+**Goal:** Feed any Zillow listing URL → get a single-page underwriting workup that runs the full v1.0 calc engine (amortize × affordability × ARM × refi × stress × points × IRS Pub 936) against the property × household, with a clear GO / WATCH / NO-GO verdict.
+
+**Target features (6 phases, ~14 requirements):**
+- Zillow URL ingestion via hybrid pipeline — WebFetch + `__NEXT_DATA__` JSON extraction + interactive gap-fill when fields missing or ambiguous (no paid scraper API in v1.1; deferred to v1.2 if/when WebFetch degrades)
+- `PropertyListing` Pydantic v2 model with `ProvenancedMoney` wrapper (every money field tagged `scraped | user_provided | estimated`)
+- `lib/property_analysis.py` orchestrator that fans out across 4 loan programs (Conventional 30/15, FHA, VA, Jumbo) × 6 down-payment scenarios (3% / 5% / 10% / 15% / 20% / 25%) — ~24 amortization runs per property
+- Auto-applied stress tests + points breakeven + refi opportunity scan + IRS Pub 936 deductibility rollup
+- GO / WATCH / NO-GO verdict synthesis with reason list (DTI breach → NO-GO, ARM stress income shock → WATCH, all green → GO)
+- DuckDB `analyzed_listings` table — auto-watchlist by accident; mirror Phase 9 lockfile pattern
+- `property` mode in SKILL.md — URL-pin routing (substring `zillow.com` → `property` mode)
+- Markdown report emitted to `reports/{NNN}-property-{zpid}-{YYYY-MM-DD}.md` (mirror Phase 11 amortization-agent contract)
+- 5 pinned Zillow HTML test fixtures for CI determinism (Phase 11 D-02 inherited — live WebFetch NEVER runs in CI)
+- New regulatory YAMLs: `data/reference/property-analysis-heuristics.yml` + `insurance-estimate-defaults.yml` (PMI rate tables, FHA county limits, jumbo cutoffs by zip)
+
+**Out of scope (deferred to v1.2+):**
+- Redfin / Realtor.com / FSBO ingestion
+- Comparable properties (5 similar nearby sales)
+- County assessor / tax-record lookup
+- School / commute / walkability
+- Multi-property side-by-side
+- Saved searches / price-drop alerts
+- Paid scraper API integration (Apify / Bright Data / ScrapingBee)
+
+**Research:** `.planning/research/v1.1-property-analysis.md` (997 lines; 9 locked patterns + 12 pitfalls + 8 open questions surfaced for /gsd-discuss-phase)
 
 ## Requirements
 

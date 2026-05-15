@@ -1,18 +1,18 @@
 ---
 gsd_state_version: 1.0
-milestone: v1.0
-milestone_name: milestone
-status: milestone_archived
-archived_at: "2026-05-13"
-stopped_at: v1.0 milestone archived (12/12 phases, 87 plans, 116 requirements, 644 tests; audit passed; tagged v1.0)
-last_updated: "2026-05-13T20:30:00.000Z"
-last_activity: 2026-05-13 -- v1.0 milestone archived
+milestone: v1.1
+milestone_name: property-analysis-mode
+status: defined
+defined_at: "2026-05-14"
+stopped_at: v1.1 milestone defined (6 phases 13-18, 16 requirements; research complete; ready for /gsd-plan-phase 13)
+last_updated: "2026-05-14T12:00:00.000Z"
+last_activity: 2026-05-14 -- v1.1 milestone started
 progress:
-  total_phases: 12
-  completed_phases: 12
-  total_plans: 96
-  completed_plans: 96
-  percent: 100
+  total_phases: 6
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+  percent: 0
 ---
 
 # Project State
@@ -22,18 +22,29 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-26)
 
 **Core value:** Math correctness first — every dollar figure traces to a tested, deterministic Python function; the LLM is a router and narrator that never owns numbers.
-**Current focus:** v1.0 milestone complete — ready to archive via `/gsd-complete-milestone`
+**Current focus:** v1.1 Property Analysis Mode — Phase 13 ready for planning
 
 ## Current Position
 
-Phase: v1.0 milestone ARCHIVED
-Plan: 9 of 9 (all shipped)
-Status: All 12 phases shipped and archived to .planning/milestones/v1.0-ROADMAP.md. REQUIREMENTS.md deleted; will be recreated by /gsd-new-milestone.
-Last activity: 2026-05-13 -- v1.0 milestone archived
+Milestone: v1.1 Property Analysis Mode (just started)
+Phase: 13 (property-ingestion) — ready for `/gsd-plan-phase 13`
+Status: Research complete (.planning/research/v1.1-property-analysis.md, 997 lines, 9 patterns + 12 pitfalls + 8 open questions). REQUIREMENTS.md + ROADMAP.md regenerated. Phases 13-18 continue v1.0 numbering.
+Last activity: 2026-05-14 -- v1.1 milestone defined
 
-Progress: [██████████] 100% (96/96 plans complete across 12 phases)
+Progress: [░░░░░░░░░░] 0% (0/6 phases — Phase 13 next)
 
-Run /gsd-new-milestone to start the next cycle (v1.1 polish or v2.0 expansion).
+### v1.1 Phase Map
+
+- Phase 13: Property Ingestion (WebFetch + gap-fill + PropertyListing model + DuckDB analyzed_listings)
+- Phase 14: Property Analysis Pipeline (multi-program × DP fan-out + verdict synthesis)
+- Phase 15: `property` Skill Mode + Report Formatter (mode file + scripts/property_analyze.py + lib/property_report.py)
+- Phase 16: Reference Data (PMI tables + FHA limits + jumbo cutoffs + per-state HOI averages)
+- Phase 17: Tests + Fixtures (5 pinned Zillow HTML + golden expected_report.md)
+- Phase 18: References + Docs (references/property-analysis.md + CLAUDE.md cross-link)
+
+### Recommended Next Step
+
+`/gsd-discuss-phase 13 mortgage-ops` — lock the 4 Phase-13-relevant open questions from research (#1 personal-vs-generic baseline, #3 default stress scenarios, #5 down-payment scenario set, #8 Apify v1.1 vs v1.2). Then `/gsd-plan-phase 13`.
 
 ### Parallel Planning Sweep — 2026-05-02
 
