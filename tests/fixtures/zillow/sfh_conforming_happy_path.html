@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Synthetic Fixture &mdash; 123 Synthetic St | Zillow</title>
+    <meta name="description" content="Synthetic test fixture &mdash; not a real listing." />
+</head>
+<body>
+    <!-- Synthetic Zillow listing fixture. Phase 13 INGEST-02 + PROP-01 happy path.
+         NO PII, NO real addresses, NO agent contact info. ZIP intentionally real (94110)
+         so Phase 14 per-zip tax lookups behave realistically. -->
+    <header>
+        <nav>Zillow synthetic-fixture nav (placeholder)</nav>
+    </header>
+    <main>
+        <h1>123 Synthetic St, San Francisco, CA 94110</h1>
+        <section id="property-summary">
+            <p>3 bd | 2.5 ba | 1,800 sqft | Built 1985 | Single Family</p>
+            <p>Listed at $625,000 &mdash; synthetic fixture for INGEST-02 testing.</p>
+            <p>Days on Zillow: 12. Estimated payment placeholder removed for fixture cleanliness.</p>
+        </section>
+        <section id="property-description">
+            <h2>About 123 Synthetic St</h2>
+            <p>Synthetic placeholder prose for fixture byte-padding. This text exists solely
+            to push the fixture above the MIN_BODY_BYTES = 5000 threshold so that the
+            block-detection cheap-first ordering in lib.property_block_detector.detect_block
+            does NOT fire body_too_short on this fixture. We want the happy path: status 200,
+            body length above 5000, no captcha phrase, and a present script id=__NEXT_DATA__.</p>
+            <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Phasellus euismod
+            lacus a magna porta, sed gravida sapien gravida. Vivamus venenatis purus eget
+            elit dignissim, vitae blandit nibh tristique. Nam at libero ut nibh efficitur
+            elementum at non purus. Aenean placerat, lacus et imperdiet tincidunt, leo
+            sapien venenatis nulla, eget vehicula libero leo at sapien. Praesent feugiat
+            lectus a justo iaculis, ac aliquam mi tincidunt. Maecenas nec orci eget orci
+            volutpat egestas. Sed at lacus ac justo sodales hendrerit a sed velit.</p>
+            <p>Pellentesque habitant morbi tristique senectus et netus et malesuada fames
+            ac turpis egestas. Integer eu pretium ante. Cras lobortis, mauris vitae
+            consectetur consequat, nibh massa luctus ipsum, et dapibus ipsum eros eget
+            risus. Donec nec lectus a est aliquam fermentum. Curabitur quis lacus ac
+            magna posuere posuere a non sapien. Suspendisse potenti. Phasellus sit amet
+            sapien at est venenatis dictum. Proin eu sapien at lacus consequat porta.</p>
+            <p>Etiam vitae lacinia urna. Mauris eget tortor sit amet sapien luctus
+            elementum. Aliquam erat volutpat. Sed in nibh sit amet eros gravida mattis.
+            Vivamus interdum, sapien id placerat porta, lacus risus dictum tortor, eget
+            tincidunt magna eros nec leo. Suspendisse sed dignissim arcu, nec dictum
+            tortor. Mauris pellentesque, ipsum vitae imperdiet tempus, justo sapien
+            volutpat sapien, vitae blandit eros lacus eget ante. Donec a metus ut massa
+            ultricies fringilla. In hac habitasse platea dictumst.</p>
+            <p>Generic synthetic-listing prose continues. Hardwood floors throughout the
+            living area (placeholder description). Updated kitchen with stainless
+            appliances (placeholder description). Two-car garage with workbench
+            (placeholder description). Backyard with mature landscaping (placeholder
+            description). Walking distance to fixture-village transit stop (placeholder
+            description). Energy-efficient windows installed in fixture year (placeholder
+            description). All numbers and features are illustrative for unit-testing the
+            Phase 13 ingestion pipeline; nothing in this document refers to a real
+            property, real owner, real buyer, real seller, or real listing agent.</p>
+            <p>School fixture placeholder: Elementary school rating 8/10 (synthetic),
+            Middle school rating 7/10 (synthetic), High school rating 9/10 (synthetic).
+            These ratings exist only to fatten the fixture body past MIN_BODY_BYTES; no
+            inference about a real school system is intended. Phase 14 reference data
+            (Phase 16 plan) will fill in any real per-zip values that the analysis
+            pipeline requires; this fixture only needs to be ingestible.</p>
+        </section>
+        <section id="neighborhood-fixture-padding">
+            <h2>Neighborhood (synthetic)</h2>
+            <p>Synthetic neighborhood paragraph. Fixture-village is a synthetic
+            neighborhood that exists only inside this HTML file. Quiet streets,
+            placeholder cafe, placeholder park, placeholder community garden. The
+            neighborhood paragraph exists to add bytes to the fixture body so the
+            block-detection threshold check passes. No real-world inference about any
+            real San Francisco neighborhood is intended; the 94110 ZIP is preserved so
+            downstream Phase 14 per-zip tax-rate lookups can run their normal code path
+            against a real ZIP.</p>
+            <p>Walkability synthetic score: 78/100. Transit synthetic score: 65/100.
+            Bike synthetic score: 81/100. Synthetic scores are illustrative for fixture
+            shape; not authoritative; not from any real third-party scoring service.</p>
+        </section>
+    </main>
+    <script id="__NEXT_DATA__" type="application/json">
+        {
+          "props": {
+            "pageProps": {
+              "property": {
+                "zpid": "12345678",
+                "price": 625000,
+                "zipcode": "94110",
+                "propertyTypeDimension": "SingleFamily",
+                "bedrooms": 3,
+                "bathrooms": 2.5,
+                "livingArea": 1800,
+                "yearBuilt": 1985,
+                "taxAnnualAmount": 7800,
+                "hoaFee": null,
+                "zestimate": 640000,
+                "daysOnZillow": 12,
+                "datePostedString": "2026-04-28",
+                "address": {
+                  "streetAddress": "123 Synthetic St",
+                  "city": "San Francisco",
+                  "state": "CA",
+                  "zipcode": "94110"
+                }
+              }
+            }
+          }
+        }
+    </script>
+</body>
+</html>

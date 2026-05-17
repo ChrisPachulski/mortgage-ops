@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Verification Required</title>
+    <meta name="description" content="Synthetic captcha-block fixture for Phase 13 D-13-BLOCK-01." />
+</head>
+<body>
+    <!-- Synthetic PerimeterX-style captcha block fixture.
+         Triggers D-13-BLOCK-01 captcha_detected signal via the "Press & Hold" phrase
+         on CAPTCHA_PHRASES. Padded above MIN_BODY_BYTES=5000 so detection fires on
+         the captcha phrase, NOT on body_too_short. Real CDN block pages are typically
+         8-15KB; this fixture mimics that size profile. -->
+    <div id="px-captcha">
+        <h1>Press &amp; Hold to verify you are human</h1>
+        <p>We noticed unusual traffic from your network. Please complete the human
+        verification challenge below to continue.</p>
+        <button id="hold-button">Press &amp; Hold</button>
+    </div>
+    <div class="block-page-explanation">
+        <h2>Why am I seeing this page?</h2>
+        <p>Synthetic captcha-page placeholder prose. This block page exists for Phase 13
+        test fixtures only and does not represent any real anti-bot CDN content. The
+        contents below are filler so the body length exceeds MIN_BODY_BYTES = 5000 and
+        the block-detection ordering in lib.property_block_detector.detect_block fires
+        on captcha_detected (cheap-first after status and length), NOT on body_too_short.
+        That is the more realistic real-world scenario: a fully rendered CDN challenge
+        page that is large enough to look "normal" by length but contains the captcha
+        phrase signal.</p>
+        <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Phasellus euismod
+        lacus a magna porta, sed gravida sapien gravida. Vivamus venenatis purus eget
+        elit dignissim, vitae blandit nibh tristique. Nam at libero ut nibh efficitur
+        elementum at non purus. Aenean placerat, lacus et imperdiet tincidunt, leo
+        sapien venenatis nulla, eget vehicula libero leo at sapien. Praesent feugiat
+        lectus a justo iaculis, ac aliquam mi tincidunt. Maecenas nec orci eget orci
+        volutpat egestas. Sed at lacus ac justo sodales hendrerit a sed velit.</p>
+        <p>Pellentesque habitant morbi tristique senectus et netus et malesuada fames
+        ac turpis egestas. Integer eu pretium ante. Cras lobortis, mauris vitae
+        consectetur consequat, nibh massa luctus ipsum, et dapibus ipsum eros eget
+        risus. Donec nec lectus a est aliquam fermentum. Curabitur quis lacus ac
+        magna posuere posuere a non sapien. Suspendisse potenti. Phasellus sit amet
+        sapien at est venenatis dictum. Proin eu sapien at lacus consequat porta.</p>
+        <p>Etiam vitae lacinia urna. Mauris eget tortor sit amet sapien luctus
+        elementum. Aliquam erat volutpat. Sed in nibh sit amet eros gravida mattis.
+        Vivamus interdum, sapien id placerat porta, lacus risus dictum tortor, eget
+        tincidunt magna eros nec leo. Suspendisse sed dignissim arcu, nec dictum
+        tortor. Mauris pellentesque, ipsum vitae imperdiet tempus, justo sapien
+        volutpat sapien, vitae blandit eros lacus eget ante. Donec a metus ut massa
+        ultricies fringilla. In hac habitasse platea dictumst.</p>
+        <p>Synthetic challenge-explanation placeholder. The CAPTCHA_PHRASES list in
+        lib.property_block_detector includes generic English phrases like "Press &amp;
+        Hold" and "human verification" and "unusual traffic" because those phrases are
+        common across multiple anti-bot CDN providers. The phrases are not copyrighted
+        and are present here purely as a synthetic detection target. No specific CDN's
+        proprietary content is reproduced. The fixture exists only to exercise the
+        cheap-first detection ordering locked in Plan 13-02.</p>
+        <p>Additional synthetic prose for byte-padding. The fixture deliberately has no
+        embedded listing payload because a real anti-bot block page would not ship the
+        underlying record; defense in depth means the captcha signal fires first
+        regardless of payload presence. Detection order: status code check (always 200
+        for fixture-from-file), body length check (passes because this fixture is padded
+        above 5000 bytes), captcha phrase check (FIRES on "press &amp; hold"), and the
+        missing-payload signal (would also fire but captcha fires first per the
+        cheap-first ordering).</p>
+        <p>Synthetic block-page paragraph. Generic CDN-style messaging continues here
+        to extend the fixture body. We noticed unusual traffic. Please complete the
+        human verification challenge. Synthetic; not real CDN output; not real visitor
+        guidance. The fixture exists for unit-testing the block-detection envelope
+        path that emits shape-3 with error=captcha_detected.</p>
+        <p>One more padding paragraph. Synthetic; placeholder; fixture-only; not real.
+        Phase 13 D-13-BLOCK-01 locks the four detection signals: HTTP status code,
+        body too short, captcha phrase substring match, and missing structured-payload
+        tag. This fixture exercises signal three. The other three signals have their
+        own dedicated tests against synthetic strings in
+        tests/test_property_block_detector.py; no separate file fixture is needed
+        for those signals.</p>
+    </div>
+</body>
+</html>

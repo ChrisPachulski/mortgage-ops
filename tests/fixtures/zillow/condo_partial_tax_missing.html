@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <title>Synthetic Fixture &mdash; 456 Fixture Ln | Zillow</title>
+    <meta name="description" content="Synthetic test fixture &mdash; condo with HOA, missing tax." />
+</head>
+<body>
+    <!-- Synthetic Zillow listing fixture. Phase 13 INGEST-02 + D-13-MUSTHAVE-01 path.
+         NO PII, NO real addresses, NO agent contact info. ZIP intentionally real (98052)
+         so Phase 14 per-zip tax lookups behave realistically. This fixture has HOA
+         scrapable but tax_annual null -- D-13-MUSTHAVE-01 says tax is NICE-TO-HAVE so
+         the envelope is still shape-1 with tax_annual=null. -->
+    <header>
+        <nav>Zillow synthetic-fixture nav (placeholder)</nav>
+    </header>
+    <main>
+        <h1>456 Fixture Ln, Redmond, WA 98052</h1>
+        <section id="property-summary">
+            <p>2 bd | 2.0 ba | 1,100 sqft | Built 2008 | Condominium</p>
+            <p>Listed at $450,000 &mdash; synthetic fixture for D-13-MUSTHAVE-01 partial path.</p>
+            <p>HOA: $425 / month. Days on Zillow: 7.</p>
+        </section>
+        <section id="property-description">
+            <h2>About 456 Fixture Ln</h2>
+            <p>Synthetic placeholder prose for fixture byte-padding. This text exists solely
+            to push the condo fixture above the MIN_BODY_BYTES = 5000 threshold so that
+            block-detection cheap-first ordering in lib.property_block_detector.detect_block
+            does NOT fire body_too_short on this fixture. We want the happy-but-partial path:
+            status 200, body length above 5000, no captcha phrase, present __NEXT_DATA__,
+            and the Sonnet output returns tax_annual=null. The envelope is still shape-1.</p>
+            <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Phasellus euismod
+            lacus a magna porta, sed gravida sapien gravida. Vivamus venenatis purus eget
+            elit dignissim, vitae blandit nibh tristique. Nam at libero ut nibh efficitur
+            elementum at non purus. Aenean placerat, lacus et imperdiet tincidunt, leo
+            sapien venenatis nulla, eget vehicula libero leo at sapien. Praesent feugiat
+            lectus a justo iaculis, ac aliquam mi tincidunt. Maecenas nec orci eget orci
+            volutpat egestas. Sed at lacus ac justo sodales hendrerit a sed velit.</p>
+            <p>Pellentesque habitant morbi tristique senectus et netus et malesuada fames
+            ac turpis egestas. Integer eu pretium ante. Cras lobortis, mauris vitae
+            consectetur consequat, nibh massa luctus ipsum, et dapibus ipsum eros eget
+            risus. Donec nec lectus a est aliquam fermentum. Curabitur quis lacus ac
+            magna posuere posuere a non sapien. Suspendisse potenti. Phasellus sit amet
+            sapien at est venenatis dictum. Proin eu sapien at lacus consequat porta.</p>
+            <p>Etiam vitae lacinia urna. Mauris eget tortor sit amet sapien luctus
+            elementum. Aliquam erat volutpat. Sed in nibh sit amet eros gravida mattis.
+            Vivamus interdum, sapien id placerat porta, lacus risus dictum tortor, eget
+            tincidunt magna eros nec leo. Suspendisse sed dignissim arcu, nec dictum
+            tortor. Mauris pellentesque, ipsum vitae imperdiet tempus, justo sapien
+            volutpat sapien, vitae blandit eros lacus eget ante. Donec a metus ut massa
+            ultricies fringilla. In hac habitasse platea dictumst.</p>
+            <p>Generic synthetic-condo prose continues. Open floor plan (placeholder).
+            In-unit washer dryer (placeholder). Secured building entry (placeholder).
+            Shared rooftop deck (placeholder). One reserved parking stall in below-grade
+            garage (placeholder). HOA covers exterior maintenance, common-area utilities,
+            and trash (placeholder). The tax_annual field is intentionally absent from
+            the synthetic __NEXT_DATA__ payload below so the mock-Sonnet output can model
+            the partial-extraction path: a condo whose HOA scrapes successfully but whose
+            taxAnnualAmount field is missing from Zillow's payload at scrape time.</p>
+            <p>School fixture placeholder: Elementary school rating 9/10 (synthetic),
+            Middle school rating 8/10 (synthetic), High school rating 9/10 (synthetic).
+            These ratings exist only to fatten the fixture body past MIN_BODY_BYTES; no
+            inference about a real school system is intended. Phase 14 reference data
+            (Phase 16 plan) will fill in any real per-zip values that the analysis
+            pipeline requires; this fixture only needs to be ingestible.</p>
+        </section>
+        <section id="neighborhood-fixture-padding">
+            <h2>Neighborhood (synthetic)</h2>
+            <p>Synthetic neighborhood paragraph. Fixture-village-east is a synthetic
+            neighborhood that exists only inside this HTML file. Walkable placeholder
+            shops, placeholder grocery, placeholder park. The neighborhood paragraph
+            exists to add bytes to the fixture body so the block-detection threshold
+            check passes. No real-world inference about any real Redmond, WA neighborhood
+            is intended; the 98052 ZIP is preserved so downstream Phase 14 per-zip
+            tax-rate lookups can run their normal code path against a real ZIP.</p>
+            <p>Walkability synthetic score: 72/100. Transit synthetic score: 58/100.
+            Bike synthetic score: 70/100. Synthetic scores are illustrative for fixture
+            shape; not authoritative; not from any real third-party scoring service.</p>
+        </section>
+    </main>
+    <script id="__NEXT_DATA__" type="application/json">
+        {
+          "props": {
+            "pageProps": {
+              "property": {
+                "zpid": "87654321",
+                "price": 450000,
+                "zipcode": "98052",
+                "propertyTypeDimension": "Condominium",
+                "bedrooms": 2,
+                "bathrooms": 2.0,
+                "livingArea": 1100,
+                "yearBuilt": 2008,
+                "taxAnnualAmount": null,
+                "hoaFee": 425,
+                "zestimate": 460000,
+                "daysOnZillow": 7,
+                "datePostedString": "2026-05-03",
+                "address": {
+                  "streetAddress": "456 Fixture Ln",
+                  "city": "Redmond",
+                  "state": "WA",
+                  "zipcode": "98052"
+                }
+              }
+            }
+          }
+        }
+    </script>
+</body>
+</html>
