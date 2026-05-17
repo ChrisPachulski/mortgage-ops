@@ -26,12 +26,33 @@ See: .planning/PROJECT.md (updated 2026-04-26)
 ## Current Position
 
 Milestone: v1.1 Property Analysis Mode (just started)
-Phase: 13 (property-ingestion) — EXECUTING
-Plan: 7 of 7 (5 complete: 13-00, 13-01, 13-02, 13-03, 13-05; 13-04 still pending; 13-06 awaits 13-04)
-Status: Ready to execute
-Last activity: 2026-05-17
+Phase: 13 (property-ingestion) — COMPLETED 2026-05-16
+Plan: 7 of 7 (all complete: 13-00, 13-01, 13-02, 13-03, 13-04, 13-05, 13-06)
+Status: Phase 13 closed — ready for Phase 14 (Property Analysis Pipeline)
+Last activity: 2026-05-16
 
-Progress: [█████████░] 86%
+Progress: [██████████] 100% (Phase 13)
+
+### Phase 13 closure (2026-05-16)
+
+Plan 13-06 shipped the seed test-fixture corpus + end-to-end integration test:
+- 3 sanitized synthetic HTML fixtures (SFH happy / condo partial / captcha block)
+- 2 sha-keyed extracted/{sha16}.json mock-Sonnet outputs (c9d5a0df4baa57a5, 5810e207ecf14e21)
+- Updated tests/fixtures/zillow/README.md with the actual fixture inventory + sha-key recipe
+- 11 integration tests in tests/test_property_ingestion_integration.py covering the full
+  URL -> CLI -> DuckDB pipeline via MORTGAGE_OPS_MOCK_SONNET subprocess hook
+
+All 7 Phase 13 requirements closed: INGEST-01..04, PROP-01..02, PERS-08. All 5 D-13 locks
+proven via tests: D-13-GAPFILL-01 (3-shape envelope), D-13-MUSTHAVE-01 (price+zip+type
+MUST-HAVE), D-13-REANALYSIS-01 (composite PK with microsecond delta), D-13-MODEL-01
+(Sonnet 4.6 in subprocess, no auto-retry), D-13-BLOCK-01 (4 signals, cheap-first).
+4 open questions resolved: Q1 (HTML cache via data/cache/property-{zpid}.json),
+Q2 (messages.create + regex), Q3 (Python duckdb runtime dep), Q4 (content
+SHA256 household_hash).
+
+Phase-13 test pass rate: 98 passed, 1 skipped (intentional live-Sonnet skip without
+ANTHROPIC_API_KEY). Pre-existing dirty file lib/rules/fha_mip.py and unrelated planning
+notes were preserved untouched per execution constraints.
 
 ### v1.1 Phase Map
 

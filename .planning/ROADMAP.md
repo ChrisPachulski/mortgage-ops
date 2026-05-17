@@ -17,7 +17,7 @@ User selected **fine** — 6 phases, bottom-up. Phases 13-18 continue v1.0 numbe
 
 ### Phases
 
-- [ ] **Phase 13: Property Ingestion** - WebFetch + `__NEXT_DATA__` extraction + interactive gap-fill + `PropertyListing` Pydantic model + DuckDB `analyzed_listings` table
+- [x] **Phase 13: Property Ingestion** - WebFetch + `__NEXT_DATA__` extraction + interactive gap-fill + `PropertyListing` Pydantic model + DuckDB `analyzed_listings` table
 - [ ] **Phase 14: Property Analysis Pipeline** - Multi-program fan-out (Conv 30/15, FHA, VA, Jumbo) × DP sweep (3/5/10/15/20/25%) + auto-stress + breakeven + refi + IRS Pub 936 + GO/WATCH/NO-GO verdict
 - [ ] **Phase 15: `property` Skill Mode + Report Formatter** - `modes/property.md` URL-pin routing + `scripts/property_analyze.py` orchestrator + `lib/property_report.py` markdown emitter to `reports/{NNN}-property-{zpid}-{YYYY-MM-DD}.md`
 - [ ] **Phase 16: Reference Data** - `data/reference/property-analysis-heuristics.yml` (PMI tables, FHA county limits, jumbo cutoffs) + `insurance-estimate-defaults.yml` (per-state HOI averages)
@@ -28,6 +28,7 @@ User selected **fine** — 6 phases, bottom-up. Phases 13-18 continue v1.0 numbe
 
 ### Phase 13: Property Ingestion
 **Goal**: Reliably turn a Zillow URL into a validated `PropertyListing` Pydantic record, persisted to DuckDB. Hybrid pipeline (WebFetch + Haiku-prompted extraction + interactive gap-fill); zero dependency on paid scraper APIs.
+**Status**: COMPLETED 2026-05-16 — 7 plans shipped (13-00 scaffolding, 13-01 PropertyListing, 13-02 block detector, 13-03 Sonnet extractor, 13-04 CLI orchestrator, 13-05 DuckDB persistence, 13-06 fixtures + integration test). All 7 requirements closed; 5 D-13 locks proven.
 **Depends on**: v1.0 (Phase 10 SKILL.md scaffolding + Phase 9 DuckDB + Phase 12 always-exit-0 envelope contract)
 **Requirements**: INGEST-01, INGEST-02, INGEST-03, INGEST-04, PROP-01, PROP-02, PERS-08
 **Success Criteria** (what must be TRUE):

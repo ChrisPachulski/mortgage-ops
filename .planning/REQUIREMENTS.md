@@ -69,8 +69,8 @@ The math layer is complete. v1.1 is **composition + ingestion + a new report for
 
 | Requirement | Assigned Phase | Status |
 |-------------|----------------|--------|
-| INGEST-01..04 | Phase 13 (property-ingestion) | Pending |
-| PROP-01..02 | Phase 13 (property-ingestion) | PROP-01 Closed (Plan 13-01); PROP-02 Closed (Plan 13-05) |
+| INGEST-01..04 | Phase 13 (property-ingestion) | Closed (Plan 13-04 + integration coverage in Plan 13-06) |
+| PROP-01..02 | Phase 13 (property-ingestion) | Closed (PROP-01 Plan 13-01; PROP-02 Plan 13-05) |
 | ANLZ-01..03 | Phase 14 (property-analysis-pipeline) | Pending |
 | VERD-01 | Phase 14 | Pending |
 | MODE-01..03 | Phase 15 (property-mode) | Pending |
