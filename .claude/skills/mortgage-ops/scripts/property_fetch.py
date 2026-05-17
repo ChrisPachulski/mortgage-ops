@@ -337,16 +337,22 @@ def main() -> int:
     extracted["zpid"] = zpid
     extracted["fetched_at"] = fetched_at
 
-    # 9. Pydantic validation. On failure -> shape-2 with computed missing set.
+    # 9. Pydantic validation. PropertyListing uses strict=True so Decimal-typed
+    #     money fields and datetime fields will reject string inputs from
+    #     ``model_validate(dict)``. Route through ``model_validate_json`` so
+    #     Pydantic's JSON parser handles the string->Decimal / string->datetime
+    #     coercion at the boundary (matches lib.property_persistence pattern).
+    #     On failure -> shape-2 with computed missing set.
     try:
-        listing = PropertyListing.model_validate(extracted)
+        listing = PropertyListing.model_validate_json(json.dumps(extracted))
     except Exception:
-        missing = [f for f in MUST_HAVE if not extracted.get(f)]
-        partial = {k: v for k, v in extracted.items() if k in MUST_HAVE}
+        present = {f for f in MUST_HAVE if extracted.get(f) not in (None, "")}
+        missing = [f for f in MUST_HAVE if f not in present]
+        partial = {k: extracted[k] for k in MUST_HAVE if k in extracted}
         return _emit(
             {
                 "listing": partial,
-                "missing": missing or list(MUST_HAVE),
+                "missing": missing if missing else list(MUST_HAVE),
                 "error": None,
                 "awaiting_user_input": True,
                 "source_url": args.url,
