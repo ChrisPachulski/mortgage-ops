@@ -92,10 +92,6 @@ ignore_missing_imports = true
 # succeeds; mypy needs the missing-imports waiver until those waves land.
 # Remove or pare back per-module entries as each wave ships its lib module.
 [[tool.mypy.overrides]]
-module = "lib.property_extractor"
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
 module = "lib.property_persistence"
 ignore_missing_imports = true
 
