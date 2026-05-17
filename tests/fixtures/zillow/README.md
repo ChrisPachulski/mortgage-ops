@@ -6,18 +6,52 @@ only-in-CI policy README; Wave 6 (Plan 13-06) drops the first batch of
 fixtures into place; Phase 17 expands the corpus with jumbo + multifamily
 fixtures.
 
-## Files (Wave 0 state: directory only — Wave 6 / Phase 17 ships fixtures)
+## Files
 
-| File | Tested SC | Covers |
-|------|-----------|--------|
-| `sfh_conforming_happy_path.html` | SC-1, INGEST-02 | shape-1 success on SFH all-fields (the happy path) |
-| `condo_partial_tax_missing.html` | INGEST-02, INGEST-03 | shape-1 with condo HOA scraped, tax null (gap-fill candidate) |
-| `blocked_perimeterx.html` | SC-2, D-13-BLOCK-01 | shape-3 `captcha_detected` ("Press & Hold" PerimeterX-style block page) |
-| `extracted/{sha16}.json` | INGEST-02 | Mocked Sonnet outputs, one per HTML fixture, indexed by `sha256(html)[:16]` |
+| File | Tested SC | Covers | Body bytes |
+|------|-----------|--------|------------|
+| `sfh_conforming_happy_path.html` | SC-1, INGEST-02 | shape-1 success on SFH; all 13 fields populated | ~6.5KB |
+| `condo_partial_tax_missing.html` | INGEST-02, D-13-MUSTHAVE-01 | shape-1 with condo HOA scraped, tax_annual=null (non-blocking per MUSTHAVE) | ~6.6KB |
+| `blocked_perimeterx.html` | SC-2, D-13-BLOCK-01 | shape-3 `captcha_detected` via "Press & Hold" phrase | ~5.4KB |
+| `extracted/{sha16}.json` × 2 | INGEST-02 | Pre-recorded Sonnet outputs; sha-keyed; loaded by `mock_sonnet` conftest fixture | varies |
+
+Phase 17 expansion target: 2 more fixtures (jumbo SFH, 2-unit multifamily).
 
 ZPID URL patterns (INGEST-04) are exercised by the parametric test matrix
 in `tests/test_property_block_detector.py::test_extract_zpid` — no
 dedicated fixture needed for those.
+
+### Worked sha-key example
+
+The `mock_sonnet` conftest fixture (added in Plan 13-03; see `tests/conftest.py`)
+and the CLI's `MORTGAGE_OPS_MOCK_SONNET=1` subprocess hook (added in Plan 13-04;
+see `.claude/skills/mortgage-ops/scripts/property_fetch.py:_mock_sonnet_extract`)
+both key pre-recorded Sonnet output JSON by `sha256(html_bytes).hexdigest()[:16]`.
+
+To compute the sha for an HTML fixture:
+
+```bash
+python -c "import hashlib; print(hashlib.sha256(open('tests/fixtures/zillow/sfh_conforming_happy_path.html','rb').read()).hexdigest()[:16])"
+# prints e.g. c9d5a0df4baa57a5
+```
+
+Then `tests/fixtures/zillow/extracted/c9d5a0df4baa57a5.json` is the dict that
+`mock_sonnet` returns when the CLI calls `extract_listing(html_of_sfh_fixture, ...)`.
+
+If the HTML changes by even one byte, the sha changes → existing JSON is no
+longer matched → mock_sonnet returns None → tests fall through to shape-2
+(treated as "Sonnet failed to extract"). When you edit a fixture, you MUST
+regenerate the matching `extracted/{sha16}.json` (or commit a new sha-named
+file and delete the old one). The drift-detection meta-test in
+`tests/test_property_ingestion_integration.py` catches stale pairings.
+
+Current committed pairings:
+
+| HTML fixture | SHA-16 | Extracted JSON |
+|--------------|--------|----------------|
+| `sfh_conforming_happy_path.html` | `c9d5a0df4baa57a5` | `extracted/c9d5a0df4baa57a5.json` |
+| `condo_partial_tax_missing.html` | `5810e207ecf14e21` | `extracted/5810e207ecf14e21.json` |
+| `blocked_perimeterx.html` | (n/a — block detection fires before Sonnet) | none |
 
 ## Why synthetic, not live (D-02 Phase 11 inherits)
 
