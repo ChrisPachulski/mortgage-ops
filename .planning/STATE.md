@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: property-analysis-mode
 status: executing
-stopped_at: Plan 08-05 complete (Wave 5 fixtures + tests; 14 hand-calc fixtures shipped 11 stress + 3 points; 2 final xfails flipped + citation-coverage meta-test added; full suite 521/4/1 zero-regression; Phase 8 closed at the test layer with 0 xfails in Phase-8 test files; 3 deviations 2 Rule-1 plan-spec validate_python->validate_json + meta-test scope extension for STRS-04/PNTS-03 CLI requirements + 1 Rule-3 hygiene PT018 split + unused-pytest-import; D-05-01..D-05-07 LOCKED honored verbatim; SC-1..SC-5 all verifiable verbatim by tests; STRS-01..04 + PNTS-01..03 closed; only Plan 08-06 references doc remains for Phase 8 closure)
-last_updated: "2026-05-17T04:29:07.501Z"
-last_activity: 2026-05-17
+stopped_at: Plan 13-05 complete (Wave 5 DuckDB persistence; lib/property_persistence.py 157 LOC ships write_listing + read_latest_for_zpid + compute_household_hash + _ensure_schema; composite PK (zpid, analyzed_at) + 3 indexes + JSON columns per D-13-REANALYSIS-01; with_cache_lock(db_path.parent) serializes Python writes against Phase 9 Node writer's data/.lock; SHA256 household_hash per Q4 default; 16 live tests up from 7 strict-xfail stubs; full suite 716/6/11 with 2 pre-existing [fha_mip] failures unchanged i.e. +16 net pass zero regression vs Plan 13-03 baseline; 4 Rule-3 hygiene deviations all pre-commit-driven RUF100 unused-noqa BLE001 + freezegun added to pre-commit mypy additional_dependencies + TC002 pytest moved to TYPE_CHECKING block + mypy tuple-narrow via assert row is not None; PROP-02 + PERS-08 closed; D-13-REANALYSIS-01 lock surface proven via freezegun 1us delta; Q4 default honored via 4 household_hash sensitivity tests; entire Wave-0 mypy override block removed from pyproject.toml since all 4 lib/property_*.py modules now ship; Plan 13-04 CLI still pending 11 xfails in tests/test_property_fetch.py)
+last_updated: "2026-05-16T00:00:00.000Z"
+last_activity: 2026-05-16
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 7
-  completed_plans: 4
+  completed_plans: 5
   percent: 0
 ---
 
@@ -27,11 +27,11 @@ See: .planning/PROJECT.md (updated 2026-04-26)
 
 Milestone: v1.1 Property Analysis Mode (just started)
 Phase: 13 (property-ingestion) — EXECUTING
-Plan: 5 of 7
+Plan: 6 of 7 (5 complete: 13-00, 13-01, 13-02, 13-03, 13-05; 13-04 still pending; 13-06 awaits 13-04)
 Status: Ready to execute
-Last activity: 2026-05-17
+Last activity: 2026-05-16
 
-Progress: [██████░░░░] 57%
+Progress: [███████░░░] 71%
 
 ### v1.1 Phase Map
 

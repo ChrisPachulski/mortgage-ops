@@ -23,7 +23,7 @@ The math layer is complete. v1.1 is **composition + ingestion + a new report for
 ### PropertyListing Domain Model
 
 - [x] **PROP-01**: `lib/property_listing.py` ships a Pydantic v2 `PropertyListing` model with all canonical fields, `condecimal` for money, `Literal` for `property_type` (SFH / condo / townhouse / multifamily-2-4), `field_validator` for zip (5-digit string), all money fields wrapped in `ProvenancedMoney` (value + provenance: `scraped | user_provided | estimated`).
-- [ ] **PROP-02**: Round-trip serialization to DuckDB via `orchestration/db-write.mjs` pattern from Phase 9; analyzed_listings table schema documented in references/property-analysis.md.
+- [x] **PROP-02**: Round-trip serialization to DuckDB via `orchestration/db-write.mjs` pattern from Phase 9; analyzed_listings table schema documented in references/property-analysis.md.
 
 ### Analysis Pipeline (`lib/property_analysis.py`)
 
@@ -43,7 +43,7 @@ The math layer is complete. v1.1 is **composition + ingestion + a new report for
 
 ### Persistence
 
-- [ ] **PERS-08**: DuckDB `analyzed_listings` table created in Wave 0 via migration; schema includes zpid PK, source_url, all PropertyListing fields, analysis_report TEXT (markdown), analysis_verdict ENUM (GO/WATCH/NO-GO), analyzed_at TIMESTAMP, household_snapshot_hash (so re-analyses after household.yml changes don't silently overwrite). Lockfile pattern from Phase 9 reused verbatim.
+- [x] **PERS-08**: DuckDB `analyzed_listings` table created in Wave 0 via migration; schema includes zpid PK, source_url, all PropertyListing fields, analysis_report TEXT (markdown), analysis_verdict ENUM (GO/WATCH/NO-GO), analyzed_at TIMESTAMP, household_snapshot_hash (so re-analyses after household.yml changes don't silently overwrite). Lockfile pattern from Phase 9 reused verbatim.
 
 ### Report Formatter
 
@@ -70,11 +70,11 @@ The math layer is complete. v1.1 is **composition + ingestion + a new report for
 | Requirement | Assigned Phase | Status |
 |-------------|----------------|--------|
 | INGEST-01..04 | Phase 13 (property-ingestion) | Pending |
-| PROP-01..02 | Phase 13 (property-ingestion) | Pending |
+| PROP-01..02 | Phase 13 (property-ingestion) | PROP-01 Closed (Plan 13-01); PROP-02 Closed (Plan 13-05) |
 | ANLZ-01..03 | Phase 14 (property-analysis-pipeline) | Pending |
 | VERD-01 | Phase 14 | Pending |
 | MODE-01..03 | Phase 15 (property-mode) | Pending |
-| PERS-08 | Phase 13 | Pending |
+| PERS-08 | Phase 13 | Closed (Plan 13-05) |
 | RPRT-01..02 | Phase 15 | Pending |
 | REF-09..10 | Phase 16 (reference-data) | Pending |
 | TEST-01..02 | Phase 17 (tests-and-fixtures) | Pending |
