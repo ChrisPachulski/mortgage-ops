@@ -4,6 +4,8 @@ version = "0.1.0"
 description = "Personal-use mortgage analysis: deterministic Python calc engine + Claude skill frontend"
 requires-python = ">=3.12"
 dependencies = [
+    "anthropic>=0.100.0,<1.0",
+    "duckdb>=1.4,<2.0",
     "pydantic>=2.13.3",
     "python-dateutil>=2.9.0",
     "numpy-financial==1.0.0",
@@ -12,7 +14,6 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "anthropic==0.100.0",
     "freezegun>=1.5",            # Phase 12 SC-2 cache TTL mocking (LIVE-03)
     "mypy>=1.20",
     "pre-commit>=4.6",
