@@ -1,0 +1,16 @@
+{
+  "zpid": "12345678",
+  "price": "625000.00",
+  "zip": "94110",
+  "property_type": "SFH",
+  "beds": 3,
+  "baths": "2.5",
+  "sqft": 1800,
+  "year_built": 1985,
+  "tax_annual": "7800.00",
+  "hoa_monthly": null,
+  "insurance_estimate_annual": null,
+  "zestimate": "640000.00",
+  "days_on_market": 12,
+  "list_date": "2026-04-28"
+}

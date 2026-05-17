@@ -1,0 +1,16 @@
+{
+  "zpid": "87654321",
+  "price": "450000.00",
+  "zip": "98052",
+  "property_type": "condo",
+  "beds": 2,
+  "baths": "2.0",
+  "sqft": 1100,
+  "year_built": 2008,
+  "tax_annual": null,
+  "hoa_monthly": "425.00",
+  "insurance_estimate_annual": null,
+  "zestimate": "460000.00",
+  "days_on_market": 7,
+  "list_date": "2026-05-03"
+}
