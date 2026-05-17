@@ -18,7 +18,7 @@ The math layer is complete. v1.1 is **composition + ingestion + a new report for
 - [ ] **INGEST-01**: WebFetch fetches the Zillow listing URL and extracts the `<script id="__NEXT_DATA__">` JSON blob. Captcha / 403 / non-200 responses are detected and surface a structured error envelope (not a Python traceback).
 - [ ] **INGEST-02**: Haiku-prompted extraction pulls the canonical PropertyListing fields from `__NEXT_DATA__`: price, tax_annual, hoa_monthly, insurance_estimate_annual, beds, baths, sqft, zip, property_type, year_built, zestimate, days_on_market, list_date.
 - [ ] **INGEST-03**: Interactive gap-fill — when any MUST-HAVE field (price, zip, property_type) is missing or null, Claude prompts the user; each user-provided value is recorded with `provenance: user_provided` in the PropertyListing record.
-- [ ] **INGEST-04**: ZPID extraction from URL — supports both `zillow.com/homedetails/{slug}/{zpid}_zpid/` and `zillow.com/b/{zpid}_zpid/` URL patterns; ZPID is the durable primary key for `analyzed_listings`.
+- [x] **INGEST-04**: ZPID extraction from URL — supports both `zillow.com/homedetails/{slug}/{zpid}_zpid/` and `zillow.com/b/{zpid}_zpid/` URL patterns; ZPID is the durable primary key for `analyzed_listings`.
 
 ### PropertyListing Domain Model
 
