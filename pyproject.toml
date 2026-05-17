@@ -100,10 +100,6 @@ module = "lib.property_extractor"
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
-module = "lib.property_listing"
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
 module = "lib.property_persistence"
 ignore_missing_imports = true
 
