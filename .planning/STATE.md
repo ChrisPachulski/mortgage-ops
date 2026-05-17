@@ -4,13 +4,13 @@ milestone: v1.1
 milestone_name: property-analysis-mode
 status: executing
 stopped_at: Plan 08-05 complete (Wave 5 fixtures + tests; 14 hand-calc fixtures shipped 11 stress + 3 points; 2 final xfails flipped + citation-coverage meta-test added; full suite 521/4/1 zero-regression; Phase 8 closed at the test layer with 0 xfails in Phase-8 test files; 3 deviations 2 Rule-1 plan-spec validate_python->validate_json + meta-test scope extension for STRS-04/PNTS-03 CLI requirements + 1 Rule-3 hygiene PT018 split + unused-pytest-import; D-05-01..D-05-07 LOCKED honored verbatim; SC-1..SC-5 all verifiable verbatim by tests; STRS-01..04 + PNTS-01..03 closed; only Plan 08-06 references doc remains for Phase 8 closure)
-last_updated: "2026-05-17T04:05:02.622Z"
+last_updated: "2026-05-17T04:12:12.472Z"
 last_activity: 2026-05-17
 progress:
   total_phases: 6
   completed_phases: 0
   total_plans: 7
-  completed_plans: 1
+  completed_plans: 2
   percent: 0
 ---
 
@@ -27,11 +27,11 @@ See: .planning/PROJECT.md (updated 2026-04-26)
 
 Milestone: v1.1 Property Analysis Mode (just started)
 Phase: 13 (property-ingestion) — EXECUTING
-Plan: 2 of 7
+Plan: 3 of 7
 Status: Ready to execute
 Last activity: 2026-05-17
 
-Progress: [█░░░░░░░░░] 14%
+Progress: [███░░░░░░░] 29%
 
 ### v1.1 Phase Map
 
@@ -204,6 +204,7 @@ Previous resume narrative for Plan 07-04 / Wave 3 (Phase 7 Wave 3 closes clean �
 | Phase 08-stress-points P08-04 | 9 minutes | 4 tasks | 4 files |
 | Phase 8 P5 | 10min | 5 tasks | 16 files |
 | Phase 13 P00 | 12 | 3 tasks | 8 files |
+| Phase 13 P01 | 2 | 2 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -412,6 +413,9 @@ Recent decisions affecting current work:
 - [Phase ?]: Probe A (Q2): anthropic.messages.parse AVAILABLE — Wave 3 uses structured-output API path
 - [Phase ?]: Phase 13-00: Probe B (Q3): Python duckdb 1.5.2 installed cleanly — Wave 5 uses Python duckdb direct (not subprocess Node)
 - [Phase ?]: Phase 13-00: [[tool.mypy.overrides]] ignore_missing_imports for 4 stubbed lib.property_* modules; entries removed per-wave as each wave ships
+- [Phase ?]: 13-01: Reused lib.models.Money Annotated alias for PropertyListing.price (single source of truth for money discipline)
+- [Phase ?]: 13-01: ProvenancedMoney wraps NICE-TO-HAVE money fields only; bare price is shape-1-implied-scraped
+- [Phase ?]: 13-01: Non-money NICE-TO-HAVEs use sibling *_provenance Literal, not ProvenancedMoney wrapper
 
 ### Pending Todos
 
@@ -437,6 +441,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-05-17T04:04:37.790Z
+Last session: 2026-05-17T04:12:12.463Z
 Stopped at: Plan 08-05 complete (Wave 5 fixtures + tests; 14 hand-calc fixtures shipped 11 stress + 3 points; 2 final xfails flipped + citation-coverage meta-test added; full suite 521/4/1 zero-regression; Phase 8 closed at the test layer with 0 xfails in Phase-8 test files; 3 deviations 2 Rule-1 plan-spec validate_python->validate_json + meta-test scope extension for STRS-04/PNTS-03 CLI requirements + 1 Rule-3 hygiene PT018 split + unused-pytest-import; D-05-01..D-05-07 LOCKED honored verbatim; SC-1..SC-5 all verifiable verbatim by tests; STRS-01..04 + PNTS-01..03 closed; only Plan 08-06 references doc remains for Phase 8 closure)
 Resume file: None

@@ -22,7 +22,7 @@ The math layer is complete. v1.1 is **composition + ingestion + a new report for
 
 ### PropertyListing Domain Model
 
-- [ ] **PROP-01**: `lib/property_listing.py` ships a Pydantic v2 `PropertyListing` model with all canonical fields, `condecimal` for money, `Literal` for `property_type` (SFH / condo / townhouse / multifamily-2-4), `field_validator` for zip (5-digit string), all money fields wrapped in `ProvenancedMoney` (value + provenance: `scraped | user_provided | estimated`).
+- [x] **PROP-01**: `lib/property_listing.py` ships a Pydantic v2 `PropertyListing` model with all canonical fields, `condecimal` for money, `Literal` for `property_type` (SFH / condo / townhouse / multifamily-2-4), `field_validator` for zip (5-digit string), all money fields wrapped in `ProvenancedMoney` (value + provenance: `scraped | user_provided | estimated`).
 - [ ] **PROP-02**: Round-trip serialization to DuckDB via `orchestration/db-write.mjs` pattern from Phase 9; analyzed_listings table schema documented in references/property-analysis.md.
 
 ### Analysis Pipeline (`lib/property_analysis.py`)
