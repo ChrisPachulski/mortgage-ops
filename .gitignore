@@ -55,6 +55,9 @@ data/.mortgage-ops.duckdb.lock
 data/cache/fred_*.json
 data/cache/.fred-cache.lock
 
+# Phase 13 — per-zpid HTML cache for --user-provided round-trips (Data Layer; generated)
+data/cache/property-*.html
+
 # Phase 12: eval runs (System Layer write target — generated)
 evals/runs/*
 !evals/runs/.gitkeep
