@@ -239,3 +239,44 @@ def repo_root() -> Path:
     in tests/, so parents[0] = tests/, parents[1] = repo root).
     """
     return Path(__file__).resolve().parents[1]
+
+
+# === Phase 13: Sonnet extraction mock (INGEST-02) ===
+# Synthetic-only-in-CI per Phase 11 D-02 (inherited).
+# Maps html bytes -> tests/fixtures/zillow/extracted/{sha16}.json.
+# If no fixture exists for that html hash, returns None (mimics Sonnet failure).
+
+
+@pytest.fixture
+def mock_sonnet(monkeypatch: pytest.MonkeyPatch) -> Callable[[str, str], dict[str, Any] | None]:
+    """Replace lib.property_extractor.extract_listing with a sha-keyed fixture loader.
+
+    Usage:
+        def test_my_thing(mock_sonnet):
+            # extract_listing now reads from tests/fixtures/zillow/extracted/{sha}.json
+            ...
+
+    To add a new mocked response: compute sha256(html_bytes).hexdigest()[:16]
+    and save the expected dict at tests/fixtures/zillow/extracted/{sha16}.json.
+    Returns None when no fixture exists for that html hash (mimics a Sonnet
+    failure for shape-2 awaiting_user_input path testing).
+    """
+    import hashlib
+    import json
+    from pathlib import Path
+
+    fixtures_root = Path(__file__).parent / "fixtures" / "zillow" / "extracted"
+
+    def _fake(html: str, source_url: str) -> dict[str, Any] | None:
+        digest = hashlib.sha256(html.encode("utf-8")).hexdigest()[:16]
+        fixture_path = fixtures_root / f"{digest}.json"
+        if not fixture_path.exists():
+            return None
+        try:
+            loaded = json.loads(fixture_path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return None
+        return loaded if isinstance(loaded, dict) else None
+
+    monkeypatch.setattr("lib.property_extractor.extract_listing", _fake)
+    return _fake
