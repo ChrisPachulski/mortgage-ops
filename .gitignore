@@ -57,6 +57,8 @@ data/cache/.fred-cache.lock
 
 # Phase 13 — per-zpid HTML cache for --user-provided round-trips (Data Layer; generated)
 data/cache/property-*.html
+# Phase 13 Plan 13-04 — per-zpid extracted-dict JSON companion (Q1 default; skips re-Sonnet)
+data/cache/property-*.json
 
 # Phase 12: eval runs (System Layer write target — generated)
 evals/runs/*
