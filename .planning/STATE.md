@@ -2,16 +2,15 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: property-analysis-mode
-status: defined
-defined_at: "2026-05-14"
-stopped_at: v1.1 milestone defined (6 phases 13-18, 16 requirements; research complete; ready for /gsd-plan-phase 13)
-last_updated: "2026-05-14T12:00:00.000Z"
-last_activity: 2026-05-14 -- v1.1 milestone started
+status: executing
+stopped_at: Plan 08-05 complete (Wave 5 fixtures + tests; 14 hand-calc fixtures shipped 11 stress + 3 points; 2 final xfails flipped + citation-coverage meta-test added; full suite 521/4/1 zero-regression; Phase 8 closed at the test layer with 0 xfails in Phase-8 test files; 3 deviations 2 Rule-1 plan-spec validate_python->validate_json + meta-test scope extension for STRS-04/PNTS-03 CLI requirements + 1 Rule-3 hygiene PT018 split + unused-pytest-import; D-05-01..D-05-07 LOCKED honored verbatim; SC-1..SC-5 all verifiable verbatim by tests; STRS-01..04 + PNTS-01..03 closed; only Plan 08-06 references doc remains for Phase 8 closure)
+last_updated: "2026-05-17T04:05:02.622Z"
+last_activity: 2026-05-17
 progress:
   total_phases: 6
   completed_phases: 0
-  total_plans: 0
-  completed_plans: 0
+  total_plans: 7
+  completed_plans: 1
   percent: 0
 ---
 
@@ -22,16 +21,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-26)
 
 **Core value:** Math correctness first — every dollar figure traces to a tested, deterministic Python function; the LLM is a router and narrator that never owns numbers.
-**Current focus:** v1.1 Property Analysis Mode — Phase 13 ready for planning
+**Current focus:** Phase 13 — property-ingestion
 
 ## Current Position
 
 Milestone: v1.1 Property Analysis Mode (just started)
-Phase: 13 (property-ingestion) — ready for `/gsd-plan-phase 13`
-Status: Research complete (.planning/research/v1.1-property-analysis.md, 997 lines, 9 patterns + 12 pitfalls + 8 open questions). REQUIREMENTS.md + ROADMAP.md regenerated. Phases 13-18 continue v1.0 numbering.
-Last activity: 2026-05-14 -- v1.1 milestone defined
+Phase: 13 (property-ingestion) — EXECUTING
+Plan: 2 of 7
+Status: Ready to execute
+Last activity: 2026-05-17
 
-Progress: [░░░░░░░░░░] 0% (0/6 phases — Phase 13 next)
+Progress: [█░░░░░░░░░] 14%
 
 ### v1.1 Phase Map
 
@@ -203,6 +203,7 @@ Previous resume narrative for Plan 07-04 / Wave 3 (Phase 7 Wave 3 closes clean �
 | Phase 08-stress-points P03-points-engine | 9min | 4 tasks | 2 files (0 created + 2 modified [lib/points.py +151 net with simple_breakeven + npv_breakeven + _derive_monthly_savings + dispatcher / tests/test_points.py +54 net with 2 Wave-0 xfails flipped to engine-actual values]; 4 deviations [1 Rule-1 engine-actual 215 vs planner-claimed 160 for 7% NPV breakeven + 1 Rule-2 Money->signed Decimal type contract relaxation mirroring Phase 6 D-03 + 2 Rule-3 hygiene]; PNTS-01 + PNTS-02 closed at the math layer) |
 | Phase 08-stress-points P08-04 | 9 minutes | 4 tasks | 4 files |
 | Phase 8 P5 | 10min | 5 tasks | 16 files |
+| Phase 13 P00 | 12 | 3 tasks | 8 files |
 
 ## Accumulated Context
 
@@ -408,6 +409,9 @@ Recent decisions affecting current work:
 - [Phase ?]: 08-04: Envelope-uniformity surface-pair pattern (5th project occurrence) — pair float-gate path (decimal_type, ctx.class=Decimal) with a Pydantic surface that ALSO carries ctx; Pydantic 'missing' carries only 5 keys so rotate to too_short / value_error / cross-field validator. This plan uses too_short via empty rates: [] tripping Field(min_length=1).
 - [Phase 8]: Plan 08-05 D-05-05: SC-4 numerical pins (123/215) are HARD pins; Plan honors engine truth (npv=215 not planner-claimed 160) per Plan 08-03 deviation 1 three-way cross-validation (numpy_financial.nper + closed-form annuity + engine §5.2 walk) — The planner's 160-month value was mathematically inconsistent with the §5.2 cumulative-NPV formula it purported to compute; engine ships the correct math; fixture pins the engine truth; future Phase 6 discount-rate convention changes that shift these by ±1 month require an explicit retire/update Plan in Phase 6
 - [Phase 8]: Plan 08-05 D-05-04: Citation-coverage meta-test extended to accept structured _meta.requirements arrays in addition to free-text _meta.citation strings — STRS-04 + PNTS-03 (CLI requirements) are not naturally citable in free-text fixture citation prose because the existing CLI smoke tests use inline JSON not fixtures; tagging fixture _meta.requirements arrays preserves honest traceability for cross-cutting requirements without forcing dedicated CLI-only fixture files; the meta-test accepts both literal IDs and ROADMAP SC variants as valid coverage tokens
+- [Phase ?]: Probe A (Q2): anthropic.messages.parse AVAILABLE — Wave 3 uses structured-output API path
+- [Phase ?]: Phase 13-00: Probe B (Q3): Python duckdb 1.5.2 installed cleanly — Wave 5 uses Python duckdb direct (not subprocess Node)
+- [Phase ?]: Phase 13-00: [[tool.mypy.overrides]] ignore_missing_imports for 4 stubbed lib.property_* modules; entries removed per-wave as each wave ships
 
 ### Pending Todos
 
@@ -433,6 +437,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-05-04T01:21:51.478Z
+Last session: 2026-05-17T04:04:37.790Z
 Stopped at: Plan 08-05 complete (Wave 5 fixtures + tests; 14 hand-calc fixtures shipped 11 stress + 3 points; 2 final xfails flipped + citation-coverage meta-test added; full suite 521/4/1 zero-regression; Phase 8 closed at the test layer with 0 xfails in Phase-8 test files; 3 deviations 2 Rule-1 plan-spec validate_python->validate_json + meta-test scope extension for STRS-04/PNTS-03 CLI requirements + 1 Rule-3 hygiene PT018 split + unused-pytest-import; D-05-01..D-05-07 LOCKED honored verbatim; SC-1..SC-5 all verifiable verbatim by tests; STRS-01..04 + PNTS-01..03 closed; only Plan 08-06 references doc remains for Phase 8 closure)
-Resume file: Phase 8 in-progress 6/7 — next entry point /gsd-execute-phase 08 to ship Plan 08-06 references doc (references/stress-tests.md + references/points-breakeven.md)
+Resume file: None
