@@ -91,21 +91,34 @@ from lib.affordability import (
     evaluate as affordability_evaluate,
 )
 from lib.amortize import build_schedule
-from lib.arm import ARMTerms
+from lib.arm import ARMRequest, ARMTerms
 from lib.fred_cache import CACHE_DIR, get_cached_or_fetch, with_cache_lock
 from lib.household import Household  # noqa: TC001
 from lib.models import Loan, Money, Rate  # Pydantic resolves annotations at runtime
 from lib.money import quantize_cents, quantize_rate
+from lib.points import PointsRequestFromLoans
+from lib.points import evaluate as points_evaluate
 from lib.profile import Profile  # noqa: TC001
 from lib.property_listing import (  # noqa: TC001  # Pydantic resolves annotations at runtime
     PropertyListing,
     ProvenancedMoney,
 )
+from lib.refinance import RateAndTermRefiRequest
+from lib.refinance import evaluate as refi_evaluate
 from lib.rules.fha_mip import compute as fha_mip_compute
+from lib.rules.irs_pub936 import qualified_loan_limit as pub936_qualified_loan_limit
 from lib.rules.loan_type import MissingCountyDataError
 from lib.rules.loan_type import classify as classify_loan_type
 from lib.rules.types import County
 from lib.rules.va_funding_fee import compute as va_funding_fee_compute
+from lib.stress import (
+    ArmResetRequest,
+    IncomeShockRequest,
+    RatePath,
+    RateShockRequest,
+)
+from lib.stress import StressRow as UpstreamStressRow
+from lib.stress import evaluate as stress_evaluate
 
 # ---------------------------------------------------------------------------
 # Module-level Final constants (PATTERNS.md L260-265 + RESEARCH Pitfalls 1 + 2 + 8)
@@ -175,6 +188,66 @@ DEFAULT_CONFORMING_TERM_MONTHS: Final[int] = 360
 
 DEFAULT_CONFORMING_15_TERM_MONTHS: Final[int] = 180
 """180-month term for Conv15."""
+
+# B-5 (Plan 14-03 PLAN-CHECK fix): Per-program DTI ceilings. A hardcoded 0.50
+# for all programs is silently wrong for 3 of 5 programs (false-positive WATCH
+# on FHA cells, false-negative GO on VA cells). Each entry below carries the
+# regulatory source as a comment for grep-discoverability.
+_DTI_CEILING_BY_PROGRAM: Final[dict[str, Decimal]] = {
+    # Conventional: Fannie / Freddie ATR-QM safe harbor; QM Patch sunset 2021
+    # (CFPB General QM Final Rule, 2020-12-29; back-end ratio target 0.43 with
+    # APR-APOR-spread test, lender-conservative cap 0.50).
+    "Conv30": Decimal("0.50"),
+    "Conv15": Decimal("0.50"),
+    # FHA: HUD Handbook 4000.1 II.A.5.d max back-end ratio (compensating-factors
+    # path; baseline 0.43 + 0.14 cushion for strong residual / reserves).
+    "FHA30": Decimal("0.57"),
+    # VA: VA Lender Handbook 26-7 Ch. 4 §7 — 41% baseline back-end ratio
+    # (residual-income gating supplies the upside cushion separately).
+    "VA30": Decimal("0.41"),
+    # Jumbo: ATR/QM safe harbor for non-QM jumbo (lender-conservative; most
+    # post-QM Patch jumbo programs cap at 43%).
+    "Jumbo30": Decimal("0.43"),
+}
+"""Per-program DTI ceilings used by the stress block (B-5 PLAN-CHECK fix).
+
+The ``IncomeShockRequest.dti_threshold`` field and the ``breaches_dti_ceiling``
+flag on every stress kind are evaluated against this per-program ceiling, NOT
+a hardcoded 0.50. Citations in the inline comment.
+"""
+
+_REFI_CLOSING_COSTS_PCT: Final[Decimal] = Decimal("0.02")
+"""Industry rule-of-thumb estimate for rate-and-term refi closing costs (2% of
+new loan balance). Plan 14-03 ``_build_refi_block`` uses this scalar; a future
+phase may swap in a per-jurisdiction itemized table. Distinct from
+``_CLOSING_COSTS_PCT`` (purchase) — refi closing is typically lower because
+title insurance is reissue-rated and origination fees are lender-promo
+sensitive."""
+
+_REFI_NPV_HORIZON_MONTHS: Final[int] = 60
+"""5-year NPV horizon for the refi scan (D-14-REFI-02 + Phase 6 D-11). Matches
+the ``RefiRow.npv_60mo`` field semantics on Phase 14's RefiRow."""
+
+_POINTS_CONV_FAMILY: Final[frozenset[str]] = frozenset({"Conv30", "Conv15", "Jumbo30"})
+"""Programs for which points-buydown breakeven is modeled (Open Question 1
+resolution in RESEARCH). FHA + VA cells get a ``WARNING-NO-POINTS-FOR-FHA-VA``
+note instead of a breakeven figure — FHA UFMIP / VA funding fee dominate
+deferred-cost economics, and discount points on those programs require
+case-by-case loan-officer modeling outside Phase 14's v1.1 scope."""
+
+_POINTS_HOLD_PERIOD_MONTHS: Final[int] = 60
+"""5-year hold horizon for the points-buydown NPV walk. Matches the refi NPV
+horizon and the standard mortgage-industry 5-year-tenure assumption."""
+
+_RATE_SHOCK_BPS: Final[Decimal] = Decimal("0.02")
+"""+200bps rate shock magnitude (D-14-STRESS-01)."""
+
+_INCOME_SHOCK_REDUCTION: Final[Decimal] = Decimal("0.30")
+"""-30% income shock magnitude (D-14-STRESS-01)."""
+
+_STRESS_RATE_SHOCK_CODE: Final[str] = "STRESS-RATE-SHOCK-200BPS"
+_STRESS_INCOME_SHOCK_CODE: Final[str] = "STRESS-INCOME-SHOCK-30PCT"
+_STRESS_ARM_RESET_CODE: Final[str] = "STRESS-ARM-RESET-PEAK-CAP"
 
 
 # ---------------------------------------------------------------------------
@@ -763,6 +836,579 @@ def _build_matrix(
         down_payment_pcts=list(DOWN_PAYMENT_PCTS),
     )
     return matrix, warnings
+
+
+# ---------------------------------------------------------------------------
+# Plan 14-03 auxiliary-block builders (stress / refi / points / tax)
+#
+# All four blocks run at the user's preferred down-payment (D-14-STRESS-01),
+# delegating regulatory math to lib.stress / lib.refinance / lib.points /
+# lib.rules.irs_pub936. No new mathematical primitives.
+# ---------------------------------------------------------------------------
+
+
+def _eligible_cells_at_preferred_dp(
+    matrix: DownPaymentMatrix,
+    preferred_dp: Decimal,
+) -> list[ProgramResult]:
+    """Return the subset of matrix.cells where down_payment_pct == preferred_dp
+    AND eligible is True (D-14-STRESS-01 + D-14-REFI-01 + D-14-POINTS-01).
+
+    ``preferred_dp`` is compared via numeric equality after quantize_rate; the
+    Phase-14 Household ships ``preferred_down_payment_pct`` as a Rate which is
+    already quantized, but the matrix cells route through quantize_rate one more
+    time, so we normalize both sides to be safe.
+    """
+    target = quantize_rate(preferred_dp)
+    return [c for c in matrix.cells if c.down_payment_pct == target and c.eligible]
+
+
+def _construct_affordability_request_for_cell(
+    cell: ProgramResult,
+    listing: PropertyListing,
+    household: Household,
+    profile: Profile,
+    annual_rate: Decimal,
+) -> ForwardModeRequest:
+    """Reconstruct the Phase-4 ForwardModeRequest used by lib.affordability.evaluate
+    for this cell. Mirrors the construction in Plan 14-02 ``_build_program_result``
+    steps 11-12 (including the B-2 VA-synthesis branch).
+
+    Acceptable v1.1 duplication of the request-build logic — surfacing the
+    request directly on ProgramResult is a v1.2 option. Any change to Plan
+    14-02's request construction MUST be mirrored here (loud warning per the
+    plan's <action> note).
+    """
+    price = quantize_cents(listing.price)
+    base_loan_amount = quantize_cents(price - quantize_cents(price * cell.down_payment_pct))
+    target_loan_type = _affordability_target_loan_type(cell.program)
+    term_months = (
+        DEFAULT_CONFORMING_15_TERM_MONTHS
+        if cell.program == "Conv15"
+        else DEFAULT_CONFORMING_TERM_MONTHS
+    )
+
+    va_inputs: VAInputs | None = None
+    if cell.program == "VA30":
+        va_inputs = VAInputs(
+            region="northeast",
+            family_size=2,
+            actual_residual_income=quantize_cents(household.monthly_income * Decimal("0.5")),
+        )
+
+    affordability_household = AffordabilityHousehold(
+        location=LocationFIPS(
+            state_fips=household.state_fips,
+            county_fips=household.county_fips,
+            county_name=household.county_name,
+            state=household.state_fips,
+        ),
+        applicants=[
+            Applicant(
+                name="primary",
+                gross_monthly_income=household.monthly_income,
+                credit_score=household.fico,
+            )
+        ],
+        size=1,
+        monthly_debts=MonthlyDebts(other=household.monthly_obligations),
+        escrow=EscrowInputs(
+            property_tax_monthly=cell.monthly_tax,
+            insurance_monthly=cell.monthly_insurance,
+            hoa_monthly=cell.monthly_hoa,
+        ),
+        va=va_inputs,
+    )
+
+    monthly_pmi_for_request: Money | None = None
+    if target_loan_type == "conventional" and cell.ltv > Decimal("0.80"):
+        monthly_pmi_for_request = cell.monthly_mi
+
+    # Use the eligible cell's per-program DTI ceiling as max_dti so the
+    # affordability engine doesn't pre-block the income-shock baseline at a
+    # tighter threshold than the stress logic uses (B-5 consistency). The
+    # max_dti is REQUIRED per Phase 4 D-12.
+    max_dti = _DTI_CEILING_BY_PROGRAM[cell.program]
+
+    return ForwardModeRequest(
+        household=affordability_household,
+        max_dti=max_dti,
+        target_loan_type=target_loan_type,
+        term_months=term_months,
+        annual_rate=annual_rate,
+        loan_amount=base_loan_amount,
+        property_value=price,
+        monthly_pmi=monthly_pmi_for_request,
+    )
+
+
+def _make_cell_loan(cell: ProgramResult, current_rate: Decimal) -> Loan:
+    """Build the synthetic Loan that represents this cell's financed principal
+    at the current rate. Used by both the stress block (rate-shock + arm-reset)
+    and the refi / points blocks.
+
+    loan_type mapping mirrors Plan 14-02's per-cell engine: FHA30 -> "fha",
+    VA30 -> "va", everything else -> "fixed". A fresh-origination convention
+    is used (no origination_date so Phase 3 D-12 synthesizes one).
+    """
+    term_months = (
+        DEFAULT_CONFORMING_15_TERM_MONTHS
+        if cell.program == "Conv15"
+        else DEFAULT_CONFORMING_TERM_MONTHS
+    )
+    loan_type: Literal["fixed", "fha", "va"]
+    if cell.program == "FHA30":
+        loan_type = "fha"
+    elif cell.program == "VA30":
+        loan_type = "va"
+    else:
+        loan_type = "fixed"
+    return Loan(
+        principal=cell.loan_amount,
+        annual_rate=current_rate,
+        term_months=term_months,
+        loan_type=loan_type,
+    )
+
+
+def _stress_row_from_rate_shock(
+    cell: ProgramResult,
+    upstream_row: UpstreamStressRow,
+    household: Household,
+    ceiling: Decimal,
+) -> StressRow:
+    """Convert lib.stress.StressRow (rate-shock) into Phase 14 StressRow.
+
+    Recomputes Phase 14's ``stressed_piti`` by adding the unchanged escrow +
+    MI components to the upstream ``monthly_pi``; the recomputed
+    ``stressed_dti_back`` uses the household's unchanged income + obligations
+    (rate shock does NOT change income).
+    """
+    assert upstream_row.monthly_pi is not None
+    stressed_monthly_pi = upstream_row.monthly_pi
+    stressed_piti = quantize_cents(
+        stressed_monthly_pi
+        + cell.monthly_tax
+        + cell.monthly_insurance
+        + cell.monthly_hoa
+        + cell.monthly_mi
+    )
+    stressed_dti = quantize_rate(
+        (stressed_piti + household.monthly_obligations) / household.monthly_income
+    )
+    breaches = stressed_dti > ceiling
+    blocker_reasons = [_STRESS_RATE_SHOCK_CODE] if breaches else []
+    return StressRow(
+        program=cell.program,
+        stress_kind="rate_shock",
+        baseline_piti=cell.piti,
+        stressed_piti=stressed_piti,
+        stressed_dti_back=stressed_dti,
+        breaches_dti_ceiling=breaches,
+        blocker_reasons=blocker_reasons,
+    )
+
+
+def _stress_row_from_income_shock(
+    cell: ProgramResult,
+    upstream_row: UpstreamStressRow,
+    _household: Household,
+    ceiling: Decimal,
+) -> StressRow:
+    """Convert lib.stress.StressRow (income-shock) into Phase 14 StressRow.
+
+    Income shock does NOT change PITI (per lib/stress.py L131 + RESEARCH L322 —
+    upstream row has ``monthly_pi=None`` for income-shock). The stressed DTI is
+    read directly from the upstream engine's ``dti_back`` (the affordability
+    engine recomputed it under the shocked income).
+    """
+    upstream_dti = upstream_row.dti_back
+    # Defensive: when the upstream affordability engine returns dti_back=None
+    # (rare — happens only on validation pre-blocks), fall back to a Decimal("0")
+    # sentinel so Phase 14's StressRow.stressed_dti_back (Rate, ge=0 le=1) stays
+    # populated. Mirrors Plan 14-02 D-14-MATRIX-02 numeric-population doctrine.
+    stressed_dti = upstream_dti if upstream_dti is not None else Decimal("0.000000")
+    breaches = stressed_dti > ceiling
+    blocker_reasons = [_STRESS_INCOME_SHOCK_CODE] if breaches else []
+    return StressRow(
+        program=cell.program,
+        stress_kind="income_shock",
+        baseline_piti=cell.piti,
+        stressed_piti=None,
+        stressed_dti_back=stressed_dti,
+        breaches_dti_ceiling=breaches,
+        blocker_reasons=blocker_reasons,
+    )
+
+
+def _stress_row_from_arm_reset(
+    cell: ProgramResult,
+    upstream_row: UpstreamStressRow,
+    household: Household,
+    ceiling: Decimal,
+) -> StressRow:
+    """Convert lib.stress.StressRow (arm-reset) into Phase 14 StressRow.
+
+    Reads ``max_payment`` (peak monthly_pi after the reset) from the upstream
+    row (lib/stress.py L138) and treats it as the stressed monthly P&I —
+    rebuilds PITI + DTI from the cell's unchanged escrow / MI / income.
+    """
+    peak_payment = upstream_row.max_payment
+    if peak_payment is None:
+        # Defensive fallback (upstream arm_path always populates this; keep
+        # baseline if missing so we never emit None for stressed_piti on an
+        # ARM-reset row).
+        peak_payment = cell.monthly_pi
+    stressed_piti = quantize_cents(
+        peak_payment
+        + cell.monthly_tax
+        + cell.monthly_insurance
+        + cell.monthly_hoa
+        + cell.monthly_mi
+    )
+    stressed_dti = quantize_rate(
+        (stressed_piti + household.monthly_obligations) / household.monthly_income
+    )
+    breaches = stressed_dti > ceiling
+    blocker_reasons = [_STRESS_ARM_RESET_CODE] if breaches else []
+    return StressRow(
+        program=cell.program,
+        stress_kind="arm_reset",
+        baseline_piti=cell.piti,
+        stressed_piti=stressed_piti,
+        stressed_dti_back=stressed_dti,
+        breaches_dti_ceiling=breaches,
+        blocker_reasons=blocker_reasons,
+    )
+
+
+def _build_stress_block(
+    matrix: DownPaymentMatrix,
+    listing: PropertyListing,
+    household: Household,
+    profile: Profile,
+    todays_rates: dict[str, Decimal],
+) -> StressBlock:
+    """Fan stress tests out across programs eligible at the preferred DP
+    (D-14-STRESS-01..03). Three stress kinds per eligible cell:
+
+      1. rate_shock — current_rate + 200bps (per RateShockRequest)
+      2. income_shock — -30% income (per IncomeShockRequest)
+      3. arm_reset — Conv30 only; peak-cap parallel shift on the 5/1 ARM
+
+    Programs ineligible at preferred DP are SKIPPED (D-14-STRESS-01). When no
+    cells are eligible at preferred DP, rows is empty (Behavior 8).
+
+    Upstream API signatures verified 2026-05-17 against lib/stress.py L160-260:
+      - RateShockRequest.rates: list of FULL Rate values (NOT bps offsets)
+      - IncomeShockRequest.reductions: shock MAGNITUDE (NOT multiplier)
+      - ArmResetRequest.paths: REQUIRED (min_length=1)
+    """
+    preferred = household.preferred_down_payment_pct
+    eligible_cells = _eligible_cells_at_preferred_dp(matrix, preferred)
+    rows: list[StressRow] = []
+
+    for cell in eligible_cells:
+        current_rate = todays_rates[cell.program]
+        cell_loan = _make_cell_loan(cell, current_rate)
+        ceiling = _DTI_CEILING_BY_PROGRAM[cell.program]
+
+        # ============================================================
+        # 1. Rate shock +200bps — RateShockRequest (verified L177-189)
+        # ============================================================
+        shocked_rate = quantize_rate(current_rate + _RATE_SHOCK_BPS)
+        rate_resp = stress_evaluate(
+            RateShockRequest(
+                mode="rate-shock",
+                loan=cell_loan,
+                rates=[shocked_rate],  # FULL Rate value, NOT bps
+                baseline_label=str(current_rate),
+                scenario_label=f"{cell.program}+200bps",
+            )
+        )
+        # rate_shock loop generates one upstream row per rate; we ask for one.
+        upstream_rate_row = rate_resp.rows[0]
+        rows.append(_stress_row_from_rate_shock(cell, upstream_rate_row, household, ceiling))
+
+        # ============================================================
+        # 2. Income shock -30% — IncomeShockRequest (verified L192-205)
+        # ============================================================
+        base_request = _construct_affordability_request_for_cell(
+            cell, listing, household, profile, current_rate
+        )
+        income_resp = stress_evaluate(
+            IncomeShockRequest(
+                mode="income-shock",
+                base_request=base_request,
+                reductions=[_INCOME_SHOCK_REDUCTION],  # shock MAGNITUDE
+                dti_threshold=ceiling,  # B-5: per-program ceiling
+                scenario_label=f"{cell.program}-30%-income",
+            )
+        )
+        upstream_income_row = income_resp.rows[0]
+        rows.append(_stress_row_from_income_shock(cell, upstream_income_row, household, ceiling))
+
+        # ============================================================
+        # 3. ARM reset — ArmResetRequest (verified L208-223; Conv30 only)
+        # ============================================================
+        if cell.program == "Conv30":
+            arm_index_rate = todays_rates.get(
+                "Conv30-ARM-5-1",
+                quantize_rate(current_rate - Decimal("0.0025")),
+            )
+            arm_req = ARMRequest(
+                loan=cell_loan,  # field is `loan`, NOT `base_loan`
+                arm_terms=_CONV_5_1_ARM_TERMS,
+                assumed_index_rate=arm_index_rate,
+            )
+            # paths is REQUIRED (min_length=1). Use a parallel-shift at the
+            # lifetime cap to capture the peak-cap reset stress (D-14-STRESS-03).
+            peak_cap_path = RatePath(
+                name="parallel-shift",
+                params={"shift_bps": _CONV_5_1_ARM_TERMS.lifetime_cap_bps},
+            )
+            arm_resp = stress_evaluate(
+                ArmResetRequest(
+                    mode="arm-reset",
+                    base_arm_request=arm_req,
+                    paths=[peak_cap_path],  # REQUIRED
+                    scenario_label=f"{cell.program}-arm-peak-cap",
+                )
+            )
+            upstream_arm_row = arm_resp.rows[0]
+            rows.append(_stress_row_from_arm_reset(cell, upstream_arm_row, household, ceiling))
+
+    return StressBlock(preferred_down_payment_pct=quantize_rate(preferred), rows=rows)
+
+
+def _build_refi_block(
+    matrix: DownPaymentMatrix,
+    household: Household,
+    todays_rates: dict[str, Decimal],
+) -> RefiBlock:
+    """Refi scan at the preferred DP (D-14-REFI-01..03). Exactly 2 rows per
+    eligible-at-preferred-DP program: ``FRED_current - 1.00`` AND
+    ``FRED_current x 0.85`` target rates.
+
+    Each row carries the SIGNED Phase 14 Decimals (monthly_savings, npv_60mo)
+    read verbatim from the upstream ``RefiResponse`` (refi engine returns
+    Decimal, NOT Money — Pitfall 3). Negative values are correct for the
+    rate-up scenarios that can occur when ``current_rate x 0.85`` exceeds
+    ``current_rate - 0.01`` (mathematically impossible at non-trivial rates,
+    but the engine sign-tracks regardless).
+
+    Upstream API signature verified 2026-05-17 against lib/refinance.py L288-525:
+      - RateAndTermRefiRequest.refi_kind: "rate_and_term" (underscore)
+      - .old_remaining_months: int (NOT remaining_months)
+      - .discount_rate_annual: REQUIRED (D-05)
+      - resp.breakeven.npv_months: int | None (NOT npv_breakeven_months)
+    """
+    preferred = household.preferred_down_payment_pct
+    eligible_cells = _eligible_cells_at_preferred_dp(matrix, preferred)
+    rows: list[RefiRow] = []
+
+    for cell in eligible_cells:
+        current_rate = todays_rates[cell.program]
+        new_term = (
+            DEFAULT_CONFORMING_15_TERM_MONTHS
+            if cell.program == "Conv15"
+            else DEFAULT_CONFORMING_TERM_MONTHS
+        )
+        closing = quantize_cents(cell.loan_amount * _REFI_CLOSING_COSTS_PCT)
+
+        # Scenario A: target = current_rate - Decimal("0.01") (D-14-REFI-03 FRED-1.00)
+        target_a = quantize_rate(current_rate - Decimal("0.01"))
+        refi_a = refi_evaluate(
+            RateAndTermRefiRequest(
+                refi_kind="rate_and_term",  # underscore, not hyphen
+                old_loan_balance=cell.loan_amount,
+                old_annual_rate=current_rate,
+                old_remaining_months=new_term,  # baseline matches new term
+                new_annual_rate=target_a,
+                new_term_months=new_term,
+                closing_costs=closing,
+                discount_rate_annual=current_rate,  # REQUIRED (D-05); Phase 6 D-09 convention
+                analysis_horizon_months=_REFI_NPV_HORIZON_MONTHS,
+            )
+        )
+        rows.append(
+            RefiRow(
+                program=cell.program,
+                target_rate=target_a,
+                scenario_label="minus_100bps",
+                monthly_savings=refi_a.monthly_savings,  # signed Decimal
+                breakeven_months=refi_a.breakeven.npv_months,
+                npv_60mo=refi_a.npv,  # signed Decimal
+            )
+        )
+
+        # Scenario B: target = current_rate * Decimal("0.85") (D-14-REFI-03 FREDx0.85)
+        target_b = quantize_rate(current_rate * Decimal("0.85"))
+        refi_b = refi_evaluate(
+            RateAndTermRefiRequest(
+                refi_kind="rate_and_term",
+                old_loan_balance=cell.loan_amount,
+                old_annual_rate=current_rate,
+                old_remaining_months=new_term,
+                new_annual_rate=target_b,
+                new_term_months=new_term,
+                closing_costs=closing,
+                discount_rate_annual=current_rate,
+                analysis_horizon_months=_REFI_NPV_HORIZON_MONTHS,
+            )
+        )
+        rows.append(
+            RefiRow(
+                program=cell.program,
+                target_rate=target_b,
+                scenario_label="fred_times_0_85",
+                monthly_savings=refi_b.monthly_savings,
+                breakeven_months=refi_b.breakeven.npv_months,
+                npv_60mo=refi_b.npv,
+            )
+        )
+
+    return RefiBlock(rows=rows)
+
+
+def _build_points_block(
+    matrix: DownPaymentMatrix,
+    household: Household,
+    todays_rates: dict[str, Decimal],
+) -> PointsBlock:
+    """Points-buydown breakeven at the preferred DP. Exactly 2 rows per
+    eligible-at-preferred-DP program (1pt + 2pt).
+
+    Open Question 1 resolution: Conv-family only (Conv30 / Conv15 / Jumbo30)
+    runs the full PointsRequestFromLoans evaluation; FHA + VA emit rows with
+    ``simple_breakeven_months=None`` + ``npv_breakeven_months=None`` +
+    ``note="WARNING-NO-POINTS-FOR-FHA-VA"``.
+
+    Assumption A3: each discount point drops the rate by 25bps
+    (Decimal("0.002500"); industry rule-of-thumb).
+
+    Upstream API signature verified 2026-05-17 against lib/points.py L85-103:
+      - mode="from_loans" (underscore)
+      - loan_with_points / loan_without_points (NOT discounted_loan / no_points_loan)
+      - hold_period_months: int
+      - discount_rate_annual: REQUIRED (D-02)
+    """
+    preferred = household.preferred_down_payment_pct
+    eligible_cells = _eligible_cells_at_preferred_dp(matrix, preferred)
+    rows: list[PointsRow] = []
+
+    for cell in eligible_cells:
+        current_rate = todays_rates[cell.program]
+        term_months = (
+            DEFAULT_CONFORMING_15_TERM_MONTHS
+            if cell.program == "Conv15"
+            else DEFAULT_CONFORMING_TERM_MONTHS
+        )
+
+        for points in (1, 2):
+            rate_drop_raw = Decimal("0.002500") * points  # Assumption A3
+            rate_drop = quantize_rate(rate_drop_raw)
+
+            if cell.program in _POINTS_CONV_FAMILY:
+                discounted_rate = quantize_rate(current_rate - rate_drop)
+                loan_without_points = Loan(
+                    principal=cell.loan_amount,
+                    annual_rate=current_rate,
+                    term_months=term_months,
+                    loan_type="fixed",
+                )
+                loan_with_points = Loan(
+                    principal=cell.loan_amount,
+                    annual_rate=discounted_rate,
+                    term_months=term_months,
+                    loan_type="fixed",
+                )
+                points_cost = quantize_cents(
+                    cell.loan_amount * Decimal("0.01") * Decimal(str(points))
+                )
+
+                resp = points_evaluate(
+                    PointsRequestFromLoans(
+                        mode="from_loans",  # underscore form (B-1)
+                        points_cost=points_cost,
+                        loan_with_points=loan_with_points,  # B-1 — correct field name
+                        loan_without_points=loan_without_points,  # B-1 — correct field name
+                        hold_period_months=_POINTS_HOLD_PERIOD_MONTHS,
+                        discount_rate_annual=current_rate,  # Phase 6 D-09 convention
+                    )
+                )
+                rows.append(
+                    PointsRow(
+                        program=cell.program,
+                        points_purchased=points,
+                        rate_drop=rate_drop,
+                        simple_breakeven_months=resp.simple_breakeven_months,
+                        npv_breakeven_months=resp.npv_breakeven_months,
+                        note=None,
+                    )
+                )
+            else:
+                # FHA + VA: points not modeled (Open Question 1 resolution).
+                rows.append(
+                    PointsRow(
+                        program=cell.program,
+                        points_purchased=points,
+                        rate_drop=rate_drop,
+                        simple_breakeven_months=None,
+                        npv_breakeven_months=None,
+                        note="WARNING-NO-POINTS-FOR-FHA-VA",
+                    )
+                )
+
+    return PointsBlock(rows=rows)
+
+
+def _build_tax_block(
+    matrix: DownPaymentMatrix,
+    household: Household,
+    profile: Profile,
+    todays_rates: dict[str, Decimal],
+) -> TaxBlock:
+    """IRS Pub 936 first-year interest + $750k-cap awareness per program at the
+    preferred DP.
+
+    For each program eligible at the preferred DP:
+      - first_year_interest = sum of the first 12 interest components of the
+        amortization schedule (Phase 3 build_schedule).
+      - over_750k_cap_per_program[program] = (cell.loan_amount > cap), where
+        cap comes from lib.rules.irs_pub936.qualified_loan_limit with the
+        defaults all False (Pitfall 11 — Phase 14 v1 = post-2017 acquisition;
+        future phases can extend Profile with grandfathering booleans).
+
+    B-6: signature pinned to ``(matrix, household, profile, todays_rates)``
+    (4 args) matching Plan 14-05 callsite + must_haves.truths line 4.
+    """
+    preferred = household.preferred_down_payment_pct
+    eligible_cells = _eligible_cells_at_preferred_dp(matrix, preferred)
+    cap = pub936_qualified_loan_limit(filing_status=profile.filing_status)
+    # Defaults: has_grandfathered_debt=False, binding_contract_*=False (Pitfall 11)
+
+    first_year: dict[str, Money] = {}
+    over_cap: dict[str, bool] = {}
+    for cell in eligible_cells:
+        loan = _make_cell_loan(cell, todays_rates[cell.program])
+        schedule = build_schedule(loan, frequency="monthly")
+        # Sum interest component of first 12 payments — start=Decimal("0") per
+        # PATTERNS.md L237 (avoid int 0 contamination).
+        first_year[cell.program] = quantize_cents(
+            sum(
+                (p.interest for p in schedule.payments[:12]),
+                start=Decimal("0"),
+            )
+        )
+        over_cap[cell.program] = cell.loan_amount > cap
+
+    return TaxBlock(
+        first_year_interest_per_program=first_year,
+        over_750k_cap_per_program=over_cap,
+        qualified_loan_limit=quantize_cents(cap),
+        filing_status=profile.filing_status,
+    )
 
 
 # ---------------------------------------------------------------------------

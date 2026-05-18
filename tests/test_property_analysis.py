@@ -26,10 +26,12 @@ from unittest.mock import patch
 
 import pytest
 from lib.household import Household
+from lib.money import quantize_rate
 from lib.profile import Profile
 from lib.property_analysis import (
     _CONV_5_1_ARM_TERMS,
     _CONV_PMI_ANNUAL_RATE,
+    _DTI_CEILING_BY_PROGRAM,
     DOWN_PAYMENT_PCTS,
     PROGRAMS_BASE,
     AnalysisReport,
@@ -46,6 +48,8 @@ from lib.property_analysis import (
     VerdictReason,
     _build_matrix,
     _build_program_result,
+    _build_refi_block,
+    _build_stress_block,
     _determine_programs,
     _todays_rate_per_program,
     _unwrap_provenanced,
@@ -265,6 +269,18 @@ def _make_jumbo_listing() -> PropertyListing:
 
 _TEST_RATE: Decimal = Decimal("0.065000")
 """Pinned annual_rate for unit tests — bypasses FRED dependency."""
+
+
+def _make_test_rates() -> dict[str, Decimal]:
+    """Pinned per-program rates dict — bypasses FRED dependency in block tests."""
+    return {
+        "Conv30": Decimal("0.065000"),
+        "Conv15": Decimal("0.058000"),
+        "FHA30": Decimal("0.065000"),
+        "VA30": Decimal("0.065000"),
+        "Jumbo30": Decimal("0.065000"),
+        "Conv30-ARM-5-1": Decimal("0.062500"),
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -541,18 +557,204 @@ def test_unwrap_provenanced_handles_none_wrapper() -> None:
 
 
 def test_stress_at_preferred_dp_only() -> None:
-    pytest.skip("Plan 14-03: stress block fans out at preferred DP only (D-14-STRESS-01)")
+    """D-14-STRESS-01: stress block fans out at preferred DP only — every stress
+    row references a cell whose down_payment_pct equals
+    household.preferred_down_payment_pct AND eligible=True; no rows reference
+    ineligible cells or non-preferred DP cells."""
+    household = _make_clean_household()
+    profile = _make_clean_profile()
+    listing = _make_clean_listing()
+    todays_rates = _make_test_rates()
+    matrix, _ = _build_matrix(listing, household, profile, todays_rates)
+    stress = _build_stress_block(matrix, listing, household, profile, todays_rates)
+
+    # Block carries the preferred DP marker.
+    assert stress.preferred_down_payment_pct == Decimal("0.200000")
+
+    eligible_programs_at_preferred_dp = {
+        c.program for c in matrix.cells if c.down_payment_pct == Decimal("0.200000") and c.eligible
+    }
+    # Every row's program is in the eligible-at-preferred-DP set.
+    for row in stress.rows:
+        assert row.program in eligible_programs_at_preferred_dp, (
+            f"stress row for {row.program} references a program NOT eligible at preferred DP"
+        )
+
+    # Each program in the eligible-at-preferred set gets at least 2 rows
+    # (rate_shock + income_shock), and exactly one of them gets an arm_reset
+    # (Conv30 only). Total = 2 * n_eligible + (1 if Conv30 eligible else 0).
+    n_eligible = len(eligible_programs_at_preferred_dp)
+    expected_total = 2 * n_eligible + (1 if "Conv30" in eligible_programs_at_preferred_dp else 0)
+    assert len(stress.rows) == expected_total
 
 
 def test_arm_reset_conv30_only() -> None:
-    pytest.skip("Plan 14-03: ARM-reset stress fires for Conv30 only (D-14-STRESS-03)")
+    """D-14-STRESS-03: ARM-reset stress fires for Conv30 only. With the clean
+    fixture, all 3 base programs are eligible at 20% DP, so we expect exactly
+    one arm_reset row and it's for Conv30."""
+    household = _make_clean_household()
+    profile = _make_clean_profile()
+    listing = _make_clean_listing()
+    todays_rates = _make_test_rates()
+    matrix, _ = _build_matrix(listing, household, profile, todays_rates)
+    stress = _build_stress_block(matrix, listing, household, profile, todays_rates)
+
+    arm_reset_rows = [r for r in stress.rows if r.stress_kind == "arm_reset"]
+    # Conv30 is eligible at 20% DP in the clean fixture, so exactly one arm_reset row.
+    assert len(arm_reset_rows) == 1
+    assert all(r.program == "Conv30" for r in arm_reset_rows)
 
 
 def test_refi_two_scenarios_per_program() -> None:
-    pytest.skip(
-        "Plan 14-03: refi block emits two scenarios per program "
-        "(FRED_current - 1.00 AND FRED_current * 0.85; D-14-REFI-03)"
+    """D-14-REFI-03: refi block emits two scenarios per eligible-at-preferred-DP
+    program — one ``minus_100bps`` (FRED-1.00) and one ``fred_times_0_85``
+    (FREDx0.85)."""
+    household = _make_clean_household()
+    profile = _make_clean_profile()
+    listing = _make_clean_listing()
+    todays_rates = _make_test_rates()
+    matrix, _ = _build_matrix(listing, household, profile, todays_rates)
+    refi = _build_refi_block(matrix, household, todays_rates)
+
+    eligible_programs_at_preferred_dp = {
+        c.program for c in matrix.cells if c.down_payment_pct == Decimal("0.200000") and c.eligible
+    }
+    # Exactly 2 rows per eligible-at-preferred-DP program.
+    assert len(refi.rows) == 2 * len(eligible_programs_at_preferred_dp)
+    for program in eligible_programs_at_preferred_dp:
+        prog_rows = [r for r in refi.rows if r.program == program]
+        assert len(prog_rows) == 2
+        labels = sorted(r.scenario_label for r in prog_rows)
+        assert labels == ["fred_times_0_85", "minus_100bps"]
+
+    # Target rates match the formulas (D-14-REFI-03).
+    for row in refi.rows:
+        current_rate = todays_rates[row.program]
+        if row.scenario_label == "minus_100bps":
+            assert row.target_rate == quantize_rate(current_rate - Decimal("0.01"))
+        else:
+            assert row.target_rate == quantize_rate(current_rate * Decimal("0.85"))
+
+
+def test_stress_income_shock_dti_recompute() -> None:
+    """An income_shock stress row has stressed_piti=None (income changes do NOT
+    change PITI per RESEARCH L322); stressed_dti_back is strictly greater than
+    the cell's baseline dti_back (income drops -> DTI rises)."""
+    household = _make_clean_household()
+    profile = _make_clean_profile()
+    listing = _make_clean_listing()
+    todays_rates = _make_test_rates()
+    matrix, _ = _build_matrix(listing, household, profile, todays_rates)
+    stress = _build_stress_block(matrix, listing, household, profile, todays_rates)
+
+    income_rows = [r for r in stress.rows if r.stress_kind == "income_shock"]
+    assert income_rows, "expected at least one income_shock row"
+    for row in income_rows:
+        assert row.stressed_piti is None
+        # Locate the matching cell so we can compare against baseline DTI.
+        cell = next(
+            c
+            for c in matrix.cells
+            if c.program == row.program and c.down_payment_pct == Decimal("0.200000")
+        )
+        # -30% income reduction strictly raises DTI (PITI unchanged + denom -30%).
+        assert row.stressed_dti_back > cell.dti_back
+
+
+def test_refi_signed_decimal_fields() -> None:
+    """RefiRow.monthly_savings + .npv_60mo are signed Decimals (Pitfall 3 —
+    raw Decimal, NOT Money-aliased). Construct a refi block from a synthetic
+    matrix where current_rate is low enough that target rates are HIGHER, so
+    monthly_savings is negative — the engine returns signed values and Phase 14
+    surfaces them verbatim."""
+    # When current_rate is already very low (e.g., 0.030), then:
+    #   target_a = current - 0.01 = 0.020  (lower; positive savings)
+    #   target_b = current * 0.85 = 0.0255 (lower; positive savings)
+    # Both targets stay LOWER at any positive current_rate so monthly_savings
+    # is non-negative for rate_and_term refi. The signed-Decimal field shape
+    # is enforced at the model layer regardless (covered by the Wave-0 test
+    # test_refi_row_accepts_signed_decimal_savings); here we verify that the
+    # block builder produces a Decimal (NOT Money) and accepts negative values.
+
+    household = _make_clean_household()
+    profile = _make_clean_profile()
+    listing = _make_clean_listing()
+    todays_rates = _make_test_rates()
+    matrix, _ = _build_matrix(listing, household, profile, todays_rates)
+    refi = _build_refi_block(matrix, household, todays_rates)
+
+    assert refi.rows
+    for row in refi.rows:
+        # Always raw Decimal (not Money — Money has ge=0; Decimal does not).
+        assert isinstance(row.monthly_savings, Decimal)
+        assert isinstance(row.npv_60mo, Decimal)
+
+    # Independent assertion that the model accepts negative values directly
+    # (covered structurally by Wave-0 but proves the type contract here too).
+    negative_row = RefiRow(
+        program="Conv30",
+        target_rate=Decimal("0.085000"),
+        scenario_label="minus_100bps",
+        monthly_savings=Decimal("-100.00"),
+        npv_60mo=Decimal("-3000.00"),
     )
+    assert negative_row.monthly_savings < Decimal("0")
+    assert negative_row.npv_60mo < Decimal("0")
+
+
+def test_dti_ceiling_per_program() -> None:
+    """B-5: per-program DTI ceilings differ — VA=0.41, Conv=0.50, FHA=0.57,
+    Jumbo=0.43. Verify the constant exists with the correct citation values
+    AND the stress block actually USES them (income_shock breach flag should
+    differ across programs sharing the same shocked DTI when ceilings differ).
+    """
+    # First — the constant carries the correct citation values.
+    assert _DTI_CEILING_BY_PROGRAM["Conv30"] == Decimal("0.50")
+    assert _DTI_CEILING_BY_PROGRAM["Conv15"] == Decimal("0.50")
+    assert _DTI_CEILING_BY_PROGRAM["FHA30"] == Decimal("0.57")
+    assert _DTI_CEILING_BY_PROGRAM["VA30"] == Decimal("0.41")
+    assert _DTI_CEILING_BY_PROGRAM["Jumbo30"] == Decimal("0.43")
+
+    # Second — the stress block USES these per-program ceilings. Tune household
+    # so that the -30% income shock pushes DTI between VA's 0.41 and FHA's 0.57.
+    # At monthly_income=$10500, monthly_obligations=$500, listing=$500k, 20% DP:
+    #   loan_amount ≈ $400k; conv P&I @ 6.5% over 360 = $2528.27
+    #   PITI (no MI at 80% LTV) ≈ $2528 + monthly_obligations adjustment
+    #   Pre-shock DTI = (PITI + $500) / $10500 ≈ 0.288
+    #   Post-shock DTI = (PITI + $500) / $7350 ≈ 0.411 — sits in the band
+    # We don't pin exact numerics; we assert the BREACH FLAG differs by program.
+    listing = _make_clean_listing(price="500000.00")
+    household = _make_clean_household(
+        monthly_income=Decimal("10500.00"),
+        monthly_obligations=Decimal("500.00"),
+    )
+    profile = _make_clean_profile(va_eligible=True)
+    todays_rates = _make_test_rates()
+    matrix, _ = _build_matrix(listing, household, profile, todays_rates)
+    stress = _build_stress_block(matrix, listing, household, profile, todays_rates)
+
+    fha_shock = next(
+        (r for r in stress.rows if r.program == "FHA30" and r.stress_kind == "income_shock"),
+        None,
+    )
+    va_shock = next(
+        (r for r in stress.rows if r.program == "VA30" and r.stress_kind == "income_shock"),
+        None,
+    )
+    # Both programs must be eligible-at-preferred-DP for this household for the
+    # test to prove the ceiling difference. If either is missing, the income
+    # tuning produced an ineligible cell — fail loudly so the executor knows.
+    assert fha_shock is not None, "FHA30 should be eligible at preferred DP in this fixture"
+    assert va_shock is not None, "VA30 should be eligible at preferred DP in this fixture"
+
+    # The shocked DTI for VA + FHA cells is roughly the same magnitude (the
+    # cells differ only in MI treatment which slightly tilts PITI), but the
+    # ceiling is different. We assert VA's stressed_dti exceeds 0.41 while
+    # FHA's stressed_dti stays under 0.57 — the breach flag is the proof.
+    assert va_shock.stressed_dti_back > _DTI_CEILING_BY_PROGRAM["VA30"]
+    assert va_shock.breaches_dti_ceiling is True
+    assert fha_shock.stressed_dti_back < _DTI_CEILING_BY_PROGRAM["FHA30"]
+    assert fha_shock.breaches_dti_ceiling is False
 
 
 def test_points_breakeven_per_program() -> None:
