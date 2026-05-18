@@ -7,7 +7,12 @@
   "_meta": {
     "citation": "ANLZ-01 + ANLZ-02 + ANLZ-03 + VERD-01 verbatim closure at fixture level: ANLZ-01 'AnalysisReport produces a DownPaymentMatrix...' ANLZ-02 'Every cell ProgramResult populated regardless of eligibility (D-14-MATRIX-02)' ANLZ-03 'Auxiliary blocks at preferred DP only' VERD-01 'Verdict synthesis emits GO/WATCH/NO_GO with falsifiable predicate-cited reasons (D-14-VERDICT-04)'. ROADMAP SC-7 'Golden-value fixtures: 3 hand-calculated AnalysisReport cases pin every cell of the matrix'.",
     "engine_version": "Phase 14 Plan 14-06",
-    "requirements": ["ANLZ-01", "ANLZ-02", "ANLZ-03", "VERD-01"]
+    "requirements": [
+      "ANLZ-01",
+      "ANLZ-02",
+      "ANLZ-03",
+      "VERD-01"
+    ]
   },
   "listing": {
     "price": "625000.00",

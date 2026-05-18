@@ -1,0 +1,128 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "id": "condo_with_hoa_seattle",
+  "source": "Plan 14-06 hand-calc; King County WA condo @ $475,000 with $9,500/mo household at 5% DP → Conv30 eligible at 95% LTV with PMI, Conv15 blocked by DTI, FHA30 blocked by LTV ceiling; verdict cascade Level 3 STRESS-INCOME-SHOCK",
+  "rounding": "ROUND_HALF_UP",
+  "notes": "Cascade level 3 (WATCH STRESS-INCOME-SHOCK) per lib.property_verdict.synthesize: at preferred 5% DP only Conv30 is eligible (Conv15 fails DTI-CAP-CONVENTIONAL because 5.8%/15yr P&I + $450 HOA pushes piti+obligations/income > 0.50; FHA30 fails LTV-CEILING-FHA because UFMIP-financed LTV = 0.966625 exceeds the conforming FHA-floor LTV ceiling). The single eligible cell (Conv30 @ 5%) then fails the -30% income shock: stressed DTI = (4075.91 + 300) / (9500 × 0.70) = 0.658032 > Conv30 ceiling 0.50 → VERDICT_WATCH_STRESS_INCOME_FAIL fires before any GO-default branch can reach. Hand-calc anchors via lib.amortize.build_schedule: Conv30 @ 6.5%/30yr on $451,250 principal (95% LTV financed) → monthly_pi=$2852.21; Conv15 @ 5.8%/15yr on $451,250 → monthly_pi=$3759.32; FHA30 @ 6.5%/30yr on financed principal (base $451,250 + UFMIP 1.75% = $459,146.88 — see engine output below) → monthly_pi=$2902.12 + monthly_mi=$191.31. PMI applies on Conv: monthly_mi = 451250 × 0.0075/12 = $282.03 (PMI-RATE-ESTIMATED-0.0075 per Pitfall 1). PITI Conv30 = 2852.21 + 416.67 + 75.00 + 450.00 + 282.03 = $4075.91 (per Pitfall 6 quantize-once). Hand-calc cascade trace: Level 1 fail (>=1 cell eligible somewhere); Level 2 fail (eligible-at-preferred=[Conv30] non-empty); Level 3 hit: Conv30 income-shock breach (stressed DTI 0.658032 > ceiling 0.50). Verdict pinned to WATCH.",
+  "_meta": {
+    "citation": "ANLZ-01 + ANLZ-02 + ANLZ-03 + VERD-01: covers HOA-into-PITI threading (ANLZ-02 numeric population), PMI-RATE-ESTIMATED soft signal surfacing at LTV>0.80 (ANLZ-03 eligible_reasons), and VERDICT_WATCH_STRESS_INCOME_FAIL cascade Level 3 branch (VERD-01 D-14-VERDICT-02 falsifiable income-shock predicate).",
+    "engine_version": "Phase 14 Plan 14-06",
+    "requirements": [
+      "ANLZ-01",
+      "ANLZ-02",
+      "ANLZ-03",
+      "VERD-01"
+    ]
+  },
+  "listing": {
+    "price": "475000.00",
+    "zip": "98101",
+    "property_type": "condo",
+    "tax_annual": {"value": "5000.00", "provenance": "estimated"},
+    "insurance_estimate_annual": {"value": "900.00", "provenance": "estimated"},
+    "hoa_monthly": {"value": "450.00", "provenance": "estimated"},
+    "source_url": "https://www.zillow.com/homedetails/synthetic/2_zpid/",
+    "zpid": "2",
+    "fetched_at": "2026-05-17T00:00:00Z"
+  },
+  "household": {
+    "monthly_income": "9500.00",
+    "monthly_obligations": "300.00",
+    "fico": 720,
+    "liquid_reserves": "40000.00",
+    "state_fips": "53",
+    "county_fips": "033",
+    "county_name": "King",
+    "preferred_down_payment_pct": "0.050000"
+  },
+  "profile": {
+    "va_eligible": false,
+    "first_time_buyer": false,
+    "military_status": "none",
+    "filing_status": "mfj",
+    "marginal_tax_rate": null
+  },
+  "fred_rates": {
+    "MORTGAGE30US": "0.065000",
+    "MORTGAGE15US": "0.058000"
+  },
+  "expected_response": {
+    "verdict": {
+      "level": "WATCH",
+      "headline_reason": "Income-shock stress breaches DTI ceiling for 1 eligible program(s)",
+      "reasons": [
+        {
+          "predicate_code": "STRESS-INCOME-SHOCK",
+          "computed_value": "0.658032",
+          "program": "Conv30",
+          "dp_pct": null
+        }
+      ]
+    },
+    "matrix": {
+      "cells_count": 18,
+      "programs_present": ["Conv30", "Conv15", "FHA30"],
+      "preferred_dp_cells": [
+        {
+          "program": "Conv30",
+          "dp_pct": "0.050000",
+          "loan_amount": "451250.00",
+          "monthly_pi": "2852.21",
+          "monthly_tax": "416.67",
+          "monthly_insurance": "75.00",
+          "monthly_hoa": "450.00",
+          "monthly_mi": "282.03",
+          "piti": "4075.91",
+          "dti_back": "0.460622",
+          "ltv": "0.950000",
+          "eligible": true,
+          "blocker_reasons": [],
+          "eligible_reasons": ["PMI-RATE-ESTIMATED-0.0075"]
+        },
+        {
+          "program": "Conv15",
+          "dp_pct": "0.050000",
+          "loan_amount": "451250.00",
+          "monthly_pi": "3759.32",
+          "monthly_tax": "416.67",
+          "monthly_insurance": "75.00",
+          "monthly_hoa": "450.00",
+          "monthly_mi": "282.03",
+          "piti": "4983.02",
+          "dti_back": "0.556107",
+          "ltv": "0.950000",
+          "eligible": false,
+          "blocker_reasons": ["DTI-CAP-CONVENTIONAL"],
+          "eligible_reasons": ["PMI-RATE-ESTIMATED-0.0075"]
+        },
+        {
+          "program": "FHA30",
+          "dp_pct": "0.050000",
+          "loan_amount": "459146.88",
+          "monthly_pi": "2902.12",
+          "monthly_tax": "416.67",
+          "monthly_insurance": "75.00",
+          "monthly_hoa": "450.00",
+          "monthly_mi": "191.31",
+          "piti": "4035.10",
+          "dti_back": "0.456326",
+          "ltv": "0.966625",
+          "eligible": false,
+          "blocker_reasons": ["LTV-CEILING-FHA"],
+          "eligible_reasons": []
+        }
+      ]
+    },
+    "tax": {
+      "qualified_loan_limit": "750000.00",
+      "over_750k_cap_per_program": {
+        "Conv30": false
+      },
+      "first_year_interest_per_program": {
+        "Conv30": "29182.75"
+      },
+      "filing_status": "mfj"
+    },
+    "warnings": ["PMI-RATE-ESTIMATED"]
+  }
+}

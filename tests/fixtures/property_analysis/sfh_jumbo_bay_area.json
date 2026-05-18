@@ -1,0 +1,144 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "id": "sfh_jumbo_bay_area",
+  "source": "Plan 14-06 hand-calc; Santa Clara CA SFH @ $1,850,000 with $28,000/mo household at 20% DP; $1,480,000 loan_amount exceeds Santa Clara conforming high-cost limit $1,249,125 (data/reference/conforming-limits-2026.yml) AND FHA high-cost ceiling $1,249,125 (data/reference/fha-limits-2026.yml) → Conv30/Conv15 blocked by FHFA-LIMIT-CONFORMING, FHA30 blocked by HUD-LIMIT-CEILING-EXCEEDED, Jumbo30 row materializes as the 4th program and is eligible at preferred 20% DP. Verdict cascade Level 3 WATCH STRESS-INCOME-SHOCK fires on Jumbo30.",
+  "rounding": "ROUND_HALF_UP",
+  "notes": "Cascade level 3 (WATCH STRESS-INCOME-SHOCK) per lib.property_verdict.synthesize: at preferred 20% DP only Jumbo30 is eligible (Conv30/Conv15 carry FHFA-LIMIT-CONFORMING-06-085 blocker because the $1,480,000 financed exceeds the Santa Clara CA county high-cost limit of $1,249,125; FHA30 raises NotImplementedError from lib.rules.loan_type.classify (loan > FHA ceiling) which Plan 14-05's _build_program_result catches and emits as HUD-LIMIT-CEILING-EXCEEDED per D-14-MATRIX-02 explicit-ineligible-rows). The lone Jumbo30 eligible cell then fails the income-shock stress: stressed DTI = (11387.94 + 1000) / (28000 × 0.70) = 0.632038 > Jumbo30 ceiling 0.43 → VERDICT_WATCH_STRESS_INCOME_FAIL fires before any GO branch reaches. Hand-calc anchors via lib.amortize.build_schedule on $1,480,000 principal @ 6.5%/30yr (fixed, since Jumbo30 program maps to loan_type='fixed' in _make_cell_loan and _build_program_result) → monthly_pi=$9354.61 (12mo interest sum=$95,712.94). PITI Jumbo30 = 9354.61 + (22000/12=1833.33) + (2400/12=200.00) + 0 (HOA) + 0 (no PMI at 80% LTV) = $11,387.94 (Pitfall 6 quantize-once). Tax: qualified_loan_limit=$750,000 (mfj filing); Jumbo30 $1,480,000 > $750k → over_750k_cap_per_program['Jumbo30']=true (IRS Pub 936 partial-deductibility flag set; Phase 15 renders 'see CPA' callout). 24 cells = 4 programs × 6 DPs (D-14-MATRIX-03 jumbo-row materialization).",
+  "_meta": {
+    "citation": "ANLZ-01 + ANLZ-02 + ANLZ-03 + VERD-01: covers D-14-MATRIX-03 (Jumbo30 5th-row materialization on price > conforming), D-14-MATRIX-02 (Conv/FHA cells present-but-ineligible with populated numerics per ANLZ-02), ANLZ-03 (auxiliary blocks at preferred DP — tax block over_750k flag fires), and VERD-01 cascade Level 3 (D-14-VERDICT-02 income-shock falsifiable predicate).",
+    "engine_version": "Phase 14 Plan 14-06",
+    "requirements": [
+      "ANLZ-01",
+      "ANLZ-02",
+      "ANLZ-03",
+      "VERD-01"
+    ]
+  },
+  "listing": {
+    "price": "1850000.00",
+    "zip": "95110",
+    "property_type": "SFH",
+    "tax_annual": {"value": "22000.00", "provenance": "estimated"},
+    "insurance_estimate_annual": {"value": "2400.00", "provenance": "estimated"},
+    "hoa_monthly": {"value": "0.00", "provenance": "estimated"},
+    "source_url": "https://www.zillow.com/homedetails/synthetic/3_zpid/",
+    "zpid": "3",
+    "fetched_at": "2026-05-17T00:00:00Z"
+  },
+  "household": {
+    "monthly_income": "28000.00",
+    "monthly_obligations": "1000.00",
+    "fico": 760,
+    "liquid_reserves": "500000.00",
+    "state_fips": "06",
+    "county_fips": "085",
+    "county_name": "Santa Clara",
+    "preferred_down_payment_pct": "0.200000"
+  },
+  "profile": {
+    "va_eligible": false,
+    "first_time_buyer": false,
+    "military_status": "none",
+    "filing_status": "mfj",
+    "marginal_tax_rate": null
+  },
+  "fred_rates": {
+    "MORTGAGE30US": "0.065000",
+    "MORTGAGE15US": "0.058000"
+  },
+  "expected_response": {
+    "verdict": {
+      "level": "WATCH",
+      "headline_reason": "Income-shock stress breaches DTI ceiling for 1 eligible program(s)",
+      "reasons": [
+        {
+          "predicate_code": "STRESS-INCOME-SHOCK",
+          "computed_value": "0.632038",
+          "program": "Jumbo30",
+          "dp_pct": null
+        }
+      ]
+    },
+    "matrix": {
+      "cells_count": 24,
+      "programs_present": ["Conv30", "Conv15", "FHA30", "Jumbo30"],
+      "preferred_dp_cells": [
+        {
+          "program": "Conv30",
+          "dp_pct": "0.200000",
+          "loan_amount": "1480000.00",
+          "monthly_pi": "9354.61",
+          "monthly_tax": "1833.33",
+          "monthly_insurance": "200.00",
+          "monthly_hoa": "0.00",
+          "monthly_mi": "0.00",
+          "piti": "11387.94",
+          "dti_back": "0.442426",
+          "ltv": "0.800000",
+          "eligible": false,
+          "blocker_reasons": ["FHFA-LIMIT-CONFORMING-06-085"],
+          "eligible_reasons": []
+        },
+        {
+          "program": "Conv15",
+          "dp_pct": "0.200000",
+          "loan_amount": "1480000.00",
+          "monthly_pi": "12329.73",
+          "monthly_tax": "1833.33",
+          "monthly_insurance": "200.00",
+          "monthly_hoa": "0.00",
+          "monthly_mi": "0.00",
+          "piti": "14363.06",
+          "dti_back": "0.548681",
+          "ltv": "0.800000",
+          "eligible": false,
+          "blocker_reasons": ["FHFA-LIMIT-CONFORMING-06-085"],
+          "eligible_reasons": []
+        },
+        {
+          "program": "FHA30",
+          "dp_pct": "0.200000",
+          "loan_amount": "1505900.00",
+          "monthly_pi": "9518.31",
+          "monthly_tax": "1833.33",
+          "monthly_insurance": "200.00",
+          "monthly_hoa": "0.00",
+          "monthly_mi": "878.44",
+          "piti": "12430.08",
+          "dti_back": "0.479646",
+          "ltv": "0.814000",
+          "eligible": false,
+          "blocker_reasons": ["HUD-LIMIT-CEILING-EXCEEDED: loan_amount 1480000.00 exceeds FHA county ceiling 1249125 for Santa Clara; loans above the FHA ceiling are not eligible for the FHA program (consider conventional jumbo)"],
+          "eligible_reasons": []
+        },
+        {
+          "program": "Jumbo30",
+          "dp_pct": "0.200000",
+          "loan_amount": "1480000.00",
+          "monthly_pi": "9354.61",
+          "monthly_tax": "1833.33",
+          "monthly_insurance": "200.00",
+          "monthly_hoa": "0.00",
+          "monthly_mi": "0.00",
+          "piti": "11387.94",
+          "dti_back": "0.442426",
+          "ltv": "0.800000",
+          "eligible": true,
+          "blocker_reasons": [],
+          "eligible_reasons": []
+        }
+      ]
+    },
+    "tax": {
+      "qualified_loan_limit": "750000.00",
+      "over_750k_cap_per_program": {
+        "Jumbo30": true
+      },
+      "first_year_interest_per_program": {
+        "Jumbo30": "95712.94"
+      },
+      "filing_status": "mfj"
+    },
+    "warnings": ["PMI-RATE-ESTIMATED"]
+  }
+}
