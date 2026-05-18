@@ -663,6 +663,26 @@ def test_stress_income_shock_dti_recompute() -> None:
         assert row.stressed_dti_back > cell.dti_back
 
 
+def test_stress_rate_shock_piti_rises() -> None:
+    """A rate_shock stress row carries stressed_piti > baseline_piti (rate
+    +200bps raises P&I → PITI rises with unchanged escrow + MI)."""
+    household = _make_clean_household()
+    profile = _make_clean_profile()
+    listing = _make_clean_listing()
+    todays_rates = _make_test_rates()
+    matrix, _ = _build_matrix(listing, household, profile, todays_rates)
+    stress = _build_stress_block(matrix, listing, household, profile, todays_rates)
+
+    rate_rows = [r for r in stress.rows if r.stress_kind == "rate_shock"]
+    assert rate_rows, "expected at least one rate_shock row"
+    for row in rate_rows:
+        assert row.stressed_piti is not None
+        assert row.stressed_piti > row.baseline_piti, (
+            f"{row.program} rate-shock should raise PITI "
+            f"({row.baseline_piti} -> {row.stressed_piti})"
+        )
+
+
 def test_refi_signed_decimal_fields() -> None:
     """RefiRow.monthly_savings + .npv_60mo are signed Decimals (Pitfall 3 —
     raw Decimal, NOT Money-aliased). Construct a refi block from a synthetic
