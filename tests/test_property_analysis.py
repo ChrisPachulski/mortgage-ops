@@ -21,7 +21,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, Literal
 from unittest.mock import patch
 
 import pytest
@@ -47,9 +47,11 @@ from lib.property_analysis import (
     Verdict,
     VerdictReason,
     _build_matrix,
+    _build_points_block,
     _build_program_result,
     _build_refi_block,
     _build_stress_block,
+    _build_tax_block,
     _determine_programs,
     _todays_rate_per_program,
     _unwrap_provenanced,
@@ -758,11 +760,169 @@ def test_dti_ceiling_per_program() -> None:
 
 
 def test_points_breakeven_per_program() -> None:
-    pytest.skip("Plan 14-03: points-buydown block emits 1pt + 2pt breakeven per program")
+    """Points block has exactly 2 rows per eligible-at-preferred-DP program;
+    rate_drop is Decimal("0.002500") for 1pt and Decimal("0.005000") for 2pt
+    (Assumption A3)."""
+    household = _make_clean_household()
+    profile = _make_clean_profile()
+    listing = _make_clean_listing()
+    todays_rates = _make_test_rates()
+    matrix, _ = _build_matrix(listing, household, profile, todays_rates)
+    points = _build_points_block(matrix, household, todays_rates)
+
+    eligible_programs_at_preferred_dp = {
+        c.program for c in matrix.cells if c.down_payment_pct == Decimal("0.200000") and c.eligible
+    }
+    # Exactly 2 rows per eligible-at-preferred-DP program.
+    assert len(points.rows) == 2 * len(eligible_programs_at_preferred_dp)
+    for program in eligible_programs_at_preferred_dp:
+        prog_rows = [r for r in points.rows if r.program == program]
+        assert len(prog_rows) == 2
+        purchased_levels = sorted(r.points_purchased for r in prog_rows)
+        assert purchased_levels == [1, 2]
+        for r in prog_rows:
+            if r.points_purchased == 1:
+                assert r.rate_drop == Decimal("0.002500")
+            else:
+                assert r.rate_drop == Decimal("0.005000")
+
+
+def test_points_fha_va_warning_note() -> None:
+    """FHA30 + VA30 points rows carry note='WARNING-NO-POINTS-FOR-FHA-VA' and
+    None breakeven months (Open Question 1 resolution)."""
+    household = _make_clean_household()
+    profile = _make_clean_profile(va_eligible=True)
+    listing = _make_clean_listing()
+    todays_rates = _make_test_rates()
+    matrix, _ = _build_matrix(listing, household, profile, todays_rates)
+    points = _build_points_block(matrix, household, todays_rates)
+
+    fha_rows = [r for r in points.rows if r.program == "FHA30"]
+    va_rows = [r for r in points.rows if r.program == "VA30"]
+    # The clean fixture has both FHA30 and VA30 eligible at 20% DP.
+    assert fha_rows, "expected at least one FHA30 points row"
+    assert va_rows, "expected at least one VA30 points row"
+    for r in fha_rows + va_rows:
+        assert r.note == "WARNING-NO-POINTS-FOR-FHA-VA"
+        assert r.simple_breakeven_months is None
+        assert r.npv_breakeven_months is None
+
+    # Conv-family rows do NOT carry the warning note.
+    conv_rows = [r for r in points.rows if r.program in ("Conv30", "Conv15")]
+    for r in conv_rows:
+        assert r.note is None
 
 
 def test_tax_block_pub936() -> None:
-    pytest.skip("Plan 14-03: IRS Pub 936 first-year interest + $750k cap awareness")
+    """IRS Pub 936: qualified_loan_limit == $750,000 for mfj/single/hoh
+    filings. first_year_interest_per_program[program] is exactly the sum of
+    the first 12 interest components of the program's preferred-DP cell
+    schedule (exact Decimal equality, no fuzzy comparator)."""
+    household = _make_clean_household()
+    profile = _make_clean_profile()  # default filing_status="mfj"
+    listing = _make_clean_listing()
+    todays_rates = _make_test_rates()
+    matrix, _ = _build_matrix(listing, household, profile, todays_rates)
+    tax = _build_tax_block(matrix, household, profile, todays_rates)
+
+    assert tax.qualified_loan_limit == Decimal("750000.00")
+    assert tax.filing_status == "mfj"
+
+    # Exact Decimal equality: compare against a freshly-computed schedule.
+    from lib.amortize import build_schedule
+    from lib.models import Loan
+    from lib.money import quantize_cents
+
+    for cell in matrix.cells:
+        if cell.down_payment_pct != Decimal("0.200000") or not cell.eligible:
+            continue
+        term_months = 180 if cell.program == "Conv15" else 360
+        loan_type: Literal["fixed", "fha", "va"] = "fixed"
+        if cell.program == "FHA30":
+            loan_type = "fha"
+        elif cell.program == "VA30":
+            loan_type = "va"
+        expected_loan = Loan(
+            principal=cell.loan_amount,
+            annual_rate=todays_rates[cell.program],
+            term_months=term_months,
+            loan_type=loan_type,
+        )
+        expected_schedule = build_schedule(expected_loan, frequency="monthly")
+        expected_first_year = quantize_cents(
+            sum(
+                (p.interest for p in expected_schedule.payments[:12]),
+                start=Decimal("0"),
+            )
+        )
+        assert tax.first_year_interest_per_program[cell.program] == expected_first_year
+
+
+def test_tax_block_mfs_filing_status_halves_cap() -> None:
+    """Profile(filing_status='mfs') halves the qualified_loan_limit to $375,000
+    per IRS Pub 936 (the predicate looks up the MFS-specific cap from
+    data/reference/irs-pub936.yml, not divided here)."""
+    household = _make_clean_household()
+    profile = _make_clean_profile(filing_status="mfs")
+    listing = _make_clean_listing()
+    todays_rates = _make_test_rates()
+    matrix, _ = _build_matrix(listing, household, profile, todays_rates)
+    tax = _build_tax_block(matrix, household, profile, todays_rates)
+
+    assert tax.qualified_loan_limit == Decimal("375000.00")
+    assert tax.filing_status == "mfs"
+
+
+def test_tax_block_over_cap_flag() -> None:
+    """over_750k_cap_per_program[program] is True iff the cell's loan_amount
+    exceeds the qualified_loan_limit. Verified by constructing a synthetic
+    matrix with a single eligible Jumbo30 cell whose loan_amount clears the
+    $750k cap, and a sibling matrix where every loan stays under the cap.
+
+    Construct the DownPaymentMatrix directly (not via _build_matrix) so the
+    test does not depend on the affordability engine's per-program eligibility
+    decisions for a jumbo listing — those would short-circuit the
+    eligible-at-preferred-DP filter and the test would not exercise the
+    over_cap flag for Jumbo30. The TaxBlock builder reads cell.loan_amount
+    directly; it does not re-run the matrix engine."""
+    household = _make_clean_household()
+    profile = _make_clean_profile()
+    todays_rates = _make_test_rates()
+
+    # Hand-craft a single-cell matrix that exercises the True path: Jumbo30
+    # at preferred DP with loan_amount > $750k.
+    jumbo_cell = ProgramResult(
+        program="Jumbo30",
+        down_payment_pct=Decimal("0.200000"),
+        loan_amount=Decimal("900000.00"),  # clearly > $750k cap
+        monthly_pi=Decimal("5500.00"),
+        monthly_tax=Decimal("500.00"),
+        monthly_insurance=Decimal("100.00"),
+        monthly_hoa=Decimal("0.00"),
+        monthly_mi=Decimal("0.00"),
+        piti=Decimal("6100.00"),
+        cash_to_close=Decimal("260000.00"),
+        dti_back=Decimal("0.350000"),
+        ltv=Decimal("0.800000"),
+        eligible=True,
+    )
+    jumbo_matrix = DownPaymentMatrix(
+        cells=[jumbo_cell],
+        programs_present=["Jumbo30"],
+        down_payment_pcts=[Decimal("0.200000")],
+    )
+    tax_jumbo = _build_tax_block(jumbo_matrix, household, profile, todays_rates)
+    assert tax_jumbo.qualified_loan_limit == Decimal("750000.00")
+    assert tax_jumbo.over_750k_cap_per_program["Jumbo30"] is True
+
+    # Non-jumbo conforming-limit cells (where loan_amount < $750k) should NOT
+    # breach. Use the existing _build_matrix on a small listing; at $500k price
+    # / 20% DP -> $400k loan; under cap for every program.
+    small_listing = _make_clean_listing(price="500000.00")
+    small_matrix, _ = _build_matrix(small_listing, household, profile, todays_rates)
+    small_tax = _build_tax_block(small_matrix, household, profile, todays_rates)
+    for program, flag in small_tax.over_750k_cap_per_program.items():
+        assert flag is False, f"{program} loan should NOT exceed $750k cap"
 
 
 def test_report_size_budget() -> None:
