@@ -104,11 +104,49 @@ def test_module_constants() -> None:
     assert _CONV_5_1_ARM_TERMS.index_series_id == "MORTGAGE30US"
 
 
-def test_analyze_stub_raises_not_implemented_with_plan_14_05_reference() -> None:
-    """analyze() raises NotImplementedError; message cites Plan 14-05."""
-    with pytest.raises(NotImplementedError) as exc:
-        analyze()
-    assert "Plan 14-05" in str(exc.value)
+def test_analyze_end_to_end() -> None:
+    """Plan 14-05 Task 1 RED->GREEN: analyze() composes the 6-step pipeline into
+    a fully-populated AnalysisReport. SFH-conforming King County WA scenario;
+    FRED rates passed explicitly so the test does not hit the cache."""
+    household = _make_clean_household()
+    profile = _make_clean_profile()
+    listing = _make_clean_listing()
+    report = analyze(
+        listing,
+        household,
+        profile,
+        fred_mortgage_30us=Decimal("0.065000"),
+        fred_mortgage_15us=Decimal("0.058000"),
+    )
+
+    assert isinstance(report, AnalysisReport)
+    # 3 base programs x 6 DPs = 18 cells (non-jumbo, non-VA-eligible).
+    assert len(report.matrix.cells) == 18
+    # Eligible programs at preferred DP drive auxiliary block counts.
+    eligible_at_preferred = [
+        c for c in report.matrix.cells if c.down_payment_pct == Decimal("0.200000") and c.eligible
+    ]
+    n_eligible = len(eligible_at_preferred)
+    # Stress: 2 stresses (rate + income) per eligible program + 1 ARM-reset if Conv30 eligible.
+    n_conv30_eligible = sum(1 for c in eligible_at_preferred if c.program == "Conv30")
+    assert len(report.stress.rows) == 2 * n_eligible + n_conv30_eligible
+    # Refi + points: 2 rows per eligible program.
+    assert len(report.refi.rows) == 2 * n_eligible
+    assert len(report.points.rows) == 2 * n_eligible
+    # Tax block uses default mfj filing -> $750k cap.
+    assert report.tax.qualified_loan_limit == Decimal("750000.00")
+    # Verdict is one of the three allowed letters.
+    assert report.verdict.level in {"GO", "WATCH", "NO_GO"}
+    # Snapshot hash: 64-char lowercase hex.
+    assert len(report.household_snapshot_hash) == 64
+    assert all(c in "0123456789abcdef" for c in report.household_snapshot_hash)
+    # fetched_at is timezone-aware (UTC).
+    assert report.fetched_at.tzinfo is not None
+    # Echoed FRED rates match the overrides (post-quantize).
+    assert report.fred_mortgage_30us == quantize_rate(Decimal("0.065000"))
+    assert report.fred_mortgage_15us == quantize_rate(Decimal("0.058000"))
+    # listing_snapshot echoed by frozen-model equality.
+    assert report.listing_snapshot == listing
 
 
 def test_program_result_validates_with_clean_inputs() -> None:
