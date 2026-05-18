@@ -162,6 +162,24 @@ def points_fixture() -> Callable[[str], dict[str, Any]]:
     return _load
 
 
+@pytest.fixture
+def property_analysis_fixture() -> Callable[[str], dict[str, Any]]:
+    """Return a callable that loads a single property-analysis fixture by
+    filename stem from tests/fixtures/property_analysis/. Mirrors the
+    affordability_fixture pattern (one-fixture-per-file; stem-based loading).
+
+    Per Plan 14-02 PATTERNS.md L760-775. Actual fixture JSON files are
+    created in Plan 14-06 (golden-fixtures); this loader is shipped early
+    so Wave-2+ test bodies have a stable reference path.
+    """
+
+    def _load(stem: str) -> dict[str, Any]:
+        path = FIXTURE_DIR / "property_analysis" / f"{stem}.json"
+        return json.loads(path.read_text())  # type: ignore[no-any-return]
+
+    return _load
+
+
 REPO_ROOT: Path = Path(__file__).resolve().parent.parent
 """Project root for cwd of Node subprocesses (parallel to FIXTURE_DIR)."""
 

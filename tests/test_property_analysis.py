@@ -529,3 +529,51 @@ def test_unwrap_provenanced_handles_none_wrapper() -> None:
     assert _unwrap_provenanced(pm_with_none) == Decimal("0.00")
     pm_with_value = ProvenancedMoney(value=Decimal("100.00"), provenance="scraped")
     assert _unwrap_provenanced(pm_with_value) == Decimal("100.00")
+
+
+# ---------------------------------------------------------------------------
+# Wave-2+ stubs (Plans 14-03 / 14-04 / 14-05 / 14-06 deliverables)
+#
+# These tests exist for shape stability: ``pytest --collect-only`` should list
+# them so the full Phase-14 test surface is visible up-front. Each body is a
+# pytest.skip with a pointer to the plan that flips it green.
+# ---------------------------------------------------------------------------
+
+
+def test_stress_at_preferred_dp_only() -> None:
+    pytest.skip("Plan 14-03: stress block fans out at preferred DP only (D-14-STRESS-01)")
+
+
+def test_arm_reset_conv30_only() -> None:
+    pytest.skip("Plan 14-03: ARM-reset stress fires for Conv30 only (D-14-STRESS-03)")
+
+
+def test_refi_two_scenarios_per_program() -> None:
+    pytest.skip(
+        "Plan 14-03: refi block emits two scenarios per program "
+        "(FRED_current - 1.00 AND FRED_current * 0.85; D-14-REFI-03)"
+    )
+
+
+def test_points_breakeven_per_program() -> None:
+    pytest.skip("Plan 14-03: points-buydown block emits 1pt + 2pt breakeven per program")
+
+
+def test_tax_block_pub936() -> None:
+    pytest.skip("Plan 14-03: IRS Pub 936 first-year interest + $750k cap awareness")
+
+
+def test_report_size_budget() -> None:
+    pytest.skip("Plan 14-06: AnalysisReport JSON stays under Phase 11 SC-5 30k-token budget")
+
+
+def test_sfh_conforming_king_county_golden() -> None:
+    pytest.skip("Plan 14-06: hand-calculated SFH conforming AnalysisReport golden fixture")
+
+
+def test_condo_with_hoa_seattle_golden() -> None:
+    pytest.skip("Plan 14-06: hand-calculated Condo+HOA AnalysisReport golden fixture")
+
+
+def test_sfh_jumbo_bay_area_golden() -> None:
+    pytest.skip("Plan 14-06: hand-calculated SFH jumbo AnalysisReport golden fixture")
