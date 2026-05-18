@@ -18,7 +18,7 @@ User selected **fine** — 6 phases, bottom-up. Phases 13-18 continue v1.0 numbe
 ### Phases
 
 - [x] **Phase 13: Property Ingestion** - WebFetch + `__NEXT_DATA__` extraction + interactive gap-fill + `PropertyListing` Pydantic model + DuckDB `analyzed_listings` table
-- [ ] **Phase 14: Property Analysis Pipeline** - Multi-program fan-out (Conv 30/15, FHA, VA, Jumbo) × DP sweep (3/5/10/15/20/25%) + auto-stress + breakeven + refi + IRS Pub 936 + GO/WATCH/NO-GO verdict
+- [x] **Phase 14: Property Analysis Pipeline** - Multi-program fan-out (Conv 30/15, FHA, VA, Jumbo) × DP sweep (3/5/10/15/20/25%) + auto-stress + breakeven + refi + IRS Pub 936 + GO/WATCH/NO-GO verdict (completed 2026-05-18)
 - [ ] **Phase 15: `property` Skill Mode + Report Formatter** - `modes/property.md` URL-pin routing + `scripts/property_analyze.py` orchestrator + `lib/property_report.py` markdown emitter to `reports/{NNN}-property-{zpid}-{YYYY-MM-DD}.md`
 - [ ] **Phase 16: Reference Data** - `data/reference/property-analysis-heuristics.yml` (PMI tables, FHA county limits, jumbo cutoffs) + `insurance-estimate-defaults.yml` (per-state HOI averages)
 - [ ] **Phase 17: Tests + Fixtures** - 5 pinned Zillow HTML fixtures + paired golden-value `expected_report.md` files + citation-coverage meta-test
