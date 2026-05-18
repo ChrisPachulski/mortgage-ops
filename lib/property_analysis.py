@@ -67,17 +67,45 @@ visible without name collision (OQ #1 resolution).
 
 from __future__ import annotations
 
-from datetime import datetime  # noqa: TC003  # Pydantic resolves annotations at runtime
+from datetime import (  # Pydantic resolves annotations at runtime
+    UTC,
+    datetime,
+)
 from decimal import Decimal
 from typing import Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from lib.affordability import (
+    Applicant,
+    EscrowInputs,
+    ForwardModeRequest,
+    LocationFIPS,
+    MonthlyDebts,
+    VAInputs,
+)
+from lib.affordability import (
+    Household as AffordabilityHousehold,
+)
+from lib.affordability import (
+    evaluate as affordability_evaluate,
+)
+from lib.amortize import build_schedule
 from lib.arm import ARMTerms
-from lib.models import Money, Rate  # noqa: TC001  # Pydantic resolves annotations at runtime
+from lib.fred_cache import CACHE_DIR, get_cached_or_fetch, with_cache_lock
+from lib.household import Household  # noqa: TC001
+from lib.models import Loan, Money, Rate  # Pydantic resolves annotations at runtime
+from lib.money import quantize_cents, quantize_rate
+from lib.profile import Profile  # noqa: TC001
 from lib.property_listing import (  # noqa: TC001  # Pydantic resolves annotations at runtime
     PropertyListing,
+    ProvenancedMoney,
 )
+from lib.rules.fha_mip import compute as fha_mip_compute
+from lib.rules.loan_type import MissingCountyDataError
+from lib.rules.loan_type import classify as classify_loan_type
+from lib.rules.types import County
+from lib.rules.va_funding_fee import compute as va_funding_fee_compute
 
 # ---------------------------------------------------------------------------
 # Module-level Final constants (PATTERNS.md L260-265 + RESEARCH Pitfalls 1 + 2 + 8)
@@ -385,6 +413,356 @@ class AnalysisReport(BaseModel):
     warnings: list[str] = Field(default_factory=list)
     """e.g., "MissingCountyDataError", "PMI-RATE-ESTIMATED" — aggregated from
     cell-construction + matrix-assembly time."""
+
+
+# ---------------------------------------------------------------------------
+# Private composition helpers (Plan 14-02 Task 2)
+# ---------------------------------------------------------------------------
+
+
+def _unwrap_provenanced(
+    pm: ProvenancedMoney | None,
+    default: Decimal = Decimal("0.00"),
+) -> Decimal:
+    """Safely unwrap a ProvenancedMoney. Returns ``default`` when ``pm`` is None
+    OR ``pm.value`` is None (Phase 13 ProvenancedMoney.value is ``Money | None``
+    — a present wrapper with a None value is a legitimate gap-fill envelope
+    state). Prevents TypeError from ``None / Decimal("12")`` in escrow division
+    paths. Resolves Plan 14-PLAN-CHECK B-4.
+    """
+    return pm.value if (pm is not None and pm.value is not None) else default
+
+
+def _todays_rate_per_program(program: str) -> Decimal:
+    """Return today's lock rate for ``program`` from FRED cache.
+
+    Per D-14-REFI-02:
+      - Conv30, FHA30, VA30, Jumbo30 -> MORTGAGE30US (acceptable v1.0 proxy)
+      - Conv15                        -> MORTGAGE15US
+      - Conv30-ARM-5-1                -> MORTGAGE30US minus 25bps heuristic
+
+    Every read serializes through ``with_cache_lock`` per Pitfall 9. When
+    ``get_cached_or_fetch`` raises NotImplementedError (cache cold, no
+    fetcher injected) the call is converted to a ValueError that names the
+    CLI invocation that refreshes the cache, so callers can recover.
+    """
+    series_id: str
+    delta: Decimal
+    if program == "Conv15":
+        series_id = "MORTGAGE15US"
+        delta = Decimal("0")
+    elif program == "Conv30-ARM-5-1":
+        series_id = "MORTGAGE30US"
+        delta = Decimal("-0.0025")
+    else:
+        # Conv30 / FHA30 / VA30 / Jumbo30
+        series_id = "MORTGAGE30US"
+        delta = Decimal("0")
+
+    with with_cache_lock(CACHE_DIR, reason=f"property-analysis read {series_id}"):
+        try:
+            entry = get_cached_or_fetch(series_id, fetcher=None)
+        except NotImplementedError as exc:
+            raise ValueError(
+                f"FRED cache cold for {series_id}; run "
+                f"scripts/fred_cli.py get {series_id} --latest to refresh"
+            ) from exc
+
+    raw = Decimal(str(entry["value"]))
+    return quantize_rate(raw + delta)
+
+
+def _determine_programs(
+    listing: PropertyListing,
+    household: Household,
+    profile: Profile,
+) -> tuple[list[str], list[str]]:
+    """Return (programs, warnings) for the matrix fan-out.
+
+    Per CONTEXT D-14-MATRIX-03 + Pitfall 5: jumbo trigger uses
+    ``County(state_fips, county_fips, name)`` from Household FIPS (NOT zip).
+    MissingCountyDataError from classify() degrades gracefully — append a
+    "MissingCountyDataError" string to warnings and return base programs.
+    """
+    programs: list[str] = list(PROGRAMS_BASE)
+    warnings: list[str] = []
+    if profile.va_eligible:
+        programs.append("VA30")
+    county = County(
+        state_fips=household.state_fips,
+        county_fips=household.county_fips,
+        name=household.county_name,
+    )
+    try:
+        classification = classify_loan_type(
+            quantize_cents(listing.price), county, program="conventional"
+        )
+        if classification == "jumbo":
+            programs.append("Jumbo30")
+    except MissingCountyDataError:
+        warnings.append("MissingCountyDataError")
+    return programs, warnings
+
+
+def _compute_cash_to_close(
+    loan_amount: Decimal,
+    down_payment: Decimal,
+    ufmip_not_financed: Decimal = Decimal("0"),
+) -> Decimal:
+    """Per Assumption A7: cash_to_close = down_payment + 3% loan_amount + any
+    non-financed UFMIP. In v1.1 UFMIP and VA funding fee are both FINANCED INTO
+    principal (Phase 4 D-03; W-3) so ``ufmip_not_financed`` defaults to 0.
+    """
+    return quantize_cents(down_payment + loan_amount * _CLOSING_COSTS_PCT + ufmip_not_financed)
+
+
+def _affordability_target_loan_type(
+    program: str,
+) -> Literal["conventional", "fha", "va", "jumbo"]:
+    """Map Plan 14 program literal to affordability's target_loan_type."""
+    if program in ("Conv30", "Conv15"):
+        return "conventional"
+    if program == "Jumbo30":
+        return "jumbo"
+    if program == "FHA30":
+        return "fha"
+    if program == "VA30":
+        return "va"
+    raise ValueError(f"unrecognized program: {program!r}")
+
+
+def _build_program_result(
+    program: str,
+    dp_pct: Decimal,
+    listing: PropertyListing,
+    household: Household,
+    profile: Profile,
+    annual_rate: Decimal,
+) -> ProgramResult:
+    """Per-cell composition engine (D-14-MATRIX-01 + D-14-MATRIX-02).
+
+    Mirrors ``lib.affordability.evaluate_forward`` (L805-949) shape but operates
+    on Phase 14's Household / Profile / PropertyListing inputs. Delegates
+    regulatory math to existing predicates: lib.amortize.build_schedule for
+    P&I, lib.rules.fha_mip.compute for FHA UFMIP/MIP, lib.rules.va_funding_fee
+    .compute for VA funding fee, lib.affordability.evaluate for eligibility.
+
+    Per D-14-MATRIX-02 every numeric field is populated regardless of
+    eligibility, so a downstream Verdict can cite the predicate breach with
+    the actual computed value.
+
+    Iteration-2 fixes baked in:
+      B-2: VA cells synthesize VAInputs deterministically.
+      B-4: ProvenancedMoney unwrap routes through ``_unwrap_provenanced``.
+      W-3: VA funding fee FINANCED INTO principal; monthly_mi=0 for VA.
+    """
+    eligible_reasons: list[str] = []
+
+    # Step 1 — price / down-payment / base loan
+    price = quantize_cents(listing.price)
+    down_payment = quantize_cents(price * dp_pct)
+    base_loan_amount = quantize_cents(price - down_payment)
+
+    # Step 2 — term
+    term_months = (
+        DEFAULT_CONFORMING_15_TERM_MONTHS if program == "Conv15" else DEFAULT_CONFORMING_TERM_MONTHS
+    )
+
+    # Step 3 — initial MI / financed-principal calc per program
+    loan_type: Literal["fixed", "fha", "va"]
+    financed_principal: Decimal
+    monthly_mi: Decimal
+    if program in ("Conv30", "Conv15", "Jumbo30"):
+        loan_type = "fixed"
+        provisional_ltv = base_loan_amount / price
+        if provisional_ltv > Decimal("0.80"):
+            monthly_mi = quantize_cents(base_loan_amount * _CONV_PMI_ANNUAL_RATE / Decimal("12"))
+            eligible_reasons.append("PMI-RATE-ESTIMATED-0.0075")
+        else:
+            monthly_mi = Decimal("0.00")
+        financed_principal = base_loan_amount
+    elif program == "FHA30":
+        loan_type = "fha"
+        pre_loan = Loan(
+            principal=base_loan_amount,
+            annual_rate=annual_rate,
+            term_months=DEFAULT_CONFORMING_TERM_MONTHS,
+            loan_type="fha",
+        )
+        mip = fha_mip_compute(
+            loan=pre_loan,
+            original_property_value=price,
+            endorsement_date=datetime.now(UTC).date(),
+        )
+        financed_principal = quantize_cents(base_loan_amount + mip.ufmip)
+        monthly_mi = quantize_cents(financed_principal * mip.annual_mip_pct / Decimal("12"))
+    elif program == "VA30":
+        loan_type = "va"
+        funding_fee = va_funding_fee_compute(
+            loan_amount=base_loan_amount,
+            down_payment_pct=dp_pct,
+            is_first_use=True,
+            loan_purpose="purchase",
+            is_exempt_from_funding_fee=False,
+        )
+        # W-3: finance the funding fee into principal (mirrors Phase 4 D-03
+        # financed-UFMIP convention). monthly_mi stays 0 — the amortization
+        # captures the funding-fee cost via the larger monthly_pi.
+        financed_principal = quantize_cents(base_loan_amount + funding_fee)
+        monthly_mi = Decimal("0.00")
+        eligible_reasons.append("VA-FUNDING-FEE-FINANCED")
+    else:
+        raise ValueError(f"unrecognized program: {program!r}")
+
+    # Step 5 — monthly_pi via Phase 3 build_schedule on financed principal
+    loan = Loan(
+        principal=financed_principal,
+        annual_rate=annual_rate,
+        term_months=term_months,
+        loan_type=loan_type,
+    )
+    schedule = build_schedule(loan, frequency="monthly")
+    monthly_pi = schedule.monthly_pi
+
+    # Step 6 — escrow components (B-4: guarded unwrap)
+    monthly_tax = quantize_cents(_unwrap_provenanced(listing.tax_annual) / Decimal("12"))
+    monthly_insurance = quantize_cents(
+        _unwrap_provenanced(listing.insurance_estimate_annual) / Decimal("12")
+    )
+    monthly_hoa = quantize_cents(_unwrap_provenanced(listing.hoa_monthly))
+
+    # Step 7 — PITI: quantize ONCE at end (Pitfall 6)
+    piti_pre = monthly_pi + monthly_tax + monthly_insurance + monthly_hoa + monthly_mi
+    piti = quantize_cents(piti_pre)
+
+    # Step 8 — DTI back-end
+    dti_back = quantize_rate((piti + household.monthly_obligations) / household.monthly_income)
+
+    # Step 9 — LTV
+    ltv = quantize_rate(financed_principal / price)
+
+    # Step 10 — cash_to_close
+    cash_to_close = _compute_cash_to_close(
+        base_loan_amount, down_payment, ufmip_not_financed=Decimal("0")
+    )
+
+    # Step 11 — affordability eligibility (B-2: VA-aware request construction)
+    target_loan_type = _affordability_target_loan_type(program)
+    va_inputs: VAInputs | None = None
+    if program == "VA30":
+        va_inputs = VAInputs(
+            region="northeast",
+            family_size=2,
+            actual_residual_income=quantize_cents(household.monthly_income * Decimal("0.5")),
+        )
+        eligible_reasons.append("VA-RESIDUAL-SYNTHESIZED-V1")
+
+    # Map the Phase-14 single-applicant snapshot into Phase-4's multi-applicant
+    # AffordabilityHousehold shape. Per W-5 the monthly_obligations collapse to
+    # the "other" bucket of MonthlyDebts; per the LocationFIPS contract
+    # (lib/affordability.py L347-351) state is a 2-char display field — we use
+    # household.state_fips (always 2 chars) since Phase 14 Household does not
+    # carry a state abbreviation.
+    affordability_household = AffordabilityHousehold(
+        location=LocationFIPS(
+            state_fips=household.state_fips,
+            county_fips=household.county_fips,
+            county_name=household.county_name,
+            state=household.state_fips,
+        ),
+        applicants=[
+            Applicant(
+                name="primary",
+                gross_monthly_income=household.monthly_income,
+                credit_score=household.fico,
+            )
+        ],
+        size=1,
+        monthly_debts=MonthlyDebts(other=household.monthly_obligations),
+        escrow=EscrowInputs(
+            property_tax_monthly=monthly_tax,
+            insurance_monthly=monthly_insurance,
+            hoa_monthly=monthly_hoa,
+        ),
+        va=va_inputs,
+    )
+
+    # monthly_pmi conditional: Phase 4 _validate_common requires it for
+    # conventional + LTV > 0.80 (RESEARCH Open Q#1). Pass the cell's monthly_mi
+    # for those cells; None otherwise.
+    monthly_pmi_for_request: Money | None = None
+    if target_loan_type == "conventional" and ltv > Decimal("0.80"):
+        monthly_pmi_for_request = monthly_mi
+
+    forward_request = ForwardModeRequest(
+        household=affordability_household,
+        max_dti=Decimal("0.500000"),
+        target_loan_type=target_loan_type,
+        term_months=term_months,
+        annual_rate=annual_rate,
+        loan_amount=base_loan_amount,
+        property_value=price,
+        monthly_pmi=monthly_pmi_for_request,
+    )
+    response = affordability_evaluate(forward_request)
+
+    eligible: bool
+    blocker_reasons: list[str]
+    if response.blocked:
+        eligible = False
+        # PATTERNS.md L437-442 — read VERBATIM, never reformat.
+        blocker_reasons = [response.blocked_by] if response.blocked_by is not None else []
+    else:
+        eligible = True
+        blocker_reasons = []
+
+    # Step 12 — assemble ProgramResult with all numerics populated
+    # regardless of eligibility (D-14-MATRIX-02).
+    return ProgramResult(
+        program=program,  # type: ignore[arg-type]
+        down_payment_pct=quantize_rate(dp_pct),
+        loan_amount=financed_principal,
+        monthly_pi=monthly_pi,
+        monthly_tax=monthly_tax,
+        monthly_insurance=monthly_insurance,
+        monthly_hoa=monthly_hoa,
+        monthly_mi=monthly_mi,
+        piti=piti,
+        cash_to_close=cash_to_close,
+        dti_back=dti_back,
+        ltv=ltv,
+        eligible=eligible,
+        blocker_reasons=blocker_reasons,
+        eligible_reasons=eligible_reasons,
+    )
+
+
+def _build_matrix(
+    listing: PropertyListing,
+    household: Household,
+    profile: Profile,
+    todays_rates: dict[str, Decimal],
+) -> tuple[DownPaymentMatrix, list[str]]:
+    """Fan out across programs x DPs to produce the full DownPaymentMatrix
+    (D-14-MATRIX-01) plus a list of matrix-assembly warnings.
+
+    ``todays_rates`` is a dict keyed by program name (Conv30, Conv15, FHA30,
+    VA30, Jumbo30) — caller obtains via ``_todays_rate_per_program`` per
+    D-14-REFI-02. Matrix carries len(programs) * 6 cells (24 in the base
+    case, 30 when jumbo triggers).
+    """
+    programs, warnings = _determine_programs(listing, household, profile)
+    cells: list[ProgramResult] = []
+    for program in programs:
+        rate = todays_rates[program]
+        for dp_pct in DOWN_PAYMENT_PCTS:
+            cells.append(_build_program_result(program, dp_pct, listing, household, profile, rate))
+    matrix = DownPaymentMatrix(
+        cells=cells,
+        programs_present=programs,
+        down_payment_pcts=list(DOWN_PAYMENT_PCTS),
+    )
+    return matrix, warnings
 
 
 # ---------------------------------------------------------------------------

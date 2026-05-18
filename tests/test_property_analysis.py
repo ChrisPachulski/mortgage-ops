@@ -19,9 +19,14 @@ Test taxonomy:
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from decimal import Decimal
+from typing import Any
+from unittest.mock import patch
 
 import pytest
+from lib.household import Household
+from lib.profile import Profile
 from lib.property_analysis import (
     _CONV_5_1_ARM_TERMS,
     _CONV_PMI_ANNUAL_RATE,
@@ -39,8 +44,14 @@ from lib.property_analysis import (
     TaxBlock,
     Verdict,
     VerdictReason,
+    _build_matrix,
+    _build_program_result,
+    _determine_programs,
+    _todays_rate_per_program,
+    _unwrap_provenanced,
     analyze,
 )
+from lib.property_listing import PropertyListing, PropertyType, ProvenancedMoney
 from pydantic import ValidationError
 
 # ---------------------------------------------------------------------------
@@ -188,3 +199,333 @@ def test_program_result_rejects_float_on_money_field() -> None:
             ltv=Decimal("0.800000"),
             eligible=True,
         )
+
+
+# ---------------------------------------------------------------------------
+# Wave-1 helper builders (Task 2/3 deliverable)
+# ---------------------------------------------------------------------------
+
+
+def _make_clean_household(**overrides: Any) -> Household:
+    """Build a Phase-14 Household with sensible defaults; overrides override."""
+    defaults: dict[str, Any] = {
+        "monthly_income": Decimal("12000.00"),
+        "monthly_obligations": Decimal("400.00"),
+        "fico": 740,
+        "liquid_reserves": Decimal("100000.00"),
+        "state_fips": "53",
+        "county_fips": "033",
+        "county_name": "King",
+        "preferred_down_payment_pct": Decimal("0.200000"),
+    }
+    defaults.update(overrides)
+    return Household(**defaults)
+
+
+def _make_clean_profile(**overrides: Any) -> Profile:
+    """Build a Phase-14 Profile with sensible defaults; overrides override."""
+    return Profile(**overrides)
+
+
+def _make_clean_listing(
+    price: str = "625000.00",
+    zip: str = "98101",
+    property_type: PropertyType = "SFH",
+    source_url: str = "https://www.zillow.com/homedetails/synthetic/1_zpid/",
+    zpid: str = "1",
+    fetched_at: datetime | None = None,
+    **provenanced_overrides: Any,
+) -> PropertyListing:
+    """Build a Phase-13-valid PropertyListing for use in Phase-14 tests.
+
+    B-3 fix: source_url / zpid / fetched_at are REQUIRED per
+    lib/property_listing.py L84-86. Defaulted here so callers don't have to
+    enumerate them.
+
+    ``provenanced_overrides`` routes to NICE-TO-HAVE money fields (e.g.,
+    tax_annual=ProvenancedMoney(value=..., provenance="estimated")).
+    """
+    if fetched_at is None:
+        fetched_at = datetime(2026, 5, 17, tzinfo=UTC)
+    return PropertyListing(
+        price=Decimal(price),
+        zip=zip,
+        property_type=property_type,
+        source_url=source_url,
+        zpid=zpid,
+        fetched_at=fetched_at,
+        **provenanced_overrides,
+    )
+
+
+def _make_jumbo_listing() -> PropertyListing:
+    """Listing above 2026 King County conforming limit ($1,027,000)."""
+    return _make_clean_listing(price="1500000.00")
+
+
+_TEST_RATE: Decimal = Decimal("0.065000")
+"""Pinned annual_rate for unit tests — bypasses FRED dependency."""
+
+
+# ---------------------------------------------------------------------------
+# Wave-1 matrix shape + composition tests
+# ---------------------------------------------------------------------------
+
+
+def test_matrix_cell_count() -> None:
+    """Non-jumbo + va_eligible=False -> 18 cells (3 programs x 6 DPs)."""
+    household = _make_clean_household()
+    profile = _make_clean_profile()
+    listing = _make_clean_listing()
+    rates = {p: _TEST_RATE for p in PROGRAMS_BASE}
+    matrix, warnings = _build_matrix(listing, household, profile, rates)
+    assert len(matrix.cells) == 18
+    assert matrix.programs_present == ["Conv30", "Conv15", "FHA30"]
+    assert warnings == []
+
+
+def test_matrix_fanout_conforming() -> None:
+    """Each base program contributes exactly 6 cells."""
+    household = _make_clean_household()
+    profile = _make_clean_profile()
+    listing = _make_clean_listing()
+    rates = {p: _TEST_RATE for p in PROGRAMS_BASE}
+    matrix, _ = _build_matrix(listing, household, profile, rates)
+    for prog in ("Conv30", "Conv15", "FHA30"):
+        assert sum(1 for c in matrix.cells if c.program == prog) == 6
+
+
+def test_va_eligibility_gates_program() -> None:
+    """Profile(va_eligible=True) appends VA30; False omits it."""
+    household = _make_clean_household()
+    listing = _make_clean_listing()
+
+    programs_no_va, _ = _determine_programs(
+        listing, household, _make_clean_profile(va_eligible=False)
+    )
+    assert "VA30" not in programs_no_va
+
+    programs_with_va, _ = _determine_programs(
+        listing, household, _make_clean_profile(va_eligible=True)
+    )
+    assert "VA30" in programs_with_va
+
+
+def test_jumbo_trigger_at_county_limit() -> None:
+    """listing.price > King County conforming → Jumbo30 in programs."""
+    household = _make_clean_household()
+    profile = _make_clean_profile()
+    listing = _make_jumbo_listing()
+    programs, warnings = _determine_programs(listing, household, profile)
+    assert "Jumbo30" in programs
+    assert warnings == []
+
+
+def test_missing_county_graceful() -> None:
+    """MissingCountyDataError from classify_loan_type is caught — base programs
+    returned + "MissingCountyDataError" appended to warnings (no exception).
+
+    Note: the conventional classifier's silent-fallback to baseline (per
+    lib/rules/loan_type.py:_county_limit) means a real unlisted-county +
+    loan-above-baseline does NOT raise — it returns "jumbo". MissingCountyDataError
+    only fires when county is None in conventional (we always pass a non-None
+    County) or in FHA classification with a not-listed high-cost county. To prove
+    the catch-and-warn behavior independent of the source exception, we monkey-
+    patch classify_loan_type to raise.
+    """
+    from lib.rules.loan_type import MissingCountyDataError as MCDE
+
+    household = _make_clean_household()
+    profile = _make_clean_profile()
+    listing = _make_clean_listing()
+
+    def _raise_mcde(*_args: object, **_kwargs: object) -> None:
+        raise MCDE("synthetic - county not in shipped table")
+
+    with patch("lib.property_analysis.classify_loan_type", _raise_mcde):
+        programs, warnings = _determine_programs(listing, household, profile)
+
+    # No exception — base programs returned, warning surfaced.
+    assert programs == list(PROGRAMS_BASE)
+    assert "MissingCountyDataError" in warnings
+
+
+def test_ineligible_rows_populate_numerics() -> None:
+    """D-14-MATRIX-02: ineligible rows still populate piti / dti / ltv."""
+    # Low-income household + expensive listing forces DTI breach.
+    # Moderate income + moderate listing: DTI breaches but stays within Rate's le=1.
+    household = _make_clean_household(
+        monthly_income=Decimal("6000.00"), monthly_obligations=Decimal("500.00")
+    )
+    profile = _make_clean_profile()
+    listing = _make_clean_listing(price="500000.00")
+    cell = _build_program_result("Conv30", Decimal("0.03"), listing, household, profile, _TEST_RATE)
+    assert cell.eligible is False
+    assert cell.piti > Decimal("0.00")
+    assert cell.dti_back > Decimal("0")
+    assert cell.ltv > Decimal("0")
+    assert cell.blocker_reasons  # at least one citation
+
+
+def test_dp_sweep_uses_decimal_strings() -> None:
+    """Every cell.down_payment_pct is a Decimal exactly in DOWN_PAYMENT_PCTS
+    (Pitfall 2 — no float contamination)."""
+    household = _make_clean_household()
+    profile = _make_clean_profile()
+    listing = _make_clean_listing()
+    rates = {p: _TEST_RATE for p in PROGRAMS_BASE}
+    matrix, _ = _build_matrix(listing, household, profile, rates)
+    for cell in matrix.cells:
+        assert isinstance(cell.down_payment_pct, Decimal)
+        # quantize_rate may have padded; the underlying value must match a
+        # DOWN_PAYMENT_PCTS entry once compared by numeric equality.
+        assert cell.down_payment_pct in DOWN_PAYMENT_PCTS
+
+
+def test_mi_included_in_piti() -> None:
+    """Pitfall 6: PITI = monthly_pi + monthly_tax + monthly_insurance +
+    monthly_hoa + monthly_mi, quantized ONCE; LTV>0.80 produces monthly_mi>0."""
+    household = _make_clean_household()
+    profile = _make_clean_profile()
+    listing = _make_clean_listing()
+    cell = _build_program_result("Conv30", Decimal("0.05"), listing, household, profile, _TEST_RATE)
+    assert cell.monthly_mi > Decimal("0.00")
+    from lib.money import quantize_cents
+
+    expected = quantize_cents(
+        cell.monthly_pi
+        + cell.monthly_tax
+        + cell.monthly_insurance
+        + cell.monthly_hoa
+        + cell.monthly_mi
+    )
+    assert cell.piti == expected
+
+
+def test_fha_cell_ufmip_financed_into_principal() -> None:
+    """FHA30 financed loan_amount > base loan (UFMIP added per Phase 4 D-03)."""
+    household = _make_clean_household()
+    profile = _make_clean_profile()
+    listing = _make_clean_listing(price="400000.00")
+    cell = _build_program_result("FHA30", Decimal("0.035"), listing, household, profile, _TEST_RATE)
+    base_loan_amount = Decimal("400000.00") * Decimal("0.965")
+    assert cell.loan_amount > base_loan_amount
+
+
+def test_conv_pmi_warning_surfaces() -> None:
+    """Conv30 at 5% DP tags eligible_reasons with PMI-RATE-ESTIMATED-0.0075."""
+    household = _make_clean_household()
+    profile = _make_clean_profile()
+    listing = _make_clean_listing()
+    cell = _build_program_result("Conv30", Decimal("0.05"), listing, household, profile, _TEST_RATE)
+    assert "PMI-RATE-ESTIMATED-0.0075" in cell.eligible_reasons
+
+
+def test_float_rejection() -> None:
+    """Constructing ProgramResult with a float on Money/Rate raises ValidationError."""
+    with pytest.raises(ValidationError):
+        ProgramResult(
+            program="Conv30",
+            down_payment_pct=Decimal("0.200000"),
+            loan_amount=500000.00,  # type: ignore[arg-type]
+            monthly_pi=Decimal("3160.34"),
+            monthly_tax=Decimal("500.00"),
+            monthly_insurance=Decimal("100.00"),
+            monthly_hoa=Decimal("0.00"),
+            monthly_mi=Decimal("0.00"),
+            piti=Decimal("3760.34"),
+            cash_to_close=Decimal("125000.00"),
+            dti_back=Decimal("0.350000"),
+            ltv=Decimal("0.800000"),
+            eligible=True,
+        )
+
+
+def test_blocker_reason_verbatim() -> None:
+    """blocker_reasons[0] is exactly the affordability blocked_by string."""
+    # Moderate income + moderate listing: DTI breaches but stays within Rate's le=1.
+    household = _make_clean_household(
+        monthly_income=Decimal("6000.00"), monthly_obligations=Decimal("500.00")
+    )
+    profile = _make_clean_profile()
+    listing = _make_clean_listing(price="500000.00")
+    cell = _build_program_result("Conv30", Decimal("0.03"), listing, household, profile, _TEST_RATE)
+    assert cell.eligible is False
+    # Verbatim citation — uppercase, hyphen-separated, no reformatting.
+    assert cell.blocker_reasons
+    # The citation prefix should be one of the known affordability blocker codes.
+    blocker = cell.blocker_reasons[0]
+    assert any(
+        blocker.startswith(prefix)
+        for prefix in (
+            "DTI-CAP-",
+            "LTV-CEILING-",
+            "CLTV-CEILING-",
+            "FHFA-LIMIT-",
+            "HUD-LIMIT-",
+            "ATR-QM-",
+        )
+    )
+
+
+def test_fred_lock_serialization() -> None:
+    """_todays_rate_per_program invokes with_cache_lock with reason containing
+    'property-analysis read'."""
+    with patch("lib.property_analysis.with_cache_lock") as mock_lock:
+        mock_lock.return_value.__enter__.return_value = {"acquired_at": 0}
+        with patch("lib.property_analysis.get_cached_or_fetch") as mock_fetch:
+            mock_fetch.return_value = {"value": "0.06500"}
+            _todays_rate_per_program("Conv30")
+    assert mock_lock.called
+    call_kwargs = mock_lock.call_args.kwargs
+    reason = call_kwargs.get("reason", "")
+    assert "property-analysis read" in reason
+
+
+def test_fred_cold_cache_raises_valueerror_with_guidance() -> None:
+    """Cold cache → ValueError with scripts/fred_cli.py guidance."""
+    with patch("lib.property_analysis.with_cache_lock") as mock_lock:
+        mock_lock.return_value.__enter__.return_value = {"acquired_at": 0}
+        with patch("lib.property_analysis.get_cached_or_fetch") as mock_fetch:
+            mock_fetch.side_effect = NotImplementedError("cold")
+            with pytest.raises(ValueError, match=r"scripts/fred_cli\.py") as exc:
+                _todays_rate_per_program("Conv30")
+            assert "scripts/fred_cli.py" in str(exc.value)
+
+
+def test_va_cell_constructs_valid_affordability_request() -> None:
+    """B-2: VA cells construct VAInputs deterministically; affordability
+    eval does NOT raise 'household.va block is required'."""
+    household = _make_clean_household()
+    profile = _make_clean_profile(va_eligible=True)
+    listing = _make_clean_listing()
+    cell = _build_program_result("VA30", Decimal("0.05"), listing, household, profile, _TEST_RATE)
+    # No exception raised; cell has both reason tags.
+    assert "VA-RESIDUAL-SYNTHESIZED-V1" in cell.eligible_reasons
+    assert "VA-FUNDING-FEE-FINANCED" in cell.eligible_reasons
+
+
+def test_provenanced_value_none_unwraps_to_zero() -> None:
+    """B-4: ProvenancedMoney(value=None, ...) and None wrappers both unwrap
+    to Decimal('0.00') in escrow paths without raising TypeError."""
+    household = _make_clean_household()
+    profile = _make_clean_profile()
+    listing = _make_clean_listing(
+        tax_annual=ProvenancedMoney(value=None, provenance="unknown"),
+        hoa_monthly=None,
+        insurance_estimate_annual=ProvenancedMoney(value=None, provenance="unknown"),
+    )
+    cell = _build_program_result("Conv30", Decimal("0.20"), listing, household, profile, _TEST_RATE)
+    assert cell.monthly_tax == Decimal("0.00")
+    assert cell.monthly_hoa == Decimal("0.00")
+    assert cell.monthly_insurance == Decimal("0.00")
+
+
+def test_unwrap_provenanced_handles_none_wrapper() -> None:
+    """B-4 unit-level: _unwrap_provenanced(None) returns the default."""
+    assert _unwrap_provenanced(None) == Decimal("0.00")
+    assert _unwrap_provenanced(None, default=Decimal("5.00")) == Decimal("5.00")
+    pm_with_none = ProvenancedMoney(value=None, provenance="unknown")
+    assert _unwrap_provenanced(pm_with_none) == Decimal("0.00")
+    pm_with_value = ProvenancedMoney(value=Decimal("100.00"), provenance="scraped")
+    assert _unwrap_provenanced(pm_with_value) == Decimal("100.00")
