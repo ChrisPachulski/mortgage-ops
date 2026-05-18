@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: property-analysis-mode
 status: executing
-stopped_at: Phase 14 context gathered
-last_updated: "2026-05-18T17:01:08.152Z"
+stopped_at: Completed 14-02-matrix-models-PLAN.md
+last_updated: "2026-05-18T17:24:47.990Z"
 last_activity: 2026-05-18
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 13
-  completed_plans: 8
+  completed_plans: 9
   percent: 17
 ---
 
@@ -27,11 +27,11 @@ See: .planning/PROJECT.md (updated 2026-04-26)
 
 Milestone: v1.1 Property Analysis Mode (just started)
 Phase: 14 (property-analysis-pipeline) — EXECUTING
-Plan: 2 of 6
+Plan: 3 of 6
 Status: Ready to execute
 Last activity: 2026-05-18
 
-Progress: [██████░░░░] 62%
+Progress: [███████░░░] 69%
 
 ### Phase 13 closure (2026-05-16)
 
@@ -231,6 +231,7 @@ Previous resume narrative for Plan 07-04 / Wave 3 (Phase 7 Wave 3 closes clean �
 | Phase 13-property-ingestion P03 | 6 | 3 tasks | 5 files |
 | Phase 13 P04 | 8 | 2 tasks | 3 files |
 | Phase 14 P01 | 6 min | 3 tasks | 5 files |
+| Phase 14 P02 | 16 min | 3 tasks | 3 files |
 
 ## Accumulated Context
 
@@ -450,6 +451,10 @@ Recent decisions affecting current work:
 - [Phase ?]: Plan 13-04: Q1 cache writes post-merge extracted JSON (not raw HTML) at data/cache/property-{zpid}.json; Round-2 --user-provided skips block-detect + Sonnet + wrapping
 - [Phase ?]: Plan 14-01 D-14-MODELS-02 resolved: Profile carries va_eligible/first_time_buyer/military_status/filing_status/marginal_tax_rate; Household carries financial state only
 - [Phase ?]: Plan 14-01: TDD RED+GREEN consolidated into per-task commit because mypy --strict pre-commit blocks test files importing not-yet-existing modules
+- [Phase ?]: Plan 14-02: VA cells synthesize VAInputs(region=northeast, family_size=2, actual_residual_income=monthly_income*0.5)
+- [Phase ?]: Plan 14-02: VA funding fee FINANCED INTO principal (mirror Phase 4 D-03 financed-UFMIP); monthly_mi=0 for VA; eligible_reasons += VA-FUNDING-FEE-FINANCED (W-3 PLAN-CHECK fix)
+- [Phase ?]: Plan 14-02: ProvenancedMoney unwrap routes through _unwrap_provenanced(pm, default); guards both pm is None AND pm.value is None (B-4 PLAN-CHECK fix)
+- [Phase ?]: Plan 14-02: 12 frozen Pydantic output models co-located in lib/property_analysis.py to avoid circular-import risk with planned lib/property_verdict.py (PATTERNS.md L461)
 
 ### Pending Todos
 
@@ -475,6 +480,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-05-18T17:01:03.838Z
-Stopped at: Phase 14 context gathered
+Last session: 2026-05-18T17:24:47.981Z
+Stopped at: Completed 14-02-matrix-models-PLAN.md
 Resume file: None

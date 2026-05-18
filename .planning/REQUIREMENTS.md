@@ -27,8 +27,8 @@ The math layer is complete. v1.1 is **composition + ingestion + a new report for
 
 ### Analysis Pipeline (`lib/property_analysis.py`)
 
-- [ ] **ANLZ-01**: Multi-program comparison fans out across 4 loan programs (Conventional 30yr, Conventional 15yr, FHA 30yr, VA 30yr if profile.va_eligible) + jumbo branch when price exceeds zip-specific conforming limit; each program produces a Pydantic `ProgramResult` (eligible, monthly_PITI, cash_to_close, DTI, LTV, PMI/MIP/funding-fee, eligible_reasons, blocker_reasons).
-- [ ] **ANLZ-02**: Down-payment scenario sweep at 3% / 5% / 10% / 15% / 20% / 25% per program — produces a `DownPaymentMatrix` (~24 cells for 4 programs × 6 DPs, fewer when programs are ineligible).
+- [x] **ANLZ-01**: Multi-program comparison fans out across 4 loan programs (Conventional 30yr, Conventional 15yr, FHA 30yr, VA 30yr if profile.va_eligible) + jumbo branch when price exceeds zip-specific conforming limit; each program produces a Pydantic `ProgramResult` (eligible, monthly_PITI, cash_to_close, DTI, LTV, PMI/MIP/funding-fee, eligible_reasons, blocker_reasons).
+- [x] **ANLZ-02**: Down-payment scenario sweep at 3% / 5% / 10% / 15% / 20% / 25% per program — produces a `DownPaymentMatrix` (~24 cells for 4 programs × 6 DPs, fewer when programs are ineligible).
 - [ ] **ANLZ-03**: Auto-applied stress tests (rate shock +2%, income shock -30%, ARM reset at peak cap) + points breakeven (1pt and 2pt drops) + refi opportunity scan (against current FRED rate × 0.85 historical-avg-drop heuristic) + IRS Pub 936 deductibility rollup (first-year interest, $750k cap awareness).
 
 ### Verdict Synthesis
