@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: property-analysis-mode
-status: ready_to_plan
-stopped_at: Phase 13 complete (7/7) — ready to discuss Phase 14
-last_updated: 2026-05-17T05:42:01.356Z
+status: planning
+stopped_at: Phase 14 context gathered
+last_updated: "2026-05-18T04:53:20.123Z"
 last_activity: 2026-05-17
 progress:
   total_phases: 6
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 7
-  completed_plans: 94
-  percent: 0
+  completed_plans: 7
+  percent: 17
 ---
 
 # Project State
@@ -36,6 +36,7 @@ Progress: [██████████] 100% (Phase 13)
 ### Phase 13 closure (2026-05-16)
 
 Plan 13-06 shipped the seed test-fixture corpus + end-to-end integration test:
+
 - 3 sanitized synthetic HTML fixtures (SFH happy / condo partial / captcha block)
 - 2 sha-keyed extracted/{sha16}.json mock-Sonnet outputs (c9d5a0df4baa57a5, 5810e207ecf14e21)
 - Updated tests/fixtures/zillow/README.md with the actual fixture inventory + sha-key recipe
@@ -471,6 +472,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-05-17T04:55:38.229Z
-Stopped at: Plan 08-05 complete (Wave 5 fixtures + tests; 14 hand-calc fixtures shipped 11 stress + 3 points; 2 final xfails flipped + citation-coverage meta-test added; full suite 521/4/1 zero-regression; Phase 8 closed at the test layer with 0 xfails in Phase-8 test files; 3 deviations 2 Rule-1 plan-spec validate_python->validate_json + meta-test scope extension for STRS-04/PNTS-03 CLI requirements + 1 Rule-3 hygiene PT018 split + unused-pytest-import; D-05-01..D-05-07 LOCKED honored verbatim; SC-1..SC-5 all verifiable verbatim by tests; STRS-01..04 + PNTS-01..03 closed; only Plan 08-06 references doc remains for Phase 8 closure)
-Resume file: None
+Last session: 2026-05-18T04:53:20.113Z
+Stopped at: Phase 14 context gathered
+Resume file: .planning/phases/14-property-analysis-pipeline/14-CONTEXT.md
