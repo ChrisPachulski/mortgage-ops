@@ -33,7 +33,7 @@ The math layer is complete. v1.1 is **composition + ingestion + a new report for
 
 ### Verdict Synthesis
 
-- [ ] **VERD-01**: `lib/property_verdict.py` returns GO / WATCH / NO-GO + reason list. Rules: any DTI breach across all eligible programs → NO-GO; any program eligible at user's preferred DP → GO; eligible-only-via-FHA-with-MIP-burden or stress-fails-income-shock → WATCH. Verdict copy is short and falsifiable (each reason cites a specific predicate + computed number).
+- [x] **VERD-01**: `lib/property_verdict.py` returns GO / WATCH / NO-GO + reason list. Rules: any DTI breach across all eligible programs → NO-GO; any program eligible at user's preferred DP → GO; eligible-only-via-FHA-with-MIP-burden or stress-fails-income-shock → WATCH. Verdict copy is short and falsifiable (each reason cites a specific predicate + computed number).
 
 ### `property` Skill Mode
 
@@ -72,7 +72,7 @@ The math layer is complete. v1.1 is **composition + ingestion + a new report for
 | INGEST-01..04 | Phase 13 (property-ingestion) | Closed (Plan 13-04 + integration coverage in Plan 13-06) |
 | PROP-01..02 | Phase 13 (property-ingestion) | Closed (PROP-01 Plan 13-01; PROP-02 Plan 13-05) |
 | ANLZ-01..03 | Phase 14 (property-analysis-pipeline) | Pending |
-| VERD-01 | Phase 14 | Pending |
+| VERD-01 | Phase 14 | Complete |
 | MODE-01..03 | Phase 15 (property-mode) | Pending |
 | PERS-08 | Phase 13 | Closed (Plan 13-05) |
 | RPRT-01..02 | Phase 15 | Pending |

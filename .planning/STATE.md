@@ -4,13 +4,13 @@ milestone: v1.1
 milestone_name: property-analysis-mode
 status: executing
 stopped_at: Completed 14-03-auxiliary-blocks-PLAN.md
-last_updated: "2026-05-18T17:46:39.226Z"
+last_updated: "2026-05-18T18:03:30.898Z"
 last_activity: 2026-05-18
 progress:
   total_phases: 6
   completed_phases: 1
   total_plans: 13
-  completed_plans: 10
+  completed_plans: 11
   percent: 17
 ---
 
@@ -27,11 +27,11 @@ See: .planning/PROJECT.md (updated 2026-04-26)
 
 Milestone: v1.1 Property Analysis Mode (just started)
 Phase: 14 (property-analysis-pipeline) — EXECUTING
-Plan: 4 of 6
+Plan: 5 of 6
 Status: Ready to execute
 Last activity: 2026-05-18
 
-Progress: [████████░░] 77%
+Progress: [█████████░] 85%
 
 ### Phase 13 closure (2026-05-16)
 
@@ -233,6 +233,7 @@ Previous resume narrative for Plan 07-04 / Wave 3 (Phase 7 Wave 3 closes clean �
 | Phase 14 P01 | 6 min | 3 tasks | 5 files |
 | Phase 14 P02 | 16 min | 3 tasks | 3 files |
 | Phase 14 P03 | 13 min | 3 tasks | 2 files |
+| Phase 14 P04 | 7 min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -461,6 +462,7 @@ Recent decisions affecting current work:
 - [Phase 14]: D-14-PLAN03-05: PointsBlock applies to Conv-family only; FHA + VA get WARNING-NO-POINTS-FOR-FHA-VA note (Open Question 1) — FHA UFMIP / VA funding fee dominate deferred-cost economics; modeling points on those programs requires per-borrower loan-officer math outside Phase 14 v1.1 scope. Matrix-row-count stability preserved (2 rows per eligible cell regardless of family).
 - [Phase 14]: D-14-PLAN03-06: IRS Pub 936 grandfathering booleans default False per Pitfall 11 — Phase 14 v1 assumes post-2017 acquisition; pub936_qualified_loan_limit called with filing_status only. Follow-on phase may extend Profile with grandfathering booleans.
 - [Phase 14]: D-14-PLAN03-07: _construct_affordability_request_for_cell uses cell.program DTI ceiling as max_dti — B-5 consistency: avoids the affordability engine pre-blocking the income-shock baseline at a tighter threshold than the stress logic uses.
+- [Phase ?]: Plan 14-04: synthesize() in lib/property_verdict.py implements D-14-VERDICT-01..04 first-match-wins cascade with 5 VERDICT_* Final[str] constants and $300/mo FHA MIP-burden threshold; VERD-01 closed at unit-test level
 
 ### Pending Todos
 
@@ -486,6 +488,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-05-18T17:46:39.217Z
+Last session: 2026-05-18T18:02:14.723Z
 Stopped at: Completed 14-03-auxiliary-blocks-PLAN.md
 Resume file: None
