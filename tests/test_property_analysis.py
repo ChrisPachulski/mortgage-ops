@@ -984,7 +984,173 @@ def test_tax_block_over_cap_flag() -> None:
 
 
 def test_report_size_budget() -> None:
-    pytest.skip("Plan 14-06: AnalysisReport JSON stays under Phase 11 SC-5 30k-token budget")
+    """Pitfall 10: AnalysisReport JSON serialization stays under 100KB for the
+    canonical SFH-conforming scenario. Mirrors tests/test_stress.py L528-567."""
+    household = _make_clean_household()
+    profile = _make_clean_profile()
+    listing = _make_clean_listing()
+    report = analyze(
+        listing,
+        household,
+        profile,
+        fred_mortgage_30us=Decimal("0.065000"),
+        fred_mortgage_15us=Decimal("0.058000"),
+    )
+    serialized = report.model_dump_json(indent=2)
+    size_bytes = len(serialized.encode("utf-8"))
+    assert size_bytes < 100 * 1024, f"Size budget violation: {size_bytes} bytes >= 100KB"
+
+
+def test_analyze_with_jumbo_listing() -> None:
+    """Jumbo trigger: listing.price > King County conforming limit appends
+    Jumbo30 as a 5th program row -> matrix.cells has 24 entries (4 programs x 6 DPs).
+
+    Uses an income high enough that every cell's DTI stays under Rate's le=1 cap
+    (cells may be ineligible per affordability, but PITI / income must remain
+    representable as a Rate)."""
+    household = _make_clean_household(
+        monthly_income=Decimal("30000.00"),  # $360k/yr supports a $1.5M analysis
+        monthly_obligations=Decimal("500.00"),
+        liquid_reserves=Decimal("500000.00"),
+    )
+    profile = _make_clean_profile()
+    listing = _make_jumbo_listing()  # $1.5M in King County WA
+    report = analyze(
+        listing,
+        household,
+        profile,
+        fred_mortgage_30us=Decimal("0.065000"),
+        fred_mortgage_15us=Decimal("0.058000"),
+    )
+    assert "Jumbo30" in report.matrix.programs_present
+    # 4 programs (Conv30, Conv15, FHA30, Jumbo30) x 6 DPs = 24 cells
+    assert len(report.matrix.cells) == 24
+
+
+def test_analyze_with_va_eligible_profile() -> None:
+    """va_eligible=True appends VA30 -> matrix.cells has 24 entries (4 x 6)."""
+    household = _make_clean_household()
+    profile = _make_clean_profile(va_eligible=True)
+    listing = _make_clean_listing()
+    report = analyze(
+        listing,
+        household,
+        profile,
+        fred_mortgage_30us=Decimal("0.065000"),
+        fred_mortgage_15us=Decimal("0.058000"),
+    )
+    assert "VA30" in report.matrix.programs_present
+    # 4 programs (Conv30, Conv15, FHA30, VA30) x 6 DPs = 24 cells
+    assert len(report.matrix.cells) == 24
+
+
+def test_analyze_fred_rate_overrides_bypass_cache() -> None:
+    """When both fred_mortgage_30us and fred_mortgage_15us are passed
+    explicitly, _todays_rate_per_program is NOT invoked (FRED cache bypassed)."""
+    household = _make_clean_household()
+    profile = _make_clean_profile()
+    listing = _make_clean_listing()
+    with patch("lib.property_analysis._todays_rate_per_program") as mock_rate:
+        mock_rate.side_effect = AssertionError(
+            "FRED cache must NOT be touched when overrides are supplied"
+        )
+        analyze(
+            listing,
+            household,
+            profile,
+            fred_mortgage_30us=Decimal("0.065000"),
+            fred_mortgage_15us=Decimal("0.058000"),
+        )
+    assert not mock_rate.called
+
+
+def test_analyze_household_snapshot_hash_deterministic() -> None:
+    """Running analyze() twice with identical inputs yields the same
+    household_snapshot_hash (deterministic SHA256) but different fetched_at
+    (timestamps differ by definition)."""
+    household = _make_clean_household()
+    profile = _make_clean_profile()
+    listing = _make_clean_listing()
+    report1 = analyze(
+        listing,
+        household,
+        profile,
+        fred_mortgage_30us=Decimal("0.065000"),
+        fred_mortgage_15us=Decimal("0.058000"),
+    )
+    report2 = analyze(
+        listing,
+        household,
+        profile,
+        fred_mortgage_30us=Decimal("0.065000"),
+        fred_mortgage_15us=Decimal("0.058000"),
+    )
+    assert report1.household_snapshot_hash == report2.household_snapshot_hash
+    # fetched_at differs (two distinct datetime.now(UTC) calls). On a fast
+    # machine the resolution may collide at microsecond level; assert
+    # >= to capture the monotonic-or-equal property.
+    assert report2.fetched_at >= report1.fetched_at
+
+
+def test_analyze_warnings_dedup_pmi_estimated() -> None:
+    """Multiple Conv30/Conv15 cells with LTV > 0.80 (95%, 90%, 85%) all tag
+    eligible_reasons with PMI-RATE-ESTIMATED-0.0075, but the top-level
+    report.warnings carries 'PMI-RATE-ESTIMATED' EXACTLY ONCE (dict.fromkeys
+    dedup preserving first-occurrence order)."""
+    household = _make_clean_household()
+    profile = _make_clean_profile()
+    listing = _make_clean_listing()
+    report = analyze(
+        listing,
+        household,
+        profile,
+        fred_mortgage_30us=Decimal("0.065000"),
+        fred_mortgage_15us=Decimal("0.058000"),
+    )
+    # Sanity: multiple cells carry the PMI tag.
+    n_pmi_cells = sum(
+        1 for c in report.matrix.cells if any("PMI-RATE-ESTIMATED" in r for r in c.eligible_reasons)
+    )
+    assert n_pmi_cells > 1, "expected multiple cells with LTV > 0.80 carrying PMI tag"
+    # The top-level warning is dedup'd to a single occurrence.
+    pmi_warnings = [w for w in report.warnings if w == "PMI-RATE-ESTIMATED"]
+    assert len(pmi_warnings) == 1
+
+
+def test_analyze_verdict_matches_synthesize() -> None:
+    """report.verdict is passed through verbatim from
+    lib.property_verdict.synthesize(matrix, stress, household, profile) — no
+    post-processing in analyze()."""
+    from lib.property_verdict import synthesize
+
+    household = _make_clean_household()
+    profile = _make_clean_profile()
+    listing = _make_clean_listing()
+    report = analyze(
+        listing,
+        household,
+        profile,
+        fred_mortgage_30us=Decimal("0.065000"),
+        fred_mortgage_15us=Decimal("0.058000"),
+    )
+    direct_verdict = synthesize(report.matrix, report.stress, household, profile)
+    assert report.verdict == direct_verdict
+
+
+def test_analyze_cold_fred_cache_raises_valueerror() -> None:
+    """When get_cached_or_fetch raises NotImplementedError (cold cache) AND no
+    fred_mortgage_* overrides are provided, analyze() raises a ValueError whose
+    message points the caller at scripts/fred_cli.py for refresh guidance."""
+    household = _make_clean_household()
+    profile = _make_clean_profile()
+    listing = _make_clean_listing()
+    with patch("lib.property_analysis.with_cache_lock") as mock_lock:
+        mock_lock.return_value.__enter__.return_value = {"acquired_at": 0}
+        with patch("lib.property_analysis.get_cached_or_fetch") as mock_fetch:
+            mock_fetch.side_effect = NotImplementedError("cold")
+            with pytest.raises(ValueError, match=r"scripts/fred_cli\.py") as exc:
+                analyze(listing, household, profile)
+            assert "scripts/fred_cli.py" in str(exc.value)
 
 
 def test_sfh_conforming_king_county_golden() -> None:
