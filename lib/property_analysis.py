@@ -778,17 +778,30 @@ def _build_program_result(
         property_value=price,
         monthly_pmi=monthly_pmi_for_request,
     )
-    response = affordability_evaluate(forward_request)
-
     eligible: bool
     blocker_reasons: list[str]
-    if response.blocked:
+    try:
+        response = affordability_evaluate(forward_request)
+    except NotImplementedError as exc:
+        # FHA / VA loan_amount above the county ceiling raises here (per
+        # lib/rules/loan_type.py L135). D-14-MATRIX-02 mandates explicit
+        # ineligible rows with populated numerics; mark the cell ineligible
+        # and surface a stable blocker code rather than propagating the crash.
         eligible = False
-        # PATTERNS.md L437-442 — read VERBATIM, never reformat.
-        blocker_reasons = [response.blocked_by] if response.blocked_by is not None else []
+        if program == "FHA30":
+            blocker_reasons = [f"HUD-LIMIT-CEILING-EXCEEDED: {exc}"]
+        elif program == "VA30":
+            blocker_reasons = [f"VA-LIMIT-CEILING-EXCEEDED: {exc}"]
+        else:
+            blocker_reasons = [f"LOAN-TYPE-CLASSIFY-NOT-IMPLEMENTED: {exc}"]
     else:
-        eligible = True
-        blocker_reasons = []
+        if response.blocked:
+            eligible = False
+            # PATTERNS.md L437-442 — read VERBATIM, never reformat.
+            blocker_reasons = [response.blocked_by] if response.blocked_by is not None else []
+        else:
+            eligible = True
+            blocker_reasons = []
 
     # Step 12 — assemble ProgramResult with all numerics populated
     # regardless of eligibility (D-14-MATRIX-02).
