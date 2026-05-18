@@ -67,6 +67,7 @@ visible without name collision (OQ #1 resolution).
 
 from __future__ import annotations
 
+import hashlib
 from datetime import (  # Pydantic resolves annotations at runtime
     UTC,
     datetime,
@@ -1412,16 +1413,109 @@ def _build_tax_block(
 
 
 # ---------------------------------------------------------------------------
-# Top-level entrypoint stub — body lands in Plan 14-05
+# Top-level entrypoint (Plan 14-05) — composes the 6-step pipeline
 # ---------------------------------------------------------------------------
 
 
-def analyze(*args: object, **kwargs: object) -> AnalysisReport:
-    """Top-level Phase 14 entrypoint. Implementation lands in Plan 14-05.
+def analyze(
+    listing: PropertyListing,
+    household: Household,
+    profile: Profile,
+    *,
+    fred_mortgage_30us: Decimal | None = None,
+    fred_mortgage_15us: Decimal | None = None,
+) -> AnalysisReport:
+    """Top-level Phase 14 entrypoint (D-14-MODELS-04). 6-step pipeline per
+    RESEARCH.md L164-235:
 
-    Signature (final): ``analyze(listing: PropertyListing, household: Household,
-    profile: Profile) -> AnalysisReport``. The body composes
-    ``_build_matrix`` (Plan 14-02, Helper 5) + stress/refi/points/tax blocks
-    (Plan 14-03) + ``synthesize_verdict`` (Plan 14-04) into the AnalysisReport.
+      1. Resolve programs + county (via ``_determine_programs``).
+      2. Resolve today's rate per program (FRED cache, lock-serialized via
+         ``_todays_rate_per_program``); when callers pass explicit
+         ``fred_mortgage_30us`` / ``fred_mortgage_15us`` overrides the FRED
+         cache is bypassed entirely (test-injection path).
+      3. Determine programs (Conv30/Conv15/FHA30 always; VA30 if
+         ``profile.va_eligible``; Jumbo30 if classify == "jumbo").
+      4. Build matrix (DownPaymentMatrix with 18, 24, or 30 cells).
+      5. Build auxiliary blocks at preferred DP (StressBlock, RefiBlock,
+         PointsBlock, TaxBlock).
+      6. Synthesize verdict (``lib.property_verdict.synthesize``).
+
+    Returns a frozen ``AnalysisReport`` Phase 15's ``lib.property_report`` renders.
+
+    Raises:
+        ValueError: when the FRED cache is cold AND no ``fred_mortgage_*us``
+            override was supplied (re-raised from
+            ``_todays_rate_per_program``; Phase 15 CLI catches at the
+            always-exit-0 envelope boundary).
+        pydantic.ValidationError: when any input violates the model contract.
     """
-    raise NotImplementedError("analyze() body lands in Plan 14-05")
+    # Local import to avoid the circular dependency with lib.property_verdict
+    # (which imports DownPaymentMatrix / StressBlock / Verdict / VerdictReason
+    # from this module at top level).
+    from lib.property_verdict import synthesize
+
+    warnings: list[str] = []
+
+    # Step 1 + 3 — programs are recomputed inside _build_matrix; here we
+    # eagerly call _determine_programs solely to surface its MissingCountyDataError
+    # warning into the top-level AnalysisReport.warnings. The matrix carries
+    # programs_present, so we discard the program list itself.
+    _programs, prog_warnings = _determine_programs(listing, household, profile)
+    warnings.extend(prog_warnings)
+
+    # Step 2 — resolve today's rates (FRED-or-override)
+    if fred_mortgage_30us is None:
+        rate_30 = _todays_rate_per_program("Conv30")
+    else:
+        rate_30 = quantize_rate(fred_mortgage_30us)
+
+    if fred_mortgage_15us is None:
+        rate_15 = _todays_rate_per_program("Conv15")
+    else:
+        rate_15 = quantize_rate(fred_mortgage_15us)
+
+    # Build the per-program rate dict (D-14-REFI-02 proxies + 25bps ARM heuristic)
+    todays_rates: dict[str, Decimal] = {
+        "Conv30": rate_30,
+        "Conv15": rate_15,
+        "FHA30": rate_30,  # D-14-REFI-02 proxy
+        "VA30": rate_30,  # D-14-REFI-02 proxy
+        "Jumbo30": rate_30,  # D-14-REFI-02 proxy
+        "Conv30-ARM-5-1": quantize_rate(rate_30 - Decimal("0.0025")),  # D-14-REFI-02
+    }
+
+    # Step 4 — matrix fan-out (24 cells base; +6 if jumbo; -6 if not VA-eligible)
+    matrix, matrix_warnings = _build_matrix(listing, household, profile, todays_rates)
+    warnings.extend(matrix_warnings)
+
+    # Surface PMI-RATE-ESTIMATED whenever any cell carried the placeholder.
+    if any("PMI-RATE-ESTIMATED" in r for c in matrix.cells for r in c.eligible_reasons):
+        warnings.append("PMI-RATE-ESTIMATED")
+
+    # Step 5 — auxiliary blocks (all at preferred DP per D-14-STRESS-01)
+    stress = _build_stress_block(matrix, listing, household, profile, todays_rates)
+    refi = _build_refi_block(matrix, household, todays_rates)
+    points = _build_points_block(matrix, household, todays_rates)
+    tax = _build_tax_block(matrix, household, profile, todays_rates)
+
+    # Step 6 — verdict synthesis (D-14-VERDICT-01..04 cascade)
+    verdict = synthesize(matrix, stress, household, profile)
+
+    # Snapshot hash + audit timestamp (Phase 13 D-13-REANALYSIS-01 pattern)
+    snapshot_input = household.model_dump_json() + profile.model_dump_json()
+    snapshot_hash = hashlib.sha256(snapshot_input.encode("utf-8")).hexdigest()
+
+    return AnalysisReport(
+        listing_snapshot=listing,
+        household_snapshot_hash=snapshot_hash,
+        fetched_at=datetime.now(UTC),
+        fred_mortgage_30us=rate_30,
+        fred_mortgage_15us=rate_15,
+        matrix=matrix,
+        stress=stress,
+        refi=refi,
+        points=points,
+        tax=tax,
+        verdict=verdict,
+        warnings=list(dict.fromkeys(warnings)),  # dedup preserving order
+    )
