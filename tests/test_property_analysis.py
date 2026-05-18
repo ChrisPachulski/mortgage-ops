@@ -19,12 +19,16 @@ Test taxonomy:
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 from unittest.mock import patch
 
 import pytest
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 from lib.household import Household
 from lib.money import quantize_rate
 from lib.profile import Profile
@@ -1153,13 +1157,203 @@ def test_analyze_cold_fred_cache_raises_valueerror() -> None:
             assert "scripts/fred_cli.py" in str(exc.value)
 
 
-def test_sfh_conforming_king_county_golden() -> None:
-    pytest.skip("Plan 14-06: hand-calculated SFH conforming AnalysisReport golden fixture")
+def _assert_preferred_dp_cells_pinned(
+    report: AnalysisReport,
+    expected_matrix: dict[str, Any],
+) -> None:
+    """Shared helper: assert every expected preferred-DP cell matches the report
+    by exact Decimal equality (CLAUDE.md money discipline; never pytest.approx).
+
+    Looks up each expected cell in report.matrix.cells by (program, dp_pct),
+    then pins monthly_pi / piti / dti_back / ltv / monthly_mi / monthly_tax /
+    monthly_insurance / monthly_hoa / loan_amount / eligible / blocker_reasons.
+    """
+    assert len(report.matrix.cells) == expected_matrix["cells_count"]
+    assert sorted(report.matrix.programs_present) == sorted(expected_matrix["programs_present"])
+    for expected_cell in expected_matrix["preferred_dp_cells"]:
+        target_dp = Decimal(expected_cell["dp_pct"])
+        actual = next(
+            (
+                c
+                for c in report.matrix.cells
+                if c.program == expected_cell["program"] and c.down_payment_pct == target_dp
+            ),
+            None,
+        )
+        assert actual is not None, (
+            f"Expected cell {expected_cell['program']}@{expected_cell['dp_pct']} "
+            f"not found in report.matrix.cells"
+        )
+        program_label = f"{expected_cell['program']}@{expected_cell['dp_pct']}"
+        assert actual.loan_amount == Decimal(expected_cell["loan_amount"]), (
+            f"{program_label}: loan_amount mismatch (got {actual.loan_amount}, "
+            f"expected {expected_cell['loan_amount']})"
+        )
+        assert actual.monthly_pi == Decimal(expected_cell["monthly_pi"]), (
+            f"{program_label}: monthly_pi mismatch (got {actual.monthly_pi}, "
+            f"expected {expected_cell['monthly_pi']})"
+        )
+        assert actual.monthly_tax == Decimal(expected_cell["monthly_tax"]), program_label
+        assert actual.monthly_insurance == Decimal(expected_cell["monthly_insurance"]), (
+            program_label
+        )
+        assert actual.monthly_hoa == Decimal(expected_cell["monthly_hoa"]), program_label
+        assert actual.monthly_mi == Decimal(expected_cell["monthly_mi"]), (
+            f"{program_label}: monthly_mi mismatch"
+        )
+        assert actual.piti == Decimal(expected_cell["piti"]), (
+            f"{program_label}: piti mismatch (got {actual.piti}, expected {expected_cell['piti']})"
+        )
+        assert actual.dti_back == Decimal(expected_cell["dti_back"]), (
+            f"{program_label}: dti_back mismatch"
+        )
+        assert actual.ltv == Decimal(expected_cell["ltv"]), f"{program_label}: ltv mismatch"
+        assert actual.eligible == expected_cell["eligible"], (
+            f"{program_label}: eligible flag mismatch"
+        )
+        assert actual.blocker_reasons == expected_cell["blocker_reasons"], (
+            f"{program_label}: blocker_reasons mismatch (got {actual.blocker_reasons!r}, "
+            f"expected {expected_cell['blocker_reasons']!r})"
+        )
+        assert actual.eligible_reasons == expected_cell["eligible_reasons"], (
+            f"{program_label}: eligible_reasons mismatch"
+        )
 
 
-def test_condo_with_hoa_seattle_golden() -> None:
-    pytest.skip("Plan 14-06: hand-calculated Condo+HOA AnalysisReport golden fixture")
+def _assert_verdict_pinned(
+    report: AnalysisReport,
+    expected_verdict: dict[str, Any],
+) -> None:
+    """Shared helper: assert verdict.level and every expected verdict reason
+    match by exact code + computed_value.
+    """
+    assert report.verdict.level == expected_verdict["level"], (
+        f"verdict.level mismatch (got {report.verdict.level!r}, "
+        f"expected {expected_verdict['level']!r})"
+    )
+    for expected_reason in expected_verdict["reasons"]:
+        match = next(
+            (
+                r
+                for r in report.verdict.reasons
+                if r.predicate_code == expected_reason["predicate_code"]
+                and r.computed_value == expected_reason["computed_value"]
+            ),
+            None,
+        )
+        assert match is not None, (
+            f"Expected verdict reason {expected_reason['predicate_code']}="
+            f"{expected_reason['computed_value']} not in report.verdict.reasons "
+            f"(got: {[(r.predicate_code, r.computed_value) for r in report.verdict.reasons]})"
+        )
 
 
-def test_sfh_jumbo_bay_area_golden() -> None:
-    pytest.skip("Plan 14-06: hand-calculated SFH jumbo AnalysisReport golden fixture")
+def test_sfh_conforming_king_county_golden(
+    property_analysis_fixture: Callable[[str], dict[str, Any]],
+) -> None:
+    """ANLZ-01..03 + VERD-01 golden-value pin: SFH conforming King County WA.
+
+    Fixture: tests/fixtures/property_analysis/sfh_conforming_king_county.json.
+    Hand-calc anchors via lib.amortize.build_schedule (see fixture `notes`).
+    Verdict=GO (cascade Level 5 GO-ALL-GREEN); 2 non-FHA programs eligible at
+    preferred 20% DP."""
+    fx = property_analysis_fixture("sfh_conforming_king_county")
+
+    # PATTERNS.md L590: strict-mode Decimal fields require the JSON parse path,
+    # NOT validate_python(dict). Re-encode each sub-block separately.
+    listing = PropertyListing.model_validate_json(json.dumps(fx["listing"]))
+    household = Household.model_validate_json(json.dumps(fx["household"]))
+    profile = Profile.model_validate_json(json.dumps(fx["profile"]))
+
+    report = analyze(
+        listing,
+        household,
+        profile,
+        fred_mortgage_30us=Decimal(fx["fred_rates"]["MORTGAGE30US"]),
+        fred_mortgage_15us=Decimal(fx["fred_rates"]["MORTGAGE15US"]),
+    )
+
+    _assert_preferred_dp_cells_pinned(report, fx["expected_response"]["matrix"])
+    _assert_verdict_pinned(report, fx["expected_response"]["verdict"])
+
+    expected_tax = fx["expected_response"]["tax"]
+    assert report.tax.qualified_loan_limit == Decimal(expected_tax["qualified_loan_limit"])
+    assert report.tax.filing_status == expected_tax["filing_status"]
+    for prog, expected_flag in expected_tax["over_750k_cap_per_program"].items():
+        assert report.tax.over_750k_cap_per_program[prog] == expected_flag, (
+            f"over_750k_cap_per_program[{prog}] mismatch"
+        )
+    for prog, expected_int in expected_tax["first_year_interest_per_program"].items():
+        assert report.tax.first_year_interest_per_program[prog] == Decimal(expected_int), (
+            f"first_year_interest_per_program[{prog}] mismatch"
+        )
+
+
+def test_condo_with_hoa_seattle_golden(
+    property_analysis_fixture: Callable[[str], dict[str, Any]],
+) -> None:
+    """ANLZ-01..03 + VERD-01 golden-value pin: Condo+HOA Seattle at 5% DP.
+
+    Fixture: tests/fixtures/property_analysis/condo_with_hoa_seattle.json.
+    Demonstrates HOA threading into PITI + PMI applying on Conv30 at 95% LTV
+    (PMI-RATE-ESTIMATED-0.0075 soft signal). Verdict=WATCH (W-1 single literal);
+    cascade Level 3 STRESS-INCOME-SHOCK on the lone eligible Conv30 cell."""
+    fx = property_analysis_fixture("condo_with_hoa_seattle")
+
+    # PATTERNS.md L590: strict-mode Decimal fields require the JSON parse path.
+    listing = PropertyListing.model_validate_json(json.dumps(fx["listing"]))
+    household = Household.model_validate_json(json.dumps(fx["household"]))
+    profile = Profile.model_validate_json(json.dumps(fx["profile"]))
+
+    report = analyze(
+        listing,
+        household,
+        profile,
+        fred_mortgage_30us=Decimal(fx["fred_rates"]["MORTGAGE30US"]),
+        fred_mortgage_15us=Decimal(fx["fred_rates"]["MORTGAGE15US"]),
+    )
+
+    _assert_preferred_dp_cells_pinned(report, fx["expected_response"]["matrix"])
+    _assert_verdict_pinned(report, fx["expected_response"]["verdict"])
+
+    # Soft-signal: PMI-RATE-ESTIMATED-0.0075 surfaces on the Conv30 cell.
+    conv30_cell = next(
+        c
+        for c in report.matrix.cells
+        if c.program == "Conv30"
+        and c.down_payment_pct == Decimal(fx["household"]["preferred_down_payment_pct"])
+    )
+    assert "PMI-RATE-ESTIMATED-0.0075" in conv30_cell.eligible_reasons
+
+
+def test_sfh_jumbo_bay_area_golden(
+    property_analysis_fixture: Callable[[str], dict[str, Any]],
+) -> None:
+    """ANLZ-01..03 + VERD-01 golden-value pin: SFH jumbo Bay Area at 20% DP.
+
+    Fixture: tests/fixtures/property_analysis/sfh_jumbo_bay_area.json.
+    Demonstrates D-14-MATRIX-03 Jumbo30 5th-row materialization on price >
+    conforming county limit, D-14-MATRIX-02 explicit-ineligible-rows on
+    Conv/FHA cells with populated numerics + stable blocker codes, and
+    cascade Level 3 STRESS-INCOME-SHOCK on the eligible Jumbo30 cell."""
+    fx = property_analysis_fixture("sfh_jumbo_bay_area")
+
+    # PATTERNS.md L590: strict-mode Decimal fields require the JSON parse path.
+    listing = PropertyListing.model_validate_json(json.dumps(fx["listing"]))
+    household = Household.model_validate_json(json.dumps(fx["household"]))
+    profile = Profile.model_validate_json(json.dumps(fx["profile"]))
+
+    report = analyze(
+        listing,
+        household,
+        profile,
+        fred_mortgage_30us=Decimal(fx["fred_rates"]["MORTGAGE30US"]),
+        fred_mortgage_15us=Decimal(fx["fred_rates"]["MORTGAGE15US"]),
+    )
+
+    _assert_preferred_dp_cells_pinned(report, fx["expected_response"]["matrix"])
+    _assert_verdict_pinned(report, fx["expected_response"]["verdict"])
+
+    # Jumbo30 row materialized at the 5th-program slot (D-14-MATRIX-03).
+    assert "Jumbo30" in report.matrix.programs_present
+    assert report.tax.over_750k_cap_per_program["Jumbo30"] is True

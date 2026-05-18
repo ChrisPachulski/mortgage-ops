@@ -432,12 +432,24 @@ def test_empty_matrix_returns_no_go() -> None:
 def test_verdict_code_citation_coverage() -> None:
     """Pitfall 12 + RESEARCH §"Validation Architecture": every VERDICT_*
     constant in lib/property_verdict.py must be emitted by at least one
-    cascade-level scenario in this file. Plan 14-06 will tighten this to
-    fixture-based coverage when the golden fixtures land. Mirrors
-    tests/test_affordability.py:test_blocked_by_citation_coverage.
+    Phase-14 fixture's expected_response.verdict.reasons[].predicate_code OR
+    by at least one cascade-level scenario in this file.
+
+    Plan 14-06 tightens the prior in-test-only coverage to FIXTURE-FIRST
+    coverage: fixtures contribute their predicate codes from
+    tests/fixtures/property_analysis/*.json; the in-test cascade scenarios
+    fill any branches the 3-fixture set cannot reach (only 5 of the 5 VERDICT_*
+    branches can fire from a single synthesize() call, so 3 fixtures naturally
+    cover a subset; the in-test scenarios complete the union per Pitfall 12).
+
+    Mirrors tests/test_affordability.py:test_blocked_by_citation_coverage
+    (fixture-first) + tests/test_stress.py:test_phase_08_citation_coverage_meta
+    (phase-wide).
 
     Closes VERD-01 at the unit-test level (D-14-VERDICT-04 falsifiable-reason
     discipline)."""
+    import json as _json
+
     import lib.property_verdict as v_mod
 
     constants = {
@@ -447,7 +459,33 @@ def test_verdict_code_citation_coverage() -> None:
     }
     assert constants, "No VERDICT_* constants found in lib.property_verdict"
 
-    emitted: set[str] = set()
+    # ------------------------------------------------------------------------
+    # Phase 14-06 fixture-based coverage path (PRIMARY anchor)
+    # ------------------------------------------------------------------------
+    fixtures_dir = Path(__file__).resolve().parent / "fixtures" / "property_analysis"
+    assert fixtures_dir.is_dir(), (
+        "tests/fixtures/property_analysis/ missing — Plan 14-06 fixtures not shipped"
+    )
+    fixture_predicate_codes: list[str] = []
+    fixture_paths = sorted(fixtures_dir.glob("*.json"))
+    assert len(fixture_paths) >= 3, (
+        f"Plan 14-06 requires 3 golden fixtures; found {len(fixture_paths)}: {fixture_paths}"
+    )
+    for fp in fixture_paths:
+        data = _json.loads(fp.read_text())
+        expected = data.get("expected_response", {})
+        verdict = expected.get("verdict", {})
+        for r in verdict.get("reasons", []):
+            code = r.get("predicate_code", "")
+            if code:
+                fixture_predicate_codes.append(code)
+
+    emitted: set[str] = set(fixture_predicate_codes)
+
+    # ------------------------------------------------------------------------
+    # In-test cascade supplemental coverage (covers VERDICT_* branches that
+    # the 3-fixture set cannot naturally reach — Pitfall 12 completeness gate)
+    # ------------------------------------------------------------------------
 
     # Level 1: NO_GO no-eligible
     v1 = synthesize(
@@ -494,10 +532,62 @@ def test_verdict_code_citation_coverage() -> None:
     )
     emitted.update(r.predicate_code for r in v5.reasons)
 
-    # Every VERDICT_* constant must appear in at least one emitted reason.
+    # Every VERDICT_* constant must appear in at least one emitted reason
+    # (fixture predicate_codes OR in-test cascade scenarios).
     for name, code in constants.items():
         assert code in emitted, (
-            f"{name}={code!r} not exercised by any cascade level in tests/test_property_verdict.py"
+            f"{name}={code!r} not exercised by any fixture predicate_code "
+            f"NOR by any cascade-level scenario in tests/test_property_verdict.py"
+        )
+
+    # Hard gate: the 3 fixtures MUST contribute at least one valid VERDICT_*
+    # predicate (otherwise the fixture coverage is decorative; this is the
+    # "fixture-first" assertion that distinguishes Plan 14-06 tightening from
+    # the pure in-test approach of Plan 14-04).
+    valid_codes = set(constants.values())
+    assert any(c in valid_codes for c in fixture_predicate_codes), (
+        f"None of the 3 Phase 14-06 fixtures contributed a valid VERDICT_* "
+        f"predicate_code (got: {sorted(set(fixture_predicate_codes))!r}); "
+        f"valid VERDICT_* values are {sorted(valid_codes)!r}"
+    )
+
+
+def test_phase_14_requirement_coverage_meta() -> None:
+    """RESEARCH §"Validation Architecture": every ANLZ-XX + VERD-01 requirement
+    appears in at least one tests/fixtures/property_analysis/*.json fixture's
+    _meta.citation or _meta.requirements.
+
+    Plan 14-06 SC: closes ANLZ-01..03 + VERD-01 at the FIXTURE level (in
+    addition to the existing unit + integration levels from Plans 14-02..05).
+
+    Mirrors tests/test_stress.py:test_phase_08_citation_coverage_meta — Pitfall
+    12 phase-level requirement-coverage gate."""
+    import json as _json
+
+    fixtures_dir = Path(__file__).resolve().parent / "fixtures" / "property_analysis"
+    assert fixtures_dir.is_dir(), (
+        "tests/fixtures/property_analysis/ missing — Plan 14-06 fixtures not shipped"
+    )
+
+    all_citations: list[str] = []
+    all_requirements: set[str] = set()
+    fixture_paths = sorted(fixtures_dir.glob("*.json"))
+    for fp in fixture_paths:
+        data = _json.loads(fp.read_text())
+        meta = data.get("_meta", {})
+        citation = meta.get("citation", "")
+        if citation:
+            all_citations.append(citation)
+        all_requirements.update(meta.get("requirements", []))
+
+    target_ids = ["ANLZ-01", "ANLZ-02", "ANLZ-03", "VERD-01"]
+    for req_id in target_ids:
+        in_citation = any(req_id in c for c in all_citations)
+        in_requirements = req_id in all_requirements
+        assert in_citation or in_requirements, (
+            f"Phase 14 requirement {req_id} not found in any fixture's "
+            f"_meta.citation or _meta.requirements (citations checked: "
+            f"{len(all_citations)}; requirements set: {sorted(all_requirements)})"
         )
 
 
