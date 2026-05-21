@@ -78,6 +78,15 @@ household:
     insurance_monthly: "0.00"          # Decimal string; consumed by AFFD-04 PITI composition
     hoa_monthly: "0.00"                # Decimal string; default "0.00" when no HOA
 
+  # Phase 15 addition (OQ1/A1): liquid post-closing reserves in dollars; used by
+  # affordability stress paths. Defaults to $0.00 if omitted.
+  liquid_reserves: "0.00"
+
+  # Phase 15 addition (OQ1/A1): the down-payment percentage you'd actually use
+  # if buying today (3-decimal precision, e.g., 0.200000 = 20%). Drives stress
+  # block + the YOUR FIT preferred-DP column bolding. Defaults to 0.200000 if omitted.
+  preferred_down_payment_pct: "0.200000"
+
   # Phase 4 VA-only inputs (D-15 optional; REQUIRED at request boundary when
   # target_loan_type=="va" per RESEARCH Open Question #7).
   # AffordabilityRequest's @model_validator(mode="after") raises ValidationError
