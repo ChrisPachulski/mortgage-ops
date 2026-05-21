@@ -1,18 +1,22 @@
-"""Phase 12 Wave-6 complete: 22 prompts + 22 oracles + three-bucket gate end-to-end.
+"""Phase 12 Wave-6 + Plan 15-05 complete: 23 prompts + 23 oracles + three-bucket gate end-to-end.
 
 Plan 12-04 shipped HarnessReport + three-bucket aggregator (pass | fail | skip
 per D-12-SC4-01). Plan 12-05 shipped 22 prompt files (21 mode-coverage + 1
 live-rate-injection per D-12-SC1-01) and flipped the 22-count + per-mode xfails.
 Plan 12-06 ships 22 paired oracle JSON files (EVAL-02) and flips the final xfail.
+Plan 15-05 adds the 23rd prompt (property-analysis-01) closing ROADMAP SC-6;
+the per-mode coverage list stays at the 7 Phase 12 modes (property is a Phase
+15 mode added on top, not part of the SC-5 7-mode invariant).
 
 0 tests xfailed in this module — Wave 0..6 all green end-to-end.
 
 Requirements covered:
-  - EVAL-01 + D-12-SC1-01: 22 prompts total (21 mode-coverage + 1 live-rate-injection)
-  - SC-5: every one of 7 modes has >=1 prompt
+  - EVAL-01 + D-12-SC1-01: 23 prompts total (21 mode-coverage + 1 live-rate-injection + 1 property-analysis)
+  - SC-5: every one of 7 Phase 12 modes has >=1 prompt
   - EVAL-02: every prompt has a paired oracle (1:1 by stem)
   - EVAL-03 + D-12-SC4-01: three-bucket gate denominator excludes numeric_skip
   - D-12-SC4-01: TBD prompts surface as SKIP, not PASS
+  - SC-6: property-analysis-01 prompt exercises full property mode end-to-end
 """
 
 from __future__ import annotations
@@ -37,18 +41,20 @@ ALL_MODES = (
 """SC-5: every mode in the v1 prompt set must have >=1 prompt."""
 
 
-def test_evals_prompts_dir_has_22_prompts() -> None:
-    """EVAL-01 + D-12-SC1-01: 22 prompts total. 21 mode-coverage (3 x 7) + 1
-    live-rate-injection. Flipped from xfail by Plan 12-05."""
+def test_evals_prompts_dir_has_23_prompts() -> None:
+    """EVAL-01 + D-12-SC1-01 + ROADMAP SC-6: 23 prompts total. 21 mode-coverage
+    (3 x 7) + 1 live-rate-injection (Plan 12-05) + 1 property-analysis (Plan
+    15-05). Phase 12 baseline was 22; Plan 15-05 adds property-analysis-01.md
+    against the Phase 15 synthetic SFH fixture to close ROADMAP SC-6."""
     md_files = [p for p in PROMPTS_DIR.glob("*.md") if p.stem != ".gitkeep"]
-    assert len(md_files) == 22, f"expected 22 prompts, got {len(md_files)}"
+    assert len(md_files) == 23, f"expected 23 prompts, got {len(md_files)}"
 
 
 @pytest.mark.parametrize("mode", ALL_MODES)
 def test_each_mode_has_at_least_one_prompt(mode: str) -> None:
     """SC-5: every one of 7 modes must have >=1 prompt with `mode: {name}` frontmatter.
     Flipped from xfail by Plan 12-05."""
-    import frontmatter  # type: ignore[import-untyped]
+    import frontmatter  # type: ignore[import-not-found]
 
     matches = []
     for p in PROMPTS_DIR.glob("*.md"):

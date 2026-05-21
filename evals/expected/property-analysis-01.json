@@ -6,7 +6,7 @@
   "expected_scripts": [
     {
       "script": "property_analyze.py",
-      "args_must_include": ["--listing", "--household", "--profile"]
+      "args_must_include": ["--listing", "--household", "--profile", "--output-dir"]
     }
   ],
   "expected_numbers": [
@@ -28,13 +28,13 @@
     },
     {
       "label": "verdict_reasons_count",
-      "value": "1.0",
+      "value": "3.0",
       "tolerance": "0.0",
       "source_script": "property_analyze.py",
       "numeric_status": "anchored",
       "provenance": "stdout"
     }
   ],
-  "expected_route_keywords": ["property", "property_analyze.py", "GO"],
-  "v1_frozen_at": "2026-05-20"
+  "expected_route_keywords": ["property", "property_analyze.py", "WATCH"],
+  "v1_frozen_at": "2026-05-21"
 }
