@@ -69,12 +69,12 @@ User selected **fine** — 6 phases, bottom-up. Phases 13-18 continue v1.0 numbe
   5. Every numeric field in the report carries citation footer `Computed by: scripts/{name}.py {args}` per Phase 11 stress-test-agent precedent.
   6. Eval: a new prompt `evals/prompts/property-analysis-01.md` exercises the full property mode against a pinned Zillow HTML fixture; oracle pins the expected verdict + 3 numeric fields. `python -m evals.runner` still exits 0 (route_match + numeric_match ≥ 0.95).
 
-**Plans:** 5 plans
+**Plans:** 1/5 plans executed
 
 Plans:
 **Wave 1**
 
-- [ ] 15-01-PLAN.md — Wave 0: test scaffolding + synthetic fixtures + eval oracle stub (RPRT-01, RPRT-02, MODE-01..03)
+- [x] 15-01-PLAN.md — Wave 0: test scaffolding + synthetic fixtures + eval oracle stub (RPRT-01, RPRT-02, MODE-01..03)
 - [ ] 15-02-PLAN.md — Wave 1: `lib/property_report.py` AnalysisReport → markdown formatter (RPRT-01, RPRT-02)
 - [ ] 15-03-PLAN.md — Wave 1: `scripts/property_analyze.py` orchestrator (always-exit-0; sidecar listing; NNN sequencer) + `config/household.example.yml` extension (MODE-03)
 

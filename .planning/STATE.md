@@ -3,14 +3,14 @@ gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Property Analysis Mode
 status: executing
-stopped_at: Phase 15 context gathered
-last_updated: "2026-05-21T07:30:57.141Z"
-last_activity: 2026-05-21 -- Phase 15 planning complete
+stopped_at: Completed 15-01-PLAN.md (3 tasks, 6 files, 34 test stubs)
+last_updated: "2026-05-21T07:46:44.602Z"
+last_activity: 2026-05-21
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 18
-  completed_plans: 13
+  completed_plans: 14
   percent: 33
 ---
 
@@ -21,17 +21,17 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-26)
 
 **Core value:** Math correctness first — every dollar figure traces to a tested, deterministic Python function; the LLM is a router and narrator that never owns numbers.
-**Current focus:** Phase 14 — property-analysis-pipeline
+**Current focus:** Phase 15 — property-skill-mode-report-formatter
 
 ## Current Position
 
 Milestone: v1.1 Property Analysis Mode (just started)
-Phase: 14 — COMPLETE
-Plan: 6 of 6
+Phase: 15 (property-skill-mode-report-formatter) — EXECUTING
+Plan: 2 of 5
 Status: Ready to execute
-Last activity: 2026-05-21 -- Phase 15 planning complete
+Last activity: 2026-05-21
 
-Progress: [██████████] 100%
+Progress: [████████░░] 78%
 
 ### Phase 13 closure (2026-05-16)
 
@@ -236,6 +236,7 @@ Previous resume narrative for Plan 07-04 / Wave 3 (Phase 7 Wave 3 closes clean �
 | Phase 14 P04 | 7 min | 2 tasks | 2 files |
 | Phase 14 P05 | 30min | 2 tasks | 2 files |
 | Phase 14 P06 | 25min | 3 tasks | 6 files |
+| Phase 15 P15-01 | ~9min | - tasks | - files |
 
 ## Accumulated Context
 
@@ -468,6 +469,8 @@ Recent decisions affecting current work:
 - [Phase 14]: Local-import-for-circular-resolve: lib.property_verdict.synthesize imported inside analyze() body to break circular dependency with property_analysis output models — Module-top import would form lib.property_analysis -> lib.property_verdict -> lib.property_analysis cycle; function-scope import resolves at first call and still satisfies the grep acceptance
 - [Phase 14]: Catch upstream NotImplementedError in _build_program_result for FHA/VA over-county-ceiling cases — D-14-MATRIX-02 mandates explicit-ineligible-rows; without the catch, jumbo listings crash the whole analyze() composition. Surfaces HUD-LIMIT-CEILING-EXCEEDED / VA-LIMIT-CEILING-EXCEEDED blocker codes instead.
 - [Phase ?]: Plan 14-06: 3 hand-calc golden fixtures + fixture-first citation coverage close Phase 14 SC-7
+- [Phase ?]: Plan 15-01 Wave 0: 34 RED test stubs (15+11+8) targeting unbuilt formatter/orchestrator/SKILL-Row-0/mode-file; xfail/fail until Plans 15-02..15-04 ship
+- [Phase ?]: Plan 15-01 oracle anchors: conv30_preferred_dp_piti=3760.34 (P&I=3160.34 + 500 tax + 100 ins on $500k @ 6.5%/30yr LTV=0.80); first_year_interest_conv30=32335.43; verdict_reasons_count=1.0; verdict.level=GO pinned via expected_route_keywords per D-15-EVAL-03 + A4
 
 ### Pending Todos
 
@@ -493,6 +496,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-05-21T06:16:44.089Z
-Stopped at: Phase 15 context gathered
-Resume file: .planning/phases/15-property-skill-mode-report-formatter/15-CONTEXT.md
+Last session: 2026-05-21T07:46:44.591Z
+Stopped at: Completed 15-01-PLAN.md (3 tasks, 6 files, 34 test stubs)
+Resume file: Plan 15-02 next: lib/property_report.py (Wave 1 GREEN of RPRT-01 + RPRT-02)
