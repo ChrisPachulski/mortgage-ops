@@ -22,6 +22,7 @@ Determine the mode from the user's input:
 
 | Input pattern | Mode | Script |
 |---|---|---|
+| Zillow URL substring (`zillow.com`) OR phrase `"analyze listing"` | `property` | `scripts/property_analyze.py` |
 | Single loan + payment question (`"$400k @ 6.5%/30yr, what's my payment?"`) | `evaluate` | `scripts/amortize.py` + `lib.affordability` composition |
 | Multiple offers, "compare", "rank by NPV" | `compare` | `scripts/refi_npv.py` per offer |
 | "refi", "refinance", "should I refi" | `refinance` | `scripts/refi_npv.py` |
@@ -36,6 +37,8 @@ Phase X" placeholder routing.)
 
 Precedence (top wins; UI-SPEC §a):
 
+0. URL pin: `zillow.com` substring OR phrase "analyze listing"
+                                  → `property` (HIGHEST — overrides ALL verbs and explicit slash-commands)
 1. Explicit sub-command           → `/mortgage-ops {mode}`
 2. "refinance" / "refi" verb      → `refinance` (overrides arm/amortize/stress vocabulary)
 3. "afford" / "borrow" verb       → `affordability` (overrides amortize)
@@ -132,7 +135,7 @@ anthropics/skills/skills/webapp-testing/SKILL.md per RESEARCH §(b).)
 ## Loading Additional Context
 
 When you decide on a mode, read `modes/_shared.md` first (always — D-10),
-then read `modes/{mode}.md`.
+then read `modes/{mode}.md` (e.g., `modes/property.md` for Zillow URL-pin dispatch).
 
 When the user explicitly asks for a regulatory citation, formula derivation,
 or methodology explanation AND the topic matches one of these references,
