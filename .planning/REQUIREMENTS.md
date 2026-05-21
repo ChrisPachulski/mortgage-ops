@@ -47,8 +47,8 @@ The math layer is complete. v1.1 is **composition + ingestion + a new report for
 
 ### Report Formatter
 
-- [ ] **RPRT-01**: `lib/property_report.py` emits markdown to `reports/{NNN}-property-{zpid}-{YYYY-MM-DD}.md` mirroring Phase 11 amortization-agent's "markdown table OR CSV path" contract. Markdown layout matches the mockup: header (address / price / Zestimate delta / tax-HOA-insurance escrow), `## YOUR FIT` section with program × DP matrix, `## RATE STRESS` + `## POINTS BREAKEVEN` + `## REFI OPPORTUNITY` + `## TAX` sections, `## VERDICT` synthesis at bottom.
-- [ ] **RPRT-02**: Every numeric field in the report carries citation footer `Computed by: scripts/{name}.py {args}` per Phase 11 stress-test-agent precedent + Phase 12 D-12-SC3-01 stdout-only sourcing.
+- [x] **RPRT-01**: `lib/property_report.py` emits markdown to `reports/{NNN}-property-{zpid}-{YYYY-MM-DD}.md` mirroring Phase 11 amortization-agent's "markdown table OR CSV path" contract. Markdown layout matches the mockup: header (address / price / Zestimate delta / tax-HOA-insurance escrow), `## YOUR FIT` section with program × DP matrix, `## RATE STRESS` + `## POINTS BREAKEVEN` + `## REFI OPPORTUNITY` + `## TAX` sections, `## VERDICT` synthesis at bottom.
+- [x] **RPRT-02**: Every numeric field in the report carries citation footer `Computed by: scripts/{name}.py {args}` per Phase 11 stress-test-agent precedent + Phase 12 D-12-SC3-01 stdout-only sourcing.
 
 ### Reference Data
 

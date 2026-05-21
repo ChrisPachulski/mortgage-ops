@@ -4,13 +4,13 @@ milestone: v1.1
 milestone_name: Property Analysis Mode
 status: executing
 stopped_at: Completed 15-01-PLAN.md (3 tasks, 6 files, 34 test stubs)
-last_updated: "2026-05-21T07:46:44.602Z"
+last_updated: "2026-05-21T08:04:57.331Z"
 last_activity: 2026-05-21
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 18
-  completed_plans: 14
+  completed_plans: 15
   percent: 33
 ---
 
@@ -27,11 +27,11 @@ See: .planning/PROJECT.md (updated 2026-04-26)
 
 Milestone: v1.1 Property Analysis Mode (just started)
 Phase: 15 (property-skill-mode-report-formatter) — EXECUTING
-Plan: 2 of 5
+Plan: 3 of 5
 Status: Ready to execute
 Last activity: 2026-05-21
 
-Progress: [████████░░] 78%
+Progress: [████████░░] 83%
 
 ### Phase 13 closure (2026-05-16)
 
@@ -237,6 +237,7 @@ Previous resume narrative for Plan 07-04 / Wave 3 (Phase 7 Wave 3 closes clean �
 | Phase 14 P05 | 30min | 2 tasks | 2 files |
 | Phase 14 P06 | 25min | 3 tasks | 6 files |
 | Phase 15 P15-01 | ~9min | - tasks | - files |
+| Phase 15 P15-02 | ~9min | 1 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -471,6 +472,11 @@ Recent decisions affecting current work:
 - [Phase ?]: Plan 14-06: 3 hand-calc golden fixtures + fixture-first citation coverage close Phase 14 SC-7
 - [Phase ?]: Plan 15-01 Wave 0: 34 RED test stubs (15+11+8) targeting unbuilt formatter/orchestrator/SKILL-Row-0/mode-file; xfail/fail until Plans 15-02..15-04 ship
 - [Phase ?]: Plan 15-01 oracle anchors: conv30_preferred_dp_piti=3760.34 (P&I=3160.34 + 500 tax + 100 ins on $500k @ 6.5%/30yr LTV=0.80); first_year_interest_conv30=32335.43; verdict_reasons_count=1.0; verdict.level=GO pinned via expected_route_keywords per D-15-EVAL-03 + A4
+- [Phase ?]: Preferred-DP derived from report.stress.preferred_down_payment_pct (StressBlock pins the chosen DP; AnalysisReport is frozen+extra=forbid)
+- [Phase ?]: Header title uses ZPID-only fallback (PropertyListing has no address field per Phase 13 D-13-MUSTHAVE-01)
+- [Phase ?]: stress_kind arm_reset label = 'ARM reset 5/1 @ peak cap' (contiguous-substring requirement from Wave 0 test)
+- [Phase ?]: Matrix cells use whole-dollar display (_fmt_money_whole) per Pitfall 11; cents preserved upstream in ProgramResult.piti
+- [Phase ?]: TAX over-cap callout emits '**see CPA**' inline; never computes partial-deduction dollars per Assumption A8 + CLAUDE.md calc-engine separation
 
 ### Pending Todos
 
@@ -496,6 +502,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-05-21T07:46:44.591Z
+Last session: 2026-05-21T08:04:49.856Z
 Stopped at: Completed 15-01-PLAN.md (3 tasks, 6 files, 34 test stubs)
-Resume file: Plan 15-02 next: lib/property_report.py (Wave 1 GREEN of RPRT-01 + RPRT-02)
+Resume file: None
