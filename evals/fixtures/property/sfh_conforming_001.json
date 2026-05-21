@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "id": "sfh_conforming_001",
+  "source": "Phase 15 D-15-EVAL-01 synthetic eval fixture; mirrors tests/fixtures/property_analysis/sfh_conforming_king_county.json shape with new synthetic zpid=1 + fetched_at=2026-05-20T14:32:11Z. Hand-calc anchors per RESEARCH lines 760-767: Conv30 @ 6.50%/30yr on $500,000 → monthly_pi=$3160.34; first-year interest sum=$32,335.43. PITI composition per Pitfall 6: tax_monthly=$500.00, insurance_monthly=$100.00, HOA=$0.00 (SFH), PMI=$0.00 (LTV=0.80 exact). DTI back-end uses $14,000/mo income + $800/mo obligations → (3760.34+800)/14000 = 0.325739.",
+  "rounding": "ROUND_HALF_UP",
+  "notes": "Synthetic Phase 11 D-02 fixture: no PII, no real address, synthetic source_url + zpid='1'. Hand-calc anchors are re-derivable from listing + household via lib.amortize.build_schedule + lib.property_analysis.analyze. Cascade verdict expected: GO-ALL-GREEN level=GO, 1 reason (count of non-FHA eligible programs at preferred 20% DP = Conv30 + Conv15 = 2). Plan 15-05 may revise oracle numerics ±0.50 after the orchestrator actually runs against this fixture.",
+  "_meta": {
+    "citation": "Phase 15 D-15-EVAL-01 synthetic fixture; hand-calc anchors per RESEARCH lines 760-767",
+    "engine_version": "v1.1",
+    "requirements": [
+      "MODE-01",
+      "MODE-02",
+      "MODE-03",
+      "RPRT-01",
+      "RPRT-02"
+    ]
+  },
+  "listing": {
+    "price": {"value": "625000.00", "provenance": "scraped"},
+    "zip": "98101",
+    "property_type": "SFH",
+    "tax_annual": {"value": "6000.00", "provenance": "scraped"},
+    "insurance_estimate_annual": {"value": "1200.00", "provenance": "scraped"},
+    "hoa_monthly": {"value": "0.00", "provenance": "scraped"},
+    "source_url": "https://www.zillow.com/homedetails/synthetic/1_zpid/",
+    "zpid": "1",
+    "fetched_at": "2026-05-20T14:32:11Z"
+  },
+  "household": {
+    "monthly_income": "14000.00",
+    "monthly_obligations": "800.00",
+    "fico": 760,
+    "liquid_reserves": "80000.00",
+    "state_fips": "53",
+    "county_fips": "033",
+    "county_name": "King",
+    "preferred_down_payment_pct": "0.200000"
+  },
+  "profile": {
+    "va_eligible": false,
+    "first_time_buyer": false,
+    "military_status": "none",
+    "filing_status": "mfj",
+    "marginal_tax_rate": "0.24"
+  },
+  "fred_rates": {
+    "MORTGAGE30US": "0.065000",
+    "MORTGAGE15US": "0.058000"
+  },
+  "expected_response": {
+    "verdict": {
+      "level": "GO",
+      "headline_reason": "2 non-FHA program(s) eligible at preferred DP 0.200000",
+      "reasons": [
+        {
+          "predicate_code": "GO-ALL-GREEN",
+          "computed_value": "2",
+          "program": null,
+          "dp_pct": null
+        }
+      ]
+    },
+    "matrix": {
+      "cells_count": 18,
+      "programs_present": ["Conv30", "Conv15", "FHA30"],
+      "down_payment_pcts": ["0.03", "0.05", "0.10", "0.15", "0.20", "0.25"],
+      "preferred_dp_cells": [
+        {
+          "program": "Conv30",
+          "dp_pct": "0.200000",
+          "loan_amount": "500000.00",
+          "monthly_pi": "3160.34",
+          "monthly_tax": "500.00",
+          "monthly_insurance": "100.00",
+          "monthly_hoa": "0.00",
+          "monthly_mi": "0.00",
+          "piti": "3760.34",
+          "dti_back": "0.325739",
+          "ltv": "0.800000",
+          "eligible": true,
+          "blocker_reasons": [],
+          "eligible_reasons": []
+        },
+        {
+          "program": "Conv15",
+          "dp_pct": "0.200000",
+          "loan_amount": "500000.00",
+          "monthly_pi": "4165.45",
+          "monthly_tax": "500.00",
+          "monthly_insurance": "100.00",
+          "monthly_hoa": "0.00",
+          "monthly_mi": "0.00",
+          "piti": "4765.45",
+          "dti_back": "0.397532",
+          "ltv": "0.800000",
+          "eligible": true,
+          "blocker_reasons": [],
+          "eligible_reasons": []
+        },
+        {
+          "program": "FHA30",
+          "dp_pct": "0.200000",
+          "loan_amount": "508750.00",
+          "monthly_pi": "3215.65",
+          "monthly_tax": "500.00",
+          "monthly_insurance": "100.00",
+          "monthly_hoa": "0.00",
+          "monthly_mi": "211.98",
+          "piti": "4027.63",
+          "dti_back": "0.344831",
+          "ltv": "0.814000",
+          "eligible": true,
+          "blocker_reasons": [],
+          "eligible_reasons": []
+        }
+      ]
+    },
+    "tax": {
+      "qualified_loan_limit": "750000.00",
+      "over_750k_cap_per_program": {
+        "Conv30": false,
+        "Conv15": false,
+        "FHA30": false
+      },
+      "first_year_interest_per_program": {
+        "Conv30": "32335.43",
+        "Conv15": "28433.05",
+        "FHA30": "32901.32"
+      },
+      "filing_status": "mfj"
+    },
+    "warnings": []
+  }
+}

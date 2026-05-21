@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "id": "property-analysis-01",
+  "mode": "property",
+  "numeric_status": "anchored",
+  "expected_scripts": [
+    {
+      "script": "property_analyze.py",
+      "args_must_include": ["--listing", "--household", "--profile"]
+    }
+  ],
+  "expected_numbers": [
+    {
+      "label": "conv30_preferred_dp_piti",
+      "value": "3760.34",
+      "tolerance": "0.50",
+      "source_script": "property_analyze.py",
+      "numeric_status": "anchored",
+      "provenance": "stdout"
+    },
+    {
+      "label": "first_year_interest_conv30",
+      "value": "32335.43",
+      "tolerance": "0.50",
+      "source_script": "property_analyze.py",
+      "numeric_status": "anchored",
+      "provenance": "stdout"
+    },
+    {
+      "label": "verdict_reasons_count",
+      "value": "1.0",
+      "tolerance": "0.0",
+      "source_script": "property_analyze.py",
+      "numeric_status": "anchored",
+      "provenance": "stdout"
+    }
+  ],
+  "expected_route_keywords": ["property", "property_analyze.py", "GO"],
+  "v1_frozen_at": "2026-05-20"
+}
