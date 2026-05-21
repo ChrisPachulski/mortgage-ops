@@ -19,7 +19,7 @@ User selected **fine** — 6 phases, bottom-up. Phases 13-18 continue v1.0 numbe
 
 - [x] **Phase 13: Property Ingestion** - WebFetch + `__NEXT_DATA__` extraction + interactive gap-fill + `PropertyListing` Pydantic model + DuckDB `analyzed_listings` table
 - [x] **Phase 14: Property Analysis Pipeline** - Multi-program fan-out (Conv 30/15, FHA, VA, Jumbo) × DP sweep (3/5/10/15/20/25%) + auto-stress + breakeven + refi + IRS Pub 936 + GO/WATCH/NO-GO verdict (completed 2026-05-18)
-- [ ] **Phase 15: `property` Skill Mode + Report Formatter** - `modes/property.md` URL-pin routing + `scripts/property_analyze.py` orchestrator + `lib/property_report.py` markdown emitter to `reports/{NNN}-property-{zpid}-{YYYY-MM-DD}.md`
+- [x] **Phase 15: `property` Skill Mode + Report Formatter** - `modes/property.md` URL-pin routing + `scripts/property_analyze.py` orchestrator + `lib/property_report.py` markdown emitter to `reports/{NNN}-property-{zpid}-{YYYY-MM-DD}.md` (completed 2026-05-21)
 - [ ] **Phase 16: Reference Data** - `data/reference/property-analysis-heuristics.yml` (PMI tables, FHA county limits, jumbo cutoffs) + `insurance-estimate-defaults.yml` (per-state HOI averages)
 - [ ] **Phase 17: Tests + Fixtures** - 5 pinned Zillow HTML fixtures + paired golden-value `expected_report.md` files + citation-coverage meta-test
 - [ ] **Phase 18: References + Docs** - `references/property-analysis.md` (≥250 lines, 6-section template + Citation Index) + CLAUDE.md cross-link + SKILL.md references-table extension
@@ -69,7 +69,7 @@ User selected **fine** — 6 phases, bottom-up. Phases 13-18 continue v1.0 numbe
   5. Every numeric field in the report carries citation footer `Computed by: scripts/{name}.py {args}` per Phase 11 stress-test-agent precedent.
   6. Eval: a new prompt `evals/prompts/property-analysis-01.md` exercises the full property mode against a pinned Zillow HTML fixture; oracle pins the expected verdict + 3 numeric fields. `python -m evals.runner` still exits 0 (route_match + numeric_match ≥ 0.95).
 
-**Plans:** 4/5 plans executed
+**Plans:** 5/5 plans complete
 
 Plans:
 **Wave 1**
@@ -81,7 +81,7 @@ Plans:
 **Wave 2** *(blocked on Wave 1 completion)*
 
 - [x] 15-04-PLAN.md — Wave 2: `.claude/skills/mortgage-ops/modes/property.md` + SKILL.md Row 0 routing insertion (MODE-01, MODE-02)
-- [ ] 15-05-PLAN.md — Wave 2: `evals/prompts/property-analysis-01.md` + oracle reconciliation + evals.runner smoke (SC-6)
+- [x] 15-05-PLAN.md — Wave 2: `evals/prompts/property-analysis-01.md` + oracle reconciliation + evals.runner smoke (SC-6)
 
 ### Phase 16: Reference Data
 

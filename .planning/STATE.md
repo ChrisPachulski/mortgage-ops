@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v1.1
 milestone_name: Property Analysis Mode
-status: executing
+status: verifying
 stopped_at: Completed 15-01-PLAN.md (3 tasks, 6 files, 34 test stubs)
-last_updated: "2026-05-21T08:36:36.362Z"
+last_updated: "2026-05-21T08:54:18.620Z"
 last_activity: 2026-05-21
 progress:
   total_phases: 6
-  completed_phases: 2
+  completed_phases: 3
   total_plans: 18
-  completed_plans: 17
-  percent: 33
+  completed_plans: 18
+  percent: 50
 ---
 
 # Project State
@@ -28,10 +28,10 @@ See: .planning/PROJECT.md (updated 2026-04-26)
 Milestone: v1.1 Property Analysis Mode (just started)
 Phase: 15 (property-skill-mode-report-formatter) — EXECUTING
 Plan: 5 of 5
-Status: Ready to execute
+Status: Phase complete — ready for verification
 Last activity: 2026-05-21
 
-Progress: [█████████░] 94%
+Progress: [██████████] 100%
 
 ### Phase 13 closure (2026-05-16)
 
@@ -239,6 +239,7 @@ Previous resume narrative for Plan 07-04 / Wave 3 (Phase 7 Wave 3 closes clean �
 | Phase 15 P15-01 | ~9min | - tasks | - files |
 | Phase 15 P15-02 | ~9min | 1 tasks | 2 files |
 | Phase 15 P04 | 7min | 2 tasks | 2 files |
+| Phase 15 P05 | 12 | 1 tasks | 4 files |
 
 ## Accumulated Context
 
@@ -481,6 +482,12 @@ Recent decisions affecting current work:
 - [Phase ?]: Plan 15-03: ship property_analyze.py orchestrator (488 lines, always-exit-0, MODE-03 complete)
 - [Phase ?]: Plan 15-04: URL-pin Row 0 dispatch — zillow.com substring OR 'analyze listing' phrase routes to property mode at HIGHEST precedence (overrides slash-commands + all verbs); SKILL.md token budget 3796/4500
 - [Phase ?]: Plan 15-04: modes/property.md SKIPS Save Report flow (no orchestration/db-write.mjs) — DuckDB persistence of analyzed_listings deferred to v1.2 watchlist; same-day re-runs deduped via -rN filename suffix
+- [Phase ?]: Plan 15-05: reconcile oracle verdict.level GO -> WATCH (Wave 0 hand-calc assumed wrong household)
+- [Phase ?]: Plan 15-05: verdict_reasons_count 1.0 -> 3.0 reconciled (all 3 eligible programs breach DTI under -30% income shock on committed household.example.yml)
+- [Phase ?]: Plan 15-05: pin verdict.level via expected_route_keywords (live-rate-injection-01 precedent; NUMBER_REGEX requires decimal point)
+- [Phase ?]: Plan 15-05: PITI + first-year-interest anchors held to-the-cent from Wave 0 (listing-driven; household-independent); no tolerance widening needed
+- [Phase ?]: Plan 15-05: v1_frozen_at 2026-05-21 stamps regression baseline; future orchestrator drift surfaces as route_match or numeric_match below 0.95
+- [Phase ?]: Plan 15-05: Phase 12 baseline test pins updated 22 -> 23 prompts and 13 -> 14 numeric_pass (Rule 1 deliberate +1 per ROADMAP SC-6)
 
 ### Pending Todos
 
@@ -506,6 +513,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-05-21T08:36:28.295Z
+Last session: 2026-05-21T08:53:38.439Z
 Stopped at: Completed 15-01-PLAN.md (3 tasks, 6 files, 34 test stubs)
 Resume file: None
