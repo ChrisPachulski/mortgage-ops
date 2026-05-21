@@ -46,14 +46,16 @@ household:
   # min across applicants for Fannie LLPA + Freddie eligibility lookups (D-05).
   applicants:
     - name: "Applicant A"              # Display name only, not a legal identifier
-      gross_monthly_income: "0.00"     # Decimal string; D-06 sums across applicants
-      credit_score: 0                  # FICO 300-850; D-05 picks min across applicants for
+      gross_monthly_income: "5000.00"  # Decimal string; D-06 sums across applicants.
+                                       # Placeholder default; REPLACE with your real income.
+      credit_score: 700                # FICO 300-850; D-05 picks min across applicants for
                                        # Fannie LLPA + Freddie eligibility (caller supplies their
                                        # representative middle-of-three; mid-of-3 modeling out
-                                       # of v1 scope per CONTEXT.md D-05)
+                                       # of v1 scope per CONTEXT.md D-05). Placeholder default
+                                       # of 700 is illustrative; REPLACE with your real FICO.
     - name: "Applicant B"
-      gross_monthly_income: "0.00"
-      credit_score: 0
+      gross_monthly_income: "5000.00"  # Placeholder default; REPLACE with your real income.
+      credit_score: 700                # Placeholder default; REPLACE with your real FICO.
 
   # Monthly debts that count toward back-end DTI (excluded from front-end DTI per
   # standard mortgage convention). Sum is added to PITI for back-end DTI ratio.

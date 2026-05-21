@@ -16,7 +16,7 @@
     ]
   },
   "listing": {
-    "price": {"value": "625000.00", "provenance": "scraped"},
+    "price": "625000.00",
     "zip": "98101",
     "property_type": "SFH",
     "tax_annual": {"value": "6000.00", "provenance": "scraped"},

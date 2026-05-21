@@ -4,26 +4,37 @@
 # config/profile.yml is in the User Layer (per DATA_CONTRACT.md): gitignored
 # and never auto-updated by any system process.
 #
-# Phase 10 (Claude Skill Frontend) consumes this schema. Phase 1 ships only this
-# redacted example so DATA_CONTRACT.md can cite a real path.
+# Phase 14 (Property Analysis Pipeline) consumes this schema via lib.profile.Profile
+# (frozen, strict, extra="forbid"). The fields here map 1:1 onto Profile's
+# eligibility + preference attributes — adding any other key WILL cause
+# Pydantic to reject the file at orchestrator-load time (D-14-MODELS-02).
+#
+# Phase 15 Plan 15-03 orchestrator path:
+#   raw = yaml.safe_load(profile.example.yml)["profile"]
+#   profile = Profile(**raw)
 
 profile:
-  # Display preferences for generated reports and skill output.
-  display:
-    money_format: "USD"         # Reserved; Phase 10 uses this
-    rate_format: "percent"      # "percent" => 6.5%, "decimal" => 0.065
-    decimal_places_money: 2
-    decimal_places_rate: 4
+  # Phase 14 D-14-MODELS-02: program-eligibility booleans + filing/tax preferences.
+  # All fields are OPTIONAL on the Pydantic model (Profile has defaults for each),
+  # but listing them here makes the example self-documenting for new users.
 
-  # Default assumptions for "what if" runs when the user does not specify.
-  defaults:
-    term_months: 360            # 30-year default
-    rate_source: "FRED:MORTGAGE30US"  # Phase 12 FRED MCP (LIVE-01)
-    extra_principal_monthly: "0.00"
+  # Gate for VA30 program inclusion in the matrix fan-out (Plan 14-02).
+  # Set to true if you have a VA Certificate of Eligibility (COE).
+  va_eligible: false
 
-  # Per-mode behavior overrides (Phase 10).
-  modes:
-    affordability:
-      max_back_end_dti: "0.43"
-    refinance:
-      assumed_holding_period_months: 60
+  # Informational flag for future FHA UFMIP exemptions / state-DPA hooks.
+  # Default false; no Phase 14 computation depends on it yet.
+  first_time_buyer: false
+
+  # Used by Plan 14-02 VA funding-fee lookup (Literal: active|veteran|reserve|none).
+  # Default "none" when va_eligible is false.
+  military_status: "none"
+
+  # Drives the IRS Pub 936 deductibility computation in Plan 14-03 TaxBlock
+  # (Literal: single|mfj|mfs|hoh).
+  filing_status: "mfj"
+
+  # Optional Decimal-string rate; when set, Plan 14-03 multiplies it by first-year
+  # deductible interest to estimate after-tax savings. Leave as null (or omit)
+  # if you don't want a tax-adjusted preview.
+  marginal_tax_rate: "0.24"
