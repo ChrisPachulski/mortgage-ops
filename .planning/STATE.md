@@ -4,13 +4,13 @@ milestone: v1.1
 milestone_name: Property Analysis Mode
 status: executing
 stopped_at: Completed 15-01-PLAN.md (3 tasks, 6 files, 34 test stubs)
-last_updated: "2026-05-21T08:22:04.452Z"
+last_updated: "2026-05-21T08:36:36.362Z"
 last_activity: 2026-05-21
 progress:
   total_phases: 6
   completed_phases: 2
   total_plans: 18
-  completed_plans: 16
+  completed_plans: 17
   percent: 33
 ---
 
@@ -27,11 +27,11 @@ See: .planning/PROJECT.md (updated 2026-04-26)
 
 Milestone: v1.1 Property Analysis Mode (just started)
 Phase: 15 (property-skill-mode-report-formatter) — EXECUTING
-Plan: 4 of 5
+Plan: 5 of 5
 Status: Ready to execute
 Last activity: 2026-05-21
 
-Progress: [█████████░] 89%
+Progress: [█████████░] 94%
 
 ### Phase 13 closure (2026-05-16)
 
@@ -238,6 +238,7 @@ Previous resume narrative for Plan 07-04 / Wave 3 (Phase 7 Wave 3 closes clean �
 | Phase 14 P06 | 25min | 3 tasks | 6 files |
 | Phase 15 P15-01 | ~9min | - tasks | - files |
 | Phase 15 P15-02 | ~9min | 1 tasks | 2 files |
+| Phase 15 P04 | 7min | 2 tasks | 2 files |
 
 ## Accumulated Context
 
@@ -478,6 +479,8 @@ Recent decisions affecting current work:
 - [Phase ?]: Matrix cells use whole-dollar display (_fmt_money_whole) per Pitfall 11; cents preserved upstream in ProgramResult.piti
 - [Phase ?]: TAX over-cap callout emits '**see CPA**' inline; never computes partial-deduction dollars per Assumption A8 + CLAUDE.md calc-engine separation
 - [Phase ?]: Plan 15-03: ship property_analyze.py orchestrator (488 lines, always-exit-0, MODE-03 complete)
+- [Phase ?]: Plan 15-04: URL-pin Row 0 dispatch — zillow.com substring OR 'analyze listing' phrase routes to property mode at HIGHEST precedence (overrides slash-commands + all verbs); SKILL.md token budget 3796/4500
+- [Phase ?]: Plan 15-04: modes/property.md SKIPS Save Report flow (no orchestration/db-write.mjs) — DuckDB persistence of analyzed_listings deferred to v1.2 watchlist; same-day re-runs deduped via -rN filename suffix
 
 ### Pending Todos
 
@@ -503,6 +506,6 @@ Items acknowledged and carried forward:
 
 ## Session Continuity
 
-Last session: 2026-05-21T08:21:26.336Z
+Last session: 2026-05-21T08:36:28.295Z
 Stopped at: Completed 15-01-PLAN.md (3 tasks, 6 files, 34 test stubs)
 Resume file: None

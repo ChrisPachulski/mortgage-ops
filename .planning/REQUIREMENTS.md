@@ -37,8 +37,8 @@ The math layer is complete. v1.1 is **composition + ingestion + a new report for
 
 ### `property` Skill Mode
 
-- [ ] **MODE-01**: `.claude/skills/mortgage-ops/modes/property.md` ships with routing rule: if user message contains a `zillow.com` substring OR explicit `analyze listing` phrase → dispatch to `property` mode. URL-pin overrides any mode-routing keyword collision (the URL is load-bearing).
-- [ ] **MODE-02**: SKILL.md routing block cross-references `modes/property.md` per Phase 10 D-09 progressive-disclosure convention; SKILL.md token budget preserved (≤ 4500 cl100k tokens).
+- [x] **MODE-01**: `.claude/skills/mortgage-ops/modes/property.md` ships with routing rule: if user message contains a `zillow.com` substring OR explicit `analyze listing` phrase → dispatch to `property` mode. URL-pin overrides any mode-routing keyword collision (the URL is load-bearing).
+- [x] **MODE-02**: SKILL.md routing block cross-references `modes/property.md` per Phase 10 D-09 progressive-disclosure convention; SKILL.md token budget preserved (≤ 4500 cl100k tokens).
 - [x] **MODE-03**: `property` mode invokes `scripts/property_analyze.py` (new) which orchestrates the full pipeline; never computes inline; always exits 0 with structured envelope per Phase 12 D-12-LIVE02-01 recovery contract.
 
 ### Persistence

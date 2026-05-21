@@ -69,7 +69,7 @@ User selected **fine** — 6 phases, bottom-up. Phases 13-18 continue v1.0 numbe
   5. Every numeric field in the report carries citation footer `Computed by: scripts/{name}.py {args}` per Phase 11 stress-test-agent precedent.
   6. Eval: a new prompt `evals/prompts/property-analysis-01.md` exercises the full property mode against a pinned Zillow HTML fixture; oracle pins the expected verdict + 3 numeric fields. `python -m evals.runner` still exits 0 (route_match + numeric_match ≥ 0.95).
 
-**Plans:** 3/5 plans executed
+**Plans:** 4/5 plans executed
 
 Plans:
 **Wave 1**
@@ -80,7 +80,7 @@ Plans:
 
 **Wave 2** *(blocked on Wave 1 completion)*
 
-- [ ] 15-04-PLAN.md — Wave 2: `.claude/skills/mortgage-ops/modes/property.md` + SKILL.md Row 0 routing insertion (MODE-01, MODE-02)
+- [x] 15-04-PLAN.md — Wave 2: `.claude/skills/mortgage-ops/modes/property.md` + SKILL.md Row 0 routing insertion (MODE-01, MODE-02)
 - [ ] 15-05-PLAN.md — Wave 2: `evals/prompts/property-analysis-01.md` + oracle reconciliation + evals.runner smoke (SC-6)
 
 ### Phase 16: Reference Data
