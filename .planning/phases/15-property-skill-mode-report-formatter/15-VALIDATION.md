@@ -2,7 +2,7 @@
 phase: 15
 slug: property-skill-mode-report-formatter
 status: draft
-nyquist_compliant: false
+nyquist_compliant: true
 wave_0_complete: false
 created: 2026-05-20
 ---
@@ -37,25 +37,31 @@ created: 2026-05-20
 ## Per-Task Verification Map
 
 > Populated by gsd-planner from RESEARCH.md Validation Architecture; refined per-task during planning.
+>
+> Task ID format: `{phase}-{plan}-{taskN}` (e.g., `15-01-02` = Phase 15 / Plan 01 / Task 2).
+> Plan column lists the PLAN.md that owns the implementation that turns this row GREEN.
+> Wave column reflects the wave the implementation lands in (Wave 0 = test stub; Wave 1/2 = GREEN).
 
 | Task ID | Plan | Wave | Requirement | Threat Ref | Secure Behavior | Test Type | Automated Command | File Exists | Status |
 |---------|------|------|-------------|------------|-----------------|-----------|-------------------|-------------|--------|
-| TBD | TBD | 0 | MODE-01 | — | mode-file present + URL-pin row | unit | `uv run pytest tests/test_skill_routing.py::test_property_mode_row0_present -x` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 0 | MODE-02 | — | SKILL.md ≤ 4500 cl100k tokens | unit (tiktoken) | `uv run pytest tests/test_skill_routing.py::test_skill_md_token_budget -x` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 0 | MODE-03 | T-15-V4 / T-15-V5 | orchestrator emits success envelope | subprocess | `uv run pytest tests/test_property_analyze_cli.py::test_success_envelope_shape -x` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 0 | MODE-03 | — | orchestrator emits error envelope AND exits 0 on bad input | subprocess | `uv run pytest tests/test_property_analyze_cli.py::test_error_envelope_always_exit_0 -x` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 0 | MODE-03 | T-15-V5 | Pydantic 6-key envelope on stderr | subprocess | `uv run pytest tests/test_property_analyze_cli.py::test_pydantic_validation_envelope_on_stderr -x` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 0 | MODE-03 | T-15-V4 | household.yml → Phase 14 Household mapping correct | unit | `uv run pytest tests/test_property_analyze_cli.py::test_household_yaml_mapping -x` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 0 | RPRT-01 | — | render() emits all 6 sections | unit | `uv run pytest tests/test_property_report.py::test_render_emits_six_sections -x` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 0 | RPRT-01 | — | filename matches `reports/{NNN}-property-{zpid}-{YYYY-MM-DD}.md` | unit | `uv run pytest tests/test_property_analyze_cli.py::test_filename_format -x` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 0 | RPRT-01 | — | same-day same-zpid → `-r2` suffix | unit | `uv run pytest tests/test_property_analyze_cli.py::test_same_day_zpid_suffix -x` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 0 | RPRT-01 | — | YOUR FIT matrix renders all cells; preferred-DP bolded | unit | `uv run pytest tests/test_property_report.py::test_matrix_renders_all_cells -x` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 0 | RPRT-01 | — | ineligible cells show blocker code; eligible show ✓ | unit | `uv run pytest tests/test_property_report.py::test_cell_eligibility_marks -x` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 0 | RPRT-02 | — | 6 italic citation footers (one per section) | unit | `uv run pytest tests/test_property_report.py::test_six_citation_footers -x` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 0 | RPRT-02 | — | footer is full re-runnable invocation | unit | `uv run pytest tests/test_property_report.py::test_footer_is_full_invocation -x` | ❌ W0 | ⬜ pending |
-| TBD | TBD | 0 | SC-6 | — | evals.runner exits 0 with new prompt (route + numeric ≥ 0.95) | subprocess | `uv run python -m evals.runner` | ❌ W0 | ⬜ pending |
+| 15-01-03 | 15-01 | 0 | MODE-01 | — | mode-file present + URL-pin row | unit | `uv run pytest tests/test_skill_routing.py::test_property_mode_row0_present -x` | ❌ W0 | ⬜ pending |
+| 15-01-03 | 15-01 | 0 | MODE-02 | — | SKILL.md ≤ 4500 cl100k tokens | unit (tiktoken) | `uv run pytest tests/test_skill_routing.py::test_skill_md_token_budget -x` | ❌ W0 | ⬜ pending |
+| 15-01-03 | 15-01 | 0 | MODE-03 | T-15-V4 / T-15-V5 | orchestrator emits success envelope | subprocess | `uv run pytest tests/test_property_analyze_cli.py::test_success_envelope_shape -x` | ❌ W0 | ⬜ pending |
+| 15-01-03 | 15-01 | 0 | MODE-03 | — | orchestrator emits error envelope AND exits 0 on bad input | subprocess | `uv run pytest tests/test_property_analyze_cli.py::test_error_envelope_always_exit_0 -x` | ❌ W0 | ⬜ pending |
+| 15-01-03 | 15-01 | 0 | MODE-03 | T-15-V5 | Pydantic 6-key envelope on stderr | subprocess | `uv run pytest tests/test_property_analyze_cli.py::test_pydantic_validation_envelope_on_stderr -x` | ❌ W0 | ⬜ pending |
+| 15-01-03 | 15-01 | 0 | MODE-03 | T-15-V4 | household.yml → Phase 14 Household mapping correct | unit | `uv run pytest tests/test_property_analyze_cli.py::test_household_yaml_mapping -x` | ❌ W0 | ⬜ pending |
+| 15-01-02 | 15-01 | 0 | RPRT-01 | — | render() emits all 6 sections | unit | `uv run pytest tests/test_property_report.py::test_render_emits_six_sections -x` | ❌ W0 | ⬜ pending |
+| 15-01-03 | 15-01 | 0 | RPRT-01 | — | filename matches `reports/{NNN}-property-{zpid}-{YYYY-MM-DD}.md` | unit | `uv run pytest tests/test_property_analyze_cli.py::test_filename_format -x` | ❌ W0 | ⬜ pending |
+| 15-01-03 | 15-01 | 0 | RPRT-01 | — | same-day same-zpid → `-r2` suffix | unit | `uv run pytest tests/test_property_analyze_cli.py::test_same_day_zpid_suffix -x` | ❌ W0 | ⬜ pending |
+| 15-01-02 | 15-01 | 0 | RPRT-01 | — | YOUR FIT matrix renders all cells; preferred-DP bolded | unit | `uv run pytest tests/test_property_report.py::test_matrix_renders_all_cells -x` | ❌ W0 | ⬜ pending |
+| 15-01-02 | 15-01 | 0 | RPRT-01 | — | ineligible cells show blocker code; eligible show ✓ | unit | `uv run pytest tests/test_property_report.py::test_cell_eligibility_marks -x` | ❌ W0 | ⬜ pending |
+| 15-01-02 | 15-01 | 0 | RPRT-02 | — | 6 italic citation footers (one per section) | unit | `uv run pytest tests/test_property_report.py::test_six_citation_footers -x` | ❌ W0 | ⬜ pending |
+| 15-01-02 | 15-01 | 0 | RPRT-02 | — | footer is full re-runnable invocation | unit | `uv run pytest tests/test_property_report.py::test_footer_is_full_invocation -x` | ❌ W0 | ⬜ pending |
+| 15-05-01 | 15-05 | 0 | SC-6 | — | evals.runner exits 0 with new prompt (route + numeric ≥ 0.95) | subprocess | `uv run python -m evals.runner` | ❌ W0 | ⬜ pending |
 
 *Status: ⬜ pending · ✅ green · ❌ red · ⚠️ flaky*
+
+*Note: All Wave 0 rows above are AUTHORED by Plan 15-01 Tasks 2 + 3 (test stubs + fixture + oracle). They transition GREEN as Plans 15-02 (formatter — RPRT-01/02 + render-related rows), 15-03 (orchestrator — MODE-03 rows), 15-04 (SKILL.md + mode body — MODE-01/02 rows), and 15-05 (eval prompt — SC-6 row) ship in Waves 1 and 2.*
 
 ---
 
@@ -83,11 +89,11 @@ created: 2026-05-20
 
 ## Validation Sign-Off
 
-- [ ] All tasks have `<automated>` verify or Wave 0 dependencies
-- [ ] Sampling continuity: no 3 consecutive tasks without automated verify
-- [ ] Wave 0 covers all MISSING references
-- [ ] No watch-mode flags
-- [ ] Feedback latency < 20s
-- [ ] `nyquist_compliant: true` set in frontmatter
+- [x] All tasks have `<automated>` verify or Wave 0 dependencies
+- [x] Sampling continuity: no 3 consecutive tasks without automated verify
+- [x] Wave 0 covers all MISSING references
+- [x] No watch-mode flags
+- [x] Feedback latency < 20s
+- [x] `nyquist_compliant: true` set in frontmatter
 
-**Approval:** pending
+**Approval:** approved 2026-05-20

@@ -27,11 +27,13 @@ User selected **fine** — 6 phases, bottom-up. Phases 13-18 continue v1.0 numbe
 ## Phase Details
 
 ### Phase 13: Property Ingestion
+
 **Goal**: Reliably turn a Zillow URL into a validated `PropertyListing` Pydantic record, persisted to DuckDB. Hybrid pipeline (WebFetch + Haiku-prompted extraction + interactive gap-fill); zero dependency on paid scraper APIs.
 **Status**: COMPLETED 2026-05-16 — 7 plans shipped (13-00 scaffolding, 13-01 PropertyListing, 13-02 block detector, 13-03 Sonnet extractor, 13-04 CLI orchestrator, 13-05 DuckDB persistence, 13-06 fixtures + integration test). All 7 requirements closed; 5 D-13 locks proven.
 **Depends on**: v1.0 (Phase 10 SKILL.md scaffolding + Phase 9 DuckDB + Phase 12 always-exit-0 envelope contract)
 **Requirements**: INGEST-01, INGEST-02, INGEST-03, INGEST-04, PROP-01, PROP-02, PERS-08
 **Success Criteria** (what must be TRUE):
+
   1. Given a valid Zillow URL, `scripts/property_fetch.py` returns a populated `PropertyListing` JSON envelope with `provenance` tags on every money field (`scraped | user_provided | estimated`).
   2. Captcha / 403 / non-200 responses produce a structured `{listing: null, error: ...}` envelope on stdout with exit 0 — no Python tracebacks (D-12-LIVE02-01 inherited).
   3. When MUST-HAVE fields (price, zip, property_type) are missing from `__NEXT_DATA__`, the script emits an `awaiting_user_input` envelope listing the missing fields; the skill prompts the user and re-invokes with `--user-provided '{...}'` flag.
@@ -39,10 +41,12 @@ User selected **fine** — 6 phases, bottom-up. Phases 13-18 continue v1.0 numbe
   5. Round-trip persistence: write a PropertyListing to DuckDB, read it back, assert byte-equal serialization. Lockfile pattern from Phase 9 reused verbatim.
 
 ### Phase 14: Property Analysis Pipeline
+
 **Goal**: Compose v1.0 calc primitives (amortize × affordability × ARM × refi × stress × points × IRS Pub 936) into a single `(listing, household, profile) → AnalysisReport` pipeline. Multi-program × down-payment fan-out + verdict synthesis.
 **Depends on**: Phase 13 (needs `PropertyListing` model)
 **Requirements**: ANLZ-01, ANLZ-02, ANLZ-03, VERD-01
 **Success Criteria**:
+
   1. `lib/property_analysis.py:analyze(listing, household, profile) → AnalysisReport` runs 4 program-eligibility checks (Conventional 30, Conventional 15, FHA, VA if eligible) + jumbo branch when price > conforming limit per zip.
   2. Down-payment sweep produces a `DownPaymentMatrix` with 6 cells per eligible program (3 / 5 / 10 / 15 / 20 / 25% DP). PMI/MIP/funding-fee correctly applied per program + LTV.
   3. Auto-applied stress tests: rate shock +2%, income shock -30%, ARM reset at peak cap (one entry per program where ARM is offered).
@@ -52,10 +56,12 @@ User selected **fine** — 6 phases, bottom-up. Phases 13-18 continue v1.0 numbe
   7. Golden-value fixtures: 3 hand-calculated AnalysisReport cases (SFH conforming, condo with HOA, SFH jumbo) pin every cell of the matrix; full suite green.
 
 ### Phase 15: `property` Skill Mode + Report Formatter
+
 **Goal**: Wire the analysis pipeline into the Claude skill via a new `property` mode; emit the report as a single-page markdown file under `reports/`.
 **Depends on**: Phase 14 (needs AnalysisReport contract)
 **Requirements**: MODE-01, MODE-02, MODE-03, RPRT-01, RPRT-02
 **Success Criteria**:
+
   1. `.claude/skills/mortgage-ops/modes/property.md` ships with URL-pin routing — any user message containing `zillow.com` substring dispatches to `property` mode regardless of other mode-routing keywords. Explicit `analyze listing` phrase also routes here.
   2. SKILL.md routing block cross-references `modes/property.md` per Phase 10 D-09 progressive-disclosure; SKILL.md token budget ≤ 4500 cl100k tokens preserved.
   3. `scripts/property_analyze.py` orchestrator runs end-to-end: ingest → analyze → format → persist → emit markdown path. Always exits 0 with `{report_path, verdict, error: null}` envelope per Phase 12 contract.
@@ -63,11 +69,27 @@ User selected **fine** — 6 phases, bottom-up. Phases 13-18 continue v1.0 numbe
   5. Every numeric field in the report carries citation footer `Computed by: scripts/{name}.py {args}` per Phase 11 stress-test-agent precedent.
   6. Eval: a new prompt `evals/prompts/property-analysis-01.md` exercises the full property mode against a pinned Zillow HTML fixture; oracle pins the expected verdict + 3 numeric fields. `python -m evals.runner` still exits 0 (route_match + numeric_match ≥ 0.95).
 
+**Plans:** 5 plans
+
+Plans:
+**Wave 1**
+
+- [ ] 15-01-PLAN.md — Wave 0: test scaffolding + synthetic fixtures + eval oracle stub (RPRT-01, RPRT-02, MODE-01..03)
+- [ ] 15-02-PLAN.md — Wave 1: `lib/property_report.py` AnalysisReport → markdown formatter (RPRT-01, RPRT-02)
+- [ ] 15-03-PLAN.md — Wave 1: `scripts/property_analyze.py` orchestrator (always-exit-0; sidecar listing; NNN sequencer) + `config/household.example.yml` extension (MODE-03)
+
+**Wave 2** *(blocked on Wave 1 completion)*
+
+- [ ] 15-04-PLAN.md — Wave 2: `.claude/skills/mortgage-ops/modes/property.md` + SKILL.md Row 0 routing insertion (MODE-01, MODE-02)
+- [ ] 15-05-PLAN.md — Wave 2: `evals/prompts/property-analysis-01.md` + oracle reconciliation + evals.runner smoke (SC-6)
+
 ### Phase 16: Reference Data
+
 **Goal**: Capture all v1.1 regulatory tables in YAML with citations + effective dates. Annual refresh = YAML edit, never code change.
 **Depends on**: Phase 14 (analysis pipeline declares which tables it needs)
 **Requirements**: REF-09, REF-10
 **Success Criteria**:
+
   1. `data/reference/property-analysis-heuristics.yml` ships PMI rate tables (PMI by LTV band × FICO band — sourced from major-lender published schedules), FHA MIP defaults (upfront 1.75% + monthly 0.55-0.85% per LTV), VA funding fee defaults (per first-use × DP × veteran-type), jumbo cutoffs by county (2026 FHFA conforming limits — baseline $766k 1-unit, $1.149M high-cost).
   2. `data/reference/insurance-estimate-defaults.yml` ships per-state homeowners insurance avg annual cost (NAIC 2024 published averages) + FEMA flood-zone surcharge + earthquake-zone surcharge for California / Oregon / Washington.
   3. Every YAML row carries `citation`, `source` URL, `effective` date, `notes` per Phase 2 D-02 convention.
@@ -75,10 +97,12 @@ User selected **fine** — 6 phases, bottom-up. Phases 13-18 continue v1.0 numbe
   5. `lib/property_analysis.py` reads these YAMLs via the existing rules-loader; no inline constants for any regulatory threshold.
 
 ### Phase 17: Tests + Fixtures
+
 **Goal**: Pinned Zillow HTML snapshots for CI determinism + golden-value expected reports + citation-coverage meta-test.
 **Depends on**: Phase 15 (needs the report formatter to pin against)
 **Requirements**: TEST-01, TEST-02
 **Success Criteria**:
+
   1. 5 pinned HTML fixtures at `tests/fixtures/zillow/` covering SFH-conforming / SFH-jumbo / condo-conforming / condo-with-HOA / multifamily-2-4. Each is a manual-capture from a real Zillow listing (cleaned of PII like agent contact info; URL anonymized).
   2. Each fixture has a paired `expected_report.md` golden file. The fixture HTML + expected report together pin the entire pipeline end-to-end.
   3. `tests/test_property_analysis_coverage.py` ships a citation-coverage meta-test: every numeric field in any `expected_report.md` must trace to either a PropertyListing field OR a script invocation OR a `data/reference/*.yml` row. No orphan numbers.
@@ -86,10 +110,12 @@ User selected **fine** — 6 phases, bottom-up. Phases 13-18 continue v1.0 numbe
   5. Full suite green at end of phase: 644 + N tests passing where N is the new property-analysis test count.
 
 ### Phase 18: References + Docs
+
 **Goal**: Long-form documentation of the v1.1 pipeline + CLAUDE.md cross-links so future operators (and future-you) understand how property mode dispatches.
 **Depends on**: Phase 15 + Phase 17 (need the report + tests to cite)
 **Requirements**: REFS-01, REFS-02
 **Success Criteria**:
+
   1. `.claude/skills/mortgage-ops/references/property-analysis.md` (≥ 250 lines, 6-section template + Citation Index appendix) documents: (a) ingestion pipeline (WebFetch + gap-fill + captcha detection), (b) 4-program × 6-DP fan-out algorithm, (c) verdict-synthesis rules, (d) DuckDB schema, (e) report layout contract, (f) 12 pitfalls from research §10.
   2. CLAUDE.md "Project Skills" section gains a `property` mode bullet referencing the new mode file + reference doc.
   3. SKILL.md references-table extended with `property-analysis.md` row (loaded on-demand per Phase 10 D-09 progressive-disclosure).
