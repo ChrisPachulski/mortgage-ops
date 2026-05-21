@@ -32,19 +32,15 @@ from lib.property_analysis import AnalysisReport, RefiRow, analyze
 from lib.property_listing import PropertyListing
 
 # ---------------------------------------------------------------------------
-# Wave 0 RED guard — lib.property_report is shipped by Plan 15-02.
+# Wave 0 RED guard — lib.property_report shipped by Plan 15-02; the xfail
+# branch and the `# type: ignore[import-not-found]` comment were removed once
+# the module landed (mypy's warn_unused_ignores flagged the now-resolved
+# ignore on first GREEN run, per Plan 15-01 SUMMARY's self-removing-hygiene
+# anticipation).
 # ---------------------------------------------------------------------------
+from lib.property_report import render
 
-try:
-    from lib.property_report import render  # type: ignore[import-not-found]
-
-    HAS_RENDER = True
-except ImportError:
-    HAS_RENDER = False
-    pytestmark = pytest.mark.xfail(
-        reason="Wave 1 — lib/property_report.py not yet shipped (Plan 15-02)",
-        strict=False,
-    )
+HAS_RENDER = True
 
 # ---------------------------------------------------------------------------
 # Canonical Phase 14 fixture (NOT the eval fixture; per PATTERNS.md L607-619).
@@ -71,9 +67,13 @@ def _load_analysis_report() -> AnalysisReport:
     construct PropertyListing + Household + Profile, and call analyze() with
     fred_mortgage_*us kwargs from the fixture's fred_rates block."""
     raw = json.loads((FIXTURES / "sfh_conforming_king_county.json").read_text())
-    listing = PropertyListing.model_validate(raw["listing"])
-    household = Household(**raw["household"])
-    profile = Profile(**raw["profile"])
+    # Use model_validate_json (JSON mode) so Pydantic coerces fixture strings
+    # into Decimal / datetime per the strict-mode field validators (mirrors
+    # tests/test_property_analysis.py L1264-1266 pattern). model_validate
+    # (dict mode) under strict=True rejects str-for-Decimal inputs.
+    listing = PropertyListing.model_validate_json(json.dumps(raw["listing"]))
+    household = Household.model_validate_json(json.dumps(raw["household"]))
+    profile = Profile.model_validate_json(json.dumps(raw["profile"]))
     return analyze(
         listing,
         household,
@@ -187,21 +187,19 @@ def test_blocker_code_truncation(sample_report: AnalysisReport) -> None:
     We exercise this by mutating one cell to be ineligible with a verbose
     blocker reason; the rendered string must not contain the parenthetical
     or colon-suffix text."""
-    # Locate any cell to mutate; if all eligible, mutate the first.
+    # Always inject a synthetic blocker with a verbose suffix so we can assert
+    # truncation; the fixture's own ineligible cells (LTV-CEILING-FHA) don't
+    # exercise the ":" or "(" truncation paths.
     cells = list(sample_report.matrix.cells)
-    if all(c.eligible for c in cells):
-        # No ineligible cells in this fixture; flip the first cell.
-        mutated = cells[0].model_copy(
-            update={
-                "eligible": False,
-                "blocker_reasons": ["DTI-CONV-CEILING (back-end > 0.45): see Conv guide"],
-            }
-        )
-        cells[0] = mutated
-        new_matrix = sample_report.matrix.model_copy(update={"cells": cells})
-        report = sample_report.model_copy(update={"matrix": new_matrix})
-    else:
-        report = sample_report
+    mutated = cells[0].model_copy(
+        update={
+            "eligible": False,
+            "blocker_reasons": ["DTI-CONV-CEILING (back-end > 0.45): see Conv guide"],
+        }
+    )
+    cells[0] = mutated
+    new_matrix = sample_report.matrix.model_copy(update={"cells": cells})
+    report = sample_report.model_copy(update={"matrix": new_matrix})
     md = render(report, orchestrator_argv=DEFAULT_ARGV)
     your_fit = md.split("## YOUR FIT", 1)[1].split("## RATE STRESS", 1)[0]
     # The bare code (before "(" or ":") must appear; the parenthetical must NOT.
