@@ -96,6 +96,25 @@ Plans:
   4. Existing `lib/rules/_loader.py:_check_staleness` warns when `effective:` is > 12 months old.
   5. `lib/property_analysis.py` reads these YAMLs via the existing rules-loader; no inline constants for any regulatory threshold.
 
+**Plans:** 4 plans
+
+Plans:
+**Wave 0**
+
+- [ ] 16-01-PLAN.md — Wave 0: ship the two new YAMLs (PMI 4x4 + insurance 51-state) + two new lib/rules predicate modules (pmi.py + insurance.py) + 8 hand-calc fixture JSONs + citation-coverage-compliant tests (REF-09, REF-10)
+
+**Wave 1**
+
+- [ ] 16-02-PLAN.md — Wave 1: remove `_CONV_PMI_ANNUAL_RATE` Final constant + wire PMI block at L653 to `lib.rules.pmi.lookup_rate` + extend `_REPORT_WARNING_PREFIXES` aggregator at L1505 with 3 new tag families (REF-09; D-16-WIRE-02, D-16-WIRE-03)
+
+**Wave 2** *(sequential after 16-02; same file `lib/property_analysis.py`, different line ranges)*
+
+- [ ] 16-03-PLAN.md — Wave 2: wire insurance fallback at L702-705 via `lib.rules.insurance.lookup_default` with corrected trigger (branches on wrapper-presence, not unwrapped value; flood_zone hardcoded None per RESEARCH correction #1) (REF-10; D-16-WIRE-01, D-16-INS-04)
+
+**Wave 3** *(blocked on 16-03 completion)*
+
+- [ ] 16-04-PLAN.md — Wave 3: search-and-destroy the retired `PMI-RATE-ESTIMATED-0.0075` literal across 7 sites in `tests/test_property_analysis.py` + 3 Phase 14 fixture JSONs; re-anchor `condo_with_hoa_seattle.json` hand-calc PITI/DTI against the new YAML's MGIC rate (REF-09, REF-10; D-16-PMI-03)
+
 ### Phase 17: Tests + Fixtures
 
 **Goal**: Pinned Zillow HTML snapshots for CI determinism + golden-value expected reports + citation-coverage meta-test.
