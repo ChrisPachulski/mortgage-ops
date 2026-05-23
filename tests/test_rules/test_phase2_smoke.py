@@ -4,12 +4,12 @@ Catches "predicate B silently broke when predicate A's YAML changed shape"
 regressions that per-predicate test files miss because they each load only
 ONE module.
 
-Pins the predicate count at exactly 11 — the same set the citation-coverage
+Pins the predicate count at exactly 13 — the same set the citation-coverage
 meta-test (`tests/test_rules/test_citation_coverage.py`) parametrizes over.
 A drift in either direction (a predicate goes missing OR a non-predicate file
 sneaks in) fails loud here.
 
-Predicate roster (after plans 02-01..02-06 ship):
+Predicate roster (after plans 02-01..02-06 and Phase 16 reference-data ship):
 
   | Plan  | Module                              |
   | 02-01 | lib.rules.loan_type                 |
@@ -23,6 +23,8 @@ Predicate roster (after plans 02-01..02-06 ship):
   | 02-05 | lib.rules.freddie_eligibility       |
   | 02-06 | lib.rules.atr_qm                    |
   | 02-06 | lib.rules.reg_z                     |
+  | 16-01 | lib.rules.pmi                       |
+  | 16-01 | lib.rules.insurance                 |
 """
 
 from __future__ import annotations
@@ -30,7 +32,7 @@ from __future__ import annotations
 import importlib
 from pathlib import Path
 
-EXPECTED_PREDICATE_COUNT: int = 11
+EXPECTED_PREDICATE_COUNT: int = 13
 
 EXPECTED_PREDICATE_MODULES: tuple[str, ...] = (
     "lib.rules.loan_type",
@@ -44,6 +46,8 @@ EXPECTED_PREDICATE_MODULES: tuple[str, ...] = (
     "lib.rules.freddie_eligibility",
     "lib.rules.atr_qm",
     "lib.rules.reg_z",
+    "lib.rules.pmi",
+    "lib.rules.insurance",
 )
 
 NON_PREDICATE_FILES: frozenset[str] = frozenset({"__init__.py", "_loader.py", "types.py"})
@@ -51,7 +55,7 @@ NON_PREDICATE_FILES: frozenset[str] = frozenset({"__init__.py", "_loader.py", "t
 RULES_DIR: Path = Path(__file__).resolve().parent.parent.parent / "lib" / "rules"
 
 
-def test_expected_predicate_count_is_11() -> None:
+def test_expected_predicate_count_is_13() -> None:
     """Sanity check the EXPECTED_PREDICATE_MODULES tuple itself."""
     assert len(EXPECTED_PREDICATE_MODULES) == EXPECTED_PREDICATE_COUNT
     assert len(set(EXPECTED_PREDICATE_MODULES)) == EXPECTED_PREDICATE_COUNT, (
@@ -60,7 +64,7 @@ def test_expected_predicate_count_is_11() -> None:
 
 
 def test_filesystem_predicate_count_matches_expected() -> None:
-    """The actual `lib/rules/*.py` count (excluding __init__/_loader/types) is 11.
+    """The actual `lib/rules/*.py` count (excluding __init__/_loader/types) is 13.
 
     Catches the case where a NEW predicate file was added without updating this
     audit (which means it also got a fixture but no documented home in this

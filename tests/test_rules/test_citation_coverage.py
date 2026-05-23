@@ -31,8 +31,12 @@ def test_predicate_has_citation_in_docstring(path: Path) -> None:
     m = re.search(r'^"""(.*?)"""', src, flags=re.DOTALL)
     assert m is not None, f"{path.name} missing module docstring (RUL-12)"
     docstring = m.group(1)
-    assert "Citation:" in docstring, f"{path.name} docstring missing 'Citation:' (RUL-12)"
-    assert "Source URL:" in docstring, f"{path.name} docstring missing 'Source URL:' (RUL-12)"
+    assert re.search(r"Citation(\s*\([^)]+\))?:", docstring), (
+        f"{path.name} docstring missing a 'Citation:' or 'Citation (...):' line (RUL-12)"
+    )
+    assert re.search(r"Source URL(\s*\([^)]+\))?:", docstring), (
+        f"{path.name} docstring missing a 'Source URL:' or 'Source URL (...):' line (RUL-12)"
+    )
     assert "Effective:" in docstring, f"{path.name} docstring missing 'Effective:' (RUL-12)"
     assert re.search(r"https?://", docstring), (
         f"{path.name} docstring 'Source URL:' must contain an http(s) URL (RUL-12)"

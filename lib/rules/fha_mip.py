@@ -1,10 +1,19 @@
 """FHA Mortgage Insurance Premium (MIP) computation.
 
-Citation: HUD Mortgagee Letter 2023-05 (annual MIP rates — 30bps reduction
-effective 2023-03-20) and HUD Mortgagee Letter 2013-04 (termination rules:
-life-of-loan if origination LTV > 90%; 132 months / 11 years if LTV <= 90%).
-Source URL: https://www.hud.gov/sites/dfiles/OCHCO/documents/2023-05hsgml.pdf
-Effective: 2023-03-20
+Citation (operative): HUD Handbook 4000.1 §II.A.8.b (annual MIP rates,
+currently 0.55% for most new borrowers — codifies the 30bps reduction
+originally announced in HUD ML 2023-05); HUD Handbook 4000.1 §II.A.8.q
+(termination rules — codifies HUD ML 2013-04: life-of-loan if origination
+LTV > 90%, 132 months / 11 years if LTV <= 90%). Per HUD's stated policy
+(`https://www.hud.gov/hudclips/sfhsuperseded`), Single Family Housing
+Mortgagee Letters are superseded in full by Handbook 4000.1.
+Citation (historical): HUD Mortgagee Letter 2023-05 (annual MIP rate
+reduction effective 2023-03-20); HUD Mortgagee Letter 2013-04 (original
+termination rules).
+Source URL (operative): https://www.hud.gov/sites/dfiles/OCHCO/documents/4000.1hsgh.pdf
+Source URL (historical): https://www.hud.gov/sites/dfiles/OCHCO/documents/2023-05hsgml.pdf
+Effective: 2023-03-20 (MIP rate); rule re-housed in Handbook 4000.1
+Update 15 (2024-05).
 
 What this predicate decides:
   Given a Loan, the original property appraised value, and the FHA endorsement

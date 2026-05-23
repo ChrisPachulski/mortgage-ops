@@ -1,8 +1,8 @@
-"""REF-09 final-pass: pin `data/reference/*.yml` count at exactly 10 (Phase 2 audit).
+"""REF-09 final-pass: pin `data/reference/*.yml` count at exactly 12 (Phase 2 + 16 audit).
 
 Per CONTEXT.md D-05 (line 43): Fannie LLPA and Freddie eligibility YAMLs are
 implementation-detail YAMLs that ship under RUL-02 / RUL-03, NOT new REF-IDs.
-The 10-file count is:
+The 12-file count is:
 
   | YAML stem                       | Plan  | Source                              |
   | conforming-limits-2026          | 02-01 | REF-01                              |
@@ -15,6 +15,8 @@ The 10-file count is:
   | fannie-llpa-matrix              | 02-05 | RUL-02 implementation-detail (D-05) |
   | freddie-eligibility-matrix      | 02-05 | RUL-03 implementation-detail (D-05) |
   | atr-qm-thresholds               | 02-06 | RUL-09 implementation-detail        |
+  | insurance-estimate-defaults     | 16-01 | Phase 16 PMI/insurance reference    |
+  | property-analysis-heuristics    | 16-01 | Phase 16 property-analysis ref      |
 
 If a future plan introduces a new YAML, the FIX is to update this audit
 (EXPECTED_YAML_STEMS + EXPECTED_YAML_COUNT) and document the new file in the
@@ -27,7 +29,7 @@ from pathlib import Path
 
 REF_DIR: Path = Path(__file__).resolve().parent.parent.parent / "data" / "reference"
 
-EXPECTED_YAML_COUNT: int = 10
+EXPECTED_YAML_COUNT: int = 12
 
 EXPECTED_YAML_STEMS: frozenset[str] = frozenset(
     {
@@ -44,6 +46,9 @@ EXPECTED_YAML_STEMS: frozenset[str] = frozenset(
         "freddie-eligibility-matrix",
         # Implementation-detail YAML for RUL-09 (plan 02-06)
         "atr-qm-thresholds",
+        # Phase 16 reference data (plan 16-01)
+        "insurance-estimate-defaults",
+        "property-analysis-heuristics",
     }
 )
 
@@ -73,7 +78,7 @@ def test_reference_yaml_stems_match_expected_set() -> None:
     unexpected = actual - EXPECTED_YAML_STEMS
     assert not missing, (
         f"Expected YAMLs missing from data/reference/: {sorted(missing)}.\n"
-        f"This audit was last updated for a 10-YAML phase set; one or more shipped YAMLs are gone."
+        f"This audit was last updated for a 12-YAML phase set; one or more shipped YAMLs are gone."
     )
     assert not unexpected, (
         f"Unexpected YAMLs in data/reference/: {sorted(unexpected)}.\n"

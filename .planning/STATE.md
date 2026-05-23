@@ -4,8 +4,8 @@ milestone: v1.1
 milestone_name: Property Analysis Mode
 status: executing
 stopped_at: Phase 16 context gathered
-last_updated: "2026-05-22T20:19:31.119Z"
-last_activity: 2026-05-22 -- Phase 16 planning complete
+last_updated: "2026-05-23T00:17:42.207Z"
+last_activity: 2026-05-23 -- Phase 16 execution started
 progress:
   total_phases: 6
   completed_phases: 3
@@ -21,15 +21,15 @@ progress:
 See: .planning/PROJECT.md (updated 2026-04-26)
 
 **Core value:** Math correctness first — every dollar figure traces to a tested, deterministic Python function; the LLM is a router and narrator that never owns numbers.
-**Current focus:** Phase 15 — property-skill-mode-report-formatter
+**Current focus:** Phase 16 — reference-data
 
 ## Current Position
 
 Milestone: v1.1 Property Analysis Mode (just started)
-Phase: 15 — COMPLETE
-Plan: 5 of 5
-Status: Ready to execute
-Last activity: 2026-05-22 -- Phase 16 planning complete
+Phase: 16 (reference-data) — EXECUTING
+Plan: 1 of 4
+Status: Executing Phase 16
+Last activity: 2026-05-23 -- Phase 16 execution started
 
 Progress: [██████████] 100%
 
