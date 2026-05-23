@@ -93,4 +93,20 @@ ignore_missing_imports = true
 minversion = "9.0"
 testpaths = ["tests"]
 pythonpath = [".", ".claude/skills/mortgage-ops"]
-addopts = ["-ra", "--strict-markers", "--strict-config"]
+addopts = ["-ra", "--strict-markers", "--strict-config", "-m", "not live"]
+markers = [
+    # Phase 16 live-integration gate (.github/workflows/integration.yml). Tests
+    # marked `live` hit real third-party APIs (Anthropic, FRED) and are
+    # excluded from the default `uv run pytest` run via `addopts` filter logic
+    # downstream. The existing per-test `skipif(not os.environ.get(...))` gates
+    # remain as belt-and-suspenders so a missing key on a `live`-targeted run
+    # still skips cleanly rather than failing with an auth error. See
+    # docs/live-integration.md for the full runbook.
+    "live: requires live API keys; runs only in scheduled integration workflow",
+    # tests/e2e snapshot suite — full CLI journeys via subprocess.run. Pays
+    # ~250-500ms of interpreter startup per scenario; descriptive only, not
+    # exclusionary (default `uv run pytest` includes them). See
+    # tests/e2e/README.md for snapshot regeneration and the hermetic-gap log.
+    "e2e: end-to-end snapshot test that subprocesses a relocated skill CLI",
+    "slow: test takes >250ms of wall-clock (overlaps with e2e in v1)",
+]

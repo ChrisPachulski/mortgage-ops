@@ -309,12 +309,17 @@ def test_mock_sonnet_fixture_returns_none_for_unknown_html(
 # ---------- Live test (skipped without API key) ----------
 
 
+@pytest.mark.live
 @pytest.mark.skipif(
     not os.environ.get("ANTHROPIC_API_KEY"),
     reason=(
         "Live Sonnet extraction test requires ANTHROPIC_API_KEY. "
-        "Skip is intentional for local dev without the key. CI must NOT inject the key "
-        "(Phase 11 D-02 synthetic-only-in-CI); manual runs only."
+        "Skip is intentional for local dev without the key. The default test "
+        "run filters this via `-m 'not live'` in pyproject.toml addopts; the "
+        "scheduled `.github/workflows/integration.yml` job overrides with "
+        "`-m 'live'` and injects ANTHROPIC_API_KEY from repo secrets. The "
+        "skipif gate remains as belt-and-suspenders so a missing key in the "
+        "live job still skips cleanly rather than failing with an auth error."
     ),
 )
 def test_extract_listing_live_smoke() -> None:

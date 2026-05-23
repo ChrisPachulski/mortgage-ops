@@ -427,13 +427,18 @@ def test_SUBA_05_stress_mode_routes_sweeps_over_5_to_subagent() -> None:
 # =========================================================================
 
 
+@pytest.mark.live
 @pytest.mark.skipif(
     not os.environ.get("ANTHROPIC_API_KEY"),
     reason=(
         "SC-3 SUBA-06 token-budget test requires ANTHROPIC_API_KEY for "
         "anthropic.count_tokens (FREE — no content billing per Anthropic docs — "
-        "but requires network round-trip). Skip is intentional for local dev "
-        "without the key; CI must inject the key as a secret."
+        "but requires network round-trip). The default `uv run pytest` filters "
+        "this via `-m 'not live'` in pyproject.toml; "
+        ".github/workflows/integration.yml overrides with `-m 'live'` and "
+        "injects ANTHROPIC_API_KEY from repo secrets. The skipif gate remains "
+        "as belt-and-suspenders so a missing key in the live job still skips "
+        "cleanly rather than failing with an auth error."
     ),
 )
 def test_SUBA_06_stress_summary_under_1000_tokens() -> None:

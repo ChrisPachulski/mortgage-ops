@@ -1,0 +1,109 @@
+# .github/workflows/integration.yml
+#
+# Live-integration test workflow. Runs ONLY the tests marked `@pytest.mark.live`
+# against the real Anthropic + FRED APIs.
+#
+# Distinct from .github/workflows/ci.yml:
+#   * ci.yml runs on every push / PR. Fast unit + integration. Never touches
+#     live APIs (the existing skipif-on-key tests stay skipped because ci.yml
+#     does NOT inject ANTHROPIC_API_KEY or FRED_API_KEY).
+#   * integration.yml runs on a weekly schedule + manual dispatch. Injects
+#     both keys from repo secrets and overrides the default `-m 'not live'`
+#     marker filter (set in pyproject.toml addopts) with `-m 'live'`.
+#
+# Why weekly: FRED publishes weekly (Thursday noon ET) and the Anthropic
+# token-budget probe is a stability check, not a PR gate. Sunday 13:00 UTC
+# is the cheapest slot (off-peak for both providers, well-clear of FRED's
+# Thursday publish).
+#
+# Manual dispatch:
+#   gh workflow run "Live Integration"
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   * ANTHROPIC_API_KEY — paid-tier key with messages.count_tokens scope
+#   * FRED_API_KEY      — free key from https://fred.stlouisfed.org/docs/api/api_key.html
+#
+# Missing secrets: the job will FAIL at the pytest step rather than silently
+# pass — the `@pytest.mark.skipif(not env)` belt-and-suspenders gate skips
+# the individual test, but the workflow asserts at least one live test
+# actually ran (see "Assert live tests ran" step below). See
+# docs/live-integration.md for the full secrets-setup + failure runbook.
+#
+# Wall-clock cap: timeout-minutes: 10 on the job + --timeout=120 on pytest
+# per-test. Anthropic count_tokens RTT is < 1s; FRED RTT is < 1s; the cap
+# exists purely as a runaway-process guard.
+name: Live Integration
+
+on:
+  schedule:
+    # 13:00 UTC every Sunday (cron is always UTC on GitHub-hosted runners).
+    - cron: "0 13 * * 0"
+  workflow_dispatch:
+
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0  # parity with ci.yml; not load-bearing for live tests
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.11.7"
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Sync deps (frozen)
+        run: uv sync --locked --dev
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install Node deps (orchestration)
+        run: npm ci
+
+      - name: Verify required secrets are present
+        # Fail fast with a clear pointer to the runbook when a secret is
+        # missing. Without this guard the pytest step would skip every live
+        # test via the belt-and-suspenders skipif gates and the workflow
+        # would pass green with zero tests actually exercising live APIs —
+        # exactly the silent-failure mode docs/live-integration.md warns
+        # about.
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+        run: |
+          set -euo pipefail
+          missing=0
+          if [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+            echo "::error::ANTHROPIC_API_KEY secret is not set. See docs/live-integration.md."
+            missing=1
+          fi
+          if [ -z "${FRED_API_KEY:-}" ]; then
+            echo "::error::FRED_API_KEY secret is not set. See docs/live-integration.md."
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+          echo "Both secrets present."
+
+      - name: Run live integration tests
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          FRED_API_KEY: ${{ secrets.FRED_API_KEY }}
+        # `-m "live"` overrides the default `-m "not live"` set in
+        # pyproject.toml addopts (last `-m` wins in pytest).
+        # `--timeout=120` per-test cap (each live test < 30s in practice).
+        run: uv run pytest -m "live" --timeout=120 -v
+
+permissions:
+  contents: read
