@@ -35,6 +35,17 @@ reports/*
 .idea/
 .vscode/
 
+# macOS Finder drag-copy duplicates (e.g., "foo 2.py", ".lock 3"). These
+# accidentally pollute pytest collection and break the test suite (Phase 17
+# review). tests/test_repo_hygiene.py is the strict gate; these patterns
+# are belt-and-suspenders. Force-add with `git add -f` if a real file
+# legitimately needs this naming.
+* [0-9].*
+* [0-9][0-9].*
+* copy.*
+.lock [0-9]
+.lock [0-9][0-9]
+
 # Phase 9: Node orchestration artifacts
 node_modules/
 package-lock.json.bak

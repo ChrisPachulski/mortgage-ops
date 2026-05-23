@@ -114,6 +114,7 @@ def tmp_reports(tmp_path: Path) -> Iterator[Path]:
     base = PROJECT_ROOT / "reports" / ".test-tmp"
     base.mkdir(parents=True, exist_ok=True)
     out = base / tmp_path.name
+    shutil.rmtree(out, ignore_errors=True)
     out.mkdir()
     try:
         yield out
