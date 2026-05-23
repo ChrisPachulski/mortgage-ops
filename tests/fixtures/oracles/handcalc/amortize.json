@@ -1,0 +1,40 @@
+{
+  "_meta": {
+    "family": "amortize",
+    "source_url": "https://en.wikipedia.org/wiki/Amortization_calculator#The_formula",
+    "citation_url": "https://en.wikipedia.org/wiki/Amortization_calculator",
+    "captured_at": "2026-05-23",
+    "reviewer_name": "household maintainer",
+    "reviewer_date": "2026-05-23"
+  },
+  "derivation": [
+    "# Hand-calculated derivation",
+    "Loan: P = $100,000.00, annual rate = 12.000%, term = 360 months (30 years).",
+    "",
+    "Step 1: monthly periodic rate r = 0.12 / 12 = 0.01.",
+    "Step 2: PMT = P * r * (1+r)^n / ((1+r)^n - 1)",
+    "         = 100000 * 0.01 * (1.01)^360 / ((1.01)^360 - 1)",
+    "         (1.01)^360 = 35.9496413... (textbook constant)",
+    "         numerator = 100000 * 0.01 * 35.9496413 = 35949.6413",
+    "         denominator = 35.9496413 - 1 = 34.9496413",
+    "         PMT = 35949.6413 / 34.9496413 = 1028.6125...",
+    "         quantized HALF_UP to cents: $1,028.61.",
+    "",
+    "Step 3: First-period interest = P * r = $100,000.00 * 0.01 = $1,000.00 (exactly).",
+    "Step 4: First-period principal = PMT - interest = $1,028.61 - $1,000.00 = $28.61.",
+    "Step 5: Balance after period 1 = $100,000.00 - $28.61 = $99,971.39."
+  ],
+  "inputs": {
+    "loan": {
+      "principal": "100000.00",
+      "annual_rate": "0.120000",
+      "term_months": 360
+    }
+  },
+  "expected": {
+    "monthly_pi": "1028.61",
+    "first_period_interest": "1000.00",
+    "first_period_principal": "28.61",
+    "first_period_balance": "99971.39"
+  }
+}

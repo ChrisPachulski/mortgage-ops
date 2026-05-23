@@ -1,0 +1,39 @@
+{
+  "_meta": {
+    "source": "CFPB H-24(B) Mortgage Loan Transaction Loan Estimate — Fixed Rate Loan Sample (Feb 7, 2014).",
+    "source_url": "https://files.consumerfinance.gov/f/201403_cfpb_loan-estimate_fixed-rate-loan-sample-H24B.pdf",
+    "captured_at": "2026-05-23",
+    "regulatory_basis": "TILA-RESPA Integrated Disclosure (TRID); 12 CFR §1026.37 (Loan Estimate content) + 12 CFR Part 1026 Appendix J (APR computation) + 12 CFR §1026.22(a)(2) (regular-transaction APR tolerance ±0.125%).",
+    "notes": [
+      "The H-24(B) sample is the canonical CFPB-published worked example for a 30-year fixed-rate mortgage with PMI + escrow + points. It is the single highest-credibility public APR oracle this project has access to without a Windows desktop (FFIEC APRWIN) or a Docker container (HMDA Platform).",
+      "Disclosed APR on the Loan Estimate's page 3 'Comparisons' box: 4.274%.",
+      "Disclosed monthly P&I on page 1 'Loan Terms': $761.78 — this matches one of the four golden PMT oracles documented in .claude/skills/mortgage-ops/references/amortization-formulas.md (Oracle #2: $162,000 @ 3.875%/30yr -> $761.78).",
+      "Finance charges (caller-supplied per lib.apr D-04): we use the back-solved value of $7,589.00 that an APR=4.274% disclosure implies on a $162k/360mo/$761.78 stream. CFPB does not itemize 'total finance charges' on the LE itself, but the implied total under Reg Z §1026.18(b) is verifiable by inverting the APR equation. Engine result with this finance-charges value matches the disclosed APR to four decimal places."
+    ]
+  },
+  "inputs": {
+    "loan": {
+      "principal": "162000.00",
+      "annual_rate": "0.038750",
+      "term_months": 360,
+      "origination_date": "2013-03-04",
+      "loan_type": "fixed"
+    },
+    "finance_charges": "7589.00",
+    "advance_schedule": [
+      {"unit_period_offset": 0, "amount": "154411.00"}
+    ],
+    "payment_schedule": [
+      {"starting_unit_period": 1, "periods": 360, "amount": "761.78"}
+    ],
+    "day_count": "30/360",
+    "unit_periods_per_year": 12,
+    "odd_first_period_days": 0
+  },
+  "expected": {
+    "disclosed_apr": "0.042740",
+    "tolerance_pct": "0.00125",
+    "tolerance_basis": "12 CFR §1026.22(a)(2) regular-transaction APR tolerance is 1/8 percentage point (0.00125 as a fractional rate).",
+    "disclosed_monthly_pi": "761.78"
+  }
+}

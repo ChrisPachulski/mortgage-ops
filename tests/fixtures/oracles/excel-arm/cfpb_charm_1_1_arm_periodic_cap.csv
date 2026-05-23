@@ -1,0 +1,4 @@
+scenario,period,rate,payment,balance,note
+cfpb_charm_periodic_cap_1_1,12,0.060000,1199.10,197543.99,"Last payment of year 1 at initial 6.00% rate; CFPB CHARM booklet §3.5.1 worked example. $200,000 / 30yr; initial 6% fixed for 1 year."
+cfpb_charm_periodic_cap_1_1,13,0.080000,1461.72,,"First payment of year 2 after first reset; index rose 3pp, fully-indexed would be 9% but 2pp periodic cap holds at 8%; engine + CHARM agree to the cent."
+cfpb_charm_no_cap_baseline,13,0.090000,1600.42,,"Counterfactual: same scenario WITHOUT the 2pp periodic cap; index rises 3pp -> fully-indexed 9%. CHARM cites this as the difference the cap is saving the borrower ($138.70/mo)."

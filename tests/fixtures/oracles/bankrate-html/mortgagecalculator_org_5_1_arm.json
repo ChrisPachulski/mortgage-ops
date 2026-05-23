@@ -1,0 +1,30 @@
+{
+  "_meta": {
+    "source": "mortgagecalculator.org 5/1 ARM calculator article, 'Payment Comparison Table' worked example.",
+    "source_url": "https://www.mortgagecalculator.org/calcs/5-1-arm.php",
+    "captured_at": "2026-05-23",
+    "html_snapshot": "tests/fixtures/oracles/bankrate-html/mortgagecalculator_org_5_1_arm.html",
+    "substitution_note": [
+      "Bankrate's own ARM calculator (https://www.bankrate.com/mortgages/adjustable-rate-mortgage-calculator/) is JS-rendered; WebFetch returned the landing-page copy with no calculator output. We substituted with mortgagecalculator.org which publishes the same kind of worked example as static HTML (loan amount + initial rate + lifetime cap + per-year payment table).",
+      "The captured page documents a 5/1 ARM scenario: $240,000 / 30yr / initial 3.37% with a 5pp lifetime cap (max APR = 8.37%); the year-by-year amortization table on the page shows years 1-5 paying $1,060.37/mo at 3.37% and year 9+ paying $1,686.34/mo at 8.37% (lifetime-cap-bound).",
+      "Years 6-8 of the captured table use an unstated reset path (the page does not disclose the periodic cap explicitly), so we cross-validate only the year-1 P&I (cent-equal) and the year-5 ending balance (within $1, since the oracle's balance figures derive from rounded payments)."
+    ]
+  },
+  "inputs": {
+    "loan": {
+      "principal": "240000.00",
+      "annual_rate": "0.033700",
+      "term_months": 360,
+      "origination_date": "2026-01-01",
+      "loan_type": "arm"
+    }
+  },
+  "expected": {
+    "year1_monthly_pi": "1060.37",
+    "year5_ending_balance_approx": "214788.87",
+    "year5_balance_tolerance": "1.00",
+    "year5_balance_note": "Oracle reports $214,788.87 at end of year 5; engine reports $214,788.68. Drift of $0.19 is consistent with the oracle quoting a rounded payment ($1,060.37) and amortizing from there.",
+    "lifetime_cap_max_apr": "0.083700",
+    "lifetime_cap_payment": "1686.34"
+  }
+}

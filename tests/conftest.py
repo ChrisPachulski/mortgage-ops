@@ -163,6 +163,24 @@ def points_fixture() -> Callable[[str], dict[str, Any]]:
 
 
 @pytest.fixture
+def oracle_fixture() -> Callable[[str], dict[str, Any]]:
+    """Return a callable that loads a single oracle fixture by relative path
+    (e.g. "cfpb-le/h24b_fixed_rate_162k_3_875" or "handcalc/amortize") from
+    tests/fixtures/oracles/. Mirrors the other *_fixture loaders.
+
+    These are INDEPENDENT oracles captured from external sources (CFPB
+    sample PDFs, mortgagecalculator.org HTML snapshots, hand-calc
+    derivations) — see tests/fixtures/oracles/README.md.
+    """
+
+    def _load(rel_stem: str) -> dict[str, Any]:
+        path = FIXTURE_DIR / "oracles" / f"{rel_stem}.json"
+        return json.loads(path.read_text())  # type: ignore[no-any-return]
+
+    return _load
+
+
+@pytest.fixture
 def property_analysis_fixture() -> Callable[[str], dict[str, Any]]:
     """Return a callable that loads a single property-analysis fixture by
     filename stem from tests/fixtures/property_analysis/. Mirrors the

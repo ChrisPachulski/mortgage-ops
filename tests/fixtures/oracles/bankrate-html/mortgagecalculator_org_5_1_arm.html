@@ -1,0 +1,2605 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="utf-8">
+		<title>5/1 ARM Calculator: 5-Year Hybrid Adjustable Rate Mortgage Calculator</title>
+		<link rel="shortcut icon" href="https://www.mortgagecalculator.org/favicon.ico" />
+		<meta name="author" content="">
+
+		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+		<meta name="format-detection" content="telephone=no">
+
+		<!-- design -->		<link href="https://www.mortgagecalculator.org/design/reset.css" rel="stylesheet">
+		<link href="https://www.mortgagecalculator.org/design/meanmenu.css" rel="stylesheet">
+		<link href="https://www.mortgagecalculator.org/design/style.css" rel="stylesheet">
+		<link href="https://www.mortgagecalculator.org/design/layout.css" rel="stylesheet">
+              		<link href="https://www.mortgagecalculator.org/design/tabcontrol.css" rel="stylesheet">
+<!-- HTML5 shim, for IE6-8 support of HTML5 elements -->
+		<!--[if lt IE 9]>
+		<script src="https://www.mortgagecalculator.org/scripts/html5shiv.js"></script>
+		<script src="https://www.mortgagecalculator.org/scripts/respond.min.js"></script>
+		<![endif]-->
+<script src="https://www.mortgagecalculator.org/js/moment.js"></script> 
+<script Language='JavaScript'>
+function computeMonthlyPayment(prin, numPmts, intRate) {
+
+var pmtAmt = 0;
+
+if(intRate == 0) {
+   pmtAmt = prin / numPmts;
+} else {
+     intRate = intRate / 100.0 / 12;
+
+   var pow = 1;
+   for (var j = 0; j < numPmts; j++)
+      pow = pow * (1 + intRate);
+
+   pmtAmt = (prin * pow * intRate) / (pow - 1);
+
+}
+
+return pmtAmt;
+
+}
+
+
+
+
+function sn(num) {
+
+   num=num.toString();
+
+
+   var len = num.length;
+   var rnum = "";
+   var test = "";
+   var j = 0;
+
+   var b = num.substring(0,1);
+   if(b == "-") {
+      rnum = "-";
+   }
+
+   for(i = 0; i <= len; i++) {
+
+      b = num.substring(i,i+1);
+
+      if(b == "0" || b == "1" || b == "2" || b == "3" || b == "4" || b == "5" || b == "6" || b == "7" || b == "8" || b == "9" || b == ".") {
+         rnum = rnum + "" + b;
+
+      }
+
+   }
+
+   if(rnum == "" || rnum == "-") {
+      rnum = 0;
+   }
+
+   rnum = Number(rnum);
+
+   return rnum;
+
+}
+
+
+
+function fns(num, places, comma, type, show) {
+
+    var sym_1 = "$";
+    var sym_2 = ""; 
+
+    var isNeg=0;
+
+    if(num < 0) {
+       num=num*-1;
+       isNeg=1;
+    }
+
+    var myDecFact = 1;
+    var myPlaces = 0;
+    var myZeros = "";
+    while(myPlaces < places) {
+       myDecFact = myDecFact * 10;
+       myPlaces = Number(myPlaces) + Number(1);
+       myZeros = myZeros + "0";
+    }
+    
+	onum=Math.round(num*myDecFact)/myDecFact;
+		
+	integer=Math.floor(onum);
+
+	if (Math.ceil(onum) == integer) {
+		decimal=myZeros;
+	} else{
+		decimal=Math.round((onum-integer)* myDecFact)
+	}
+	decimal=decimal.toString();
+	if (decimal.length<places) {
+        fillZeroes = places - decimal.length;
+	   for (z=0;z<fillZeroes;z++) {
+        decimal="0"+decimal;
+        }
+     }
+
+   if(places > 0) {
+      decimal = "." + decimal;
+   }
+
+   if(comma == 1) {
+	integer=integer.toString();
+	var tmpnum="";
+	var tmpinteger="";
+	var y=0;
+
+	for (x=integer.length;x>0;x--) {
+		tmpnum=tmpnum+integer.charAt(x-1);
+		y=y+1;
+		if (y==3 & x>1) {
+			tmpnum=tmpnum+",";
+			y=0;
+		}
+	}
+
+	for (x=tmpnum.length;x>0;x--) {
+		tmpinteger=tmpinteger+tmpnum.charAt(x-1);
+	}
+
+
+	finNum=tmpinteger+""+decimal;
+   } else {
+      finNum=integer+""+decimal;
+   }
+
+    if(isNeg == 1) {
+       if(type == 1 && show == 1) {
+          finNum = "-" + sym_1 + "" + finNum + "" + sym_2;
+       } else {
+          finNum = "-" + finNum;
+       }
+    } else {
+       if(show == 1) {
+          if(type == 1) {
+             finNum = sym_1 + "" + finNum + "" + sym_2;
+          } else
+          if(type == 2) {
+             finNum = finNum + "%";
+          }
+
+       }
+
+    }
+
+	return finNum;
+}
+
+
+function computeForm(report) {
+
+
+	 var Vclosing = document.calc.closing.value; 
+	 if(Vclosing == 0 || Vclosing == "") {
+  Vclosing = 0;
+ }
+   var Vhomeprice = sn(document.calc.homeprice.value);
+   var Vdownpayment = sn(document.calc.downpayment.value);
+   var Vprincipal =sn(parseFloat(document.calc.homeprice.value) + parseFloat(Vclosing) - parseFloat(Vdownpayment));
+   var Vstart_rate = sn(document.calc.start_rate.value);
+   var Vstart_months = sn(document.calc.start_months.value*12);
+   var Vadjust_months = sn(document.calc.adjust_months.value);
+   var Vfirst_adjust_amt = sn(document.calc.first_adjust_amt.value);   
+   var Vadjust_amt = sn(document.calc.adjust_amt.value);
+   var Vrate_cap = sn(document.calc.rate_cap.value) + sn(document.calc.start_rate.value);
+    
+
+ var VannualTax = sn(document.calc.propertytaxes.value);
+ var VmonthlyTax =0;
+ if(VannualTax == 0 || VannualTax == "") {
+  VannualTax = 0;
+  VmonthlyTax =0;
+ } else {
+  VmonthlyTax = VannualTax / 12;
+  VmonthlyTax *= 100;
+  VmonthlyTax = Math.round(VmonthlyTax);
+  VmonthlyTax /= 100;
+ }
+
+ var VannualInsurance = sn(document.calc.homeinsurance.value);
+ var VmonthlyInsurance = 0;
+ if(VannualInsurance == 0 || VannualInsurance == "") {
+  VannualInsurance = 0;
+  VmonthlyInsurance = 0;
+ } else {
+  VmonthlyInsurance = VannualInsurance / 12;
+  VmonthlyInsurance *= 100;
+  VmonthlyInsurance = Math.round(VmonthlyInsurance);
+  VmonthlyInsurance /= 100;
+ }
+ 
+ var VmonthlyPMI = document.calc.pmi.value;
+
+ if(VmonthlyPMI == 0 || VmonthlyPMI == "" || Vhomeprice > 1.249999999*Vprincipal ) {
+  VmonthlyPMI = 0;
+ }	 
+	 else {
+  VmonthlyPMI = sn((VmonthlyPMI * Vprincipal)/100);
+		 VmonthlyPMI = VmonthlyPMI / 12;
+  VmonthlyPMI *= 100;
+  VmonthlyPMI = Math.round(VmonthlyPMI);
+  VmonthlyPMI /= 100;
+ }
+
+ var VmonthlyHOA = document.calc.hoa.value;
+
+ var Vextra = Number(VmonthlyTax) + Number(VmonthlyInsurance) + Number(VmonthlyPMI) + Number(VmonthlyHOA);
+   var alert_txt = "";
+
+
+var Vyear = Number(document.calc.loanoriginationyear.value);
+var Vday = Number(document.calc.loanoriginationday.value);
+var Vmonth = Number(document.calc.loanoriginationmonth.selectedIndex);
+if (Vmonth < 1) {
+Vmonth = 1;	
+	}
+if (Vday < 1) {
+Vday = 1;	
+	}
+
+	  var startdate = moment([Vyear, Vmonth - 1, Vday]);	  
+	  while (!startdate.isValid()) {
+		  Vday = Vday -1;
+		  startdate = moment([Vyear, Vmonth - 1, Vday]);
+		  }
+       currentdate = moment(startdate);
+        startdate.add(1, 'months');				
+    		while (Vday > 28 && moment(startdate).date() < Vday && moment(startdate).date() < moment(startdate).daysInMonth()) {
+	    		startdate.add((1), 'days');			
+		    	}	
+
+
+
+   {
+
+
+      var VnumYears = sn(document.calc.numYears.value);
+      var term_months = VnumYears * 12;
+
+      var accum_others = term_months*Vextra;	  
+
+      var Vstart_pmt = computeMonthlyPayment(Vprincipal, term_months, Vstart_rate);
+    {
+
+         document.calc.start_pmt.value = fns(Vstart_pmt,2,1,1,1);
+         document.calc.start_pmt_2.value = fns((Vstart_pmt+Vextra),2,1,1,1);
+
+         var rate = Vstart_rate;
+         var old_rate = Vstart_rate;
+         var pmt = Vstart_pmt;
+         var accum_pmts = 0;
+         var new_rate = 0;
+         var prin = Vprincipal;
+         var int_port = 0;
+         var accum_int = 0;
+         var prin_port = 0;
+         var accum_prin = 0;
+         var cnt = 0;
+         var adjust_nprs = 0;
+         var new_term_months = 0;
+         var i = 0;
+		 
+		 var accum_prin_yr = 0;
+		 var accum_int_yr = 0;
+
+         var pmtRows = "";
+
+         while(cnt < term_months) {
+
+            cnt += 1;
+
+ 	
+
+            if(cnt <= Vstart_months) {
+               rate = Vstart_rate;
+            } else {
+               if((Number(cnt)-Number(1)-Number(Vstart_months)) % Vadjust_months == 0) {
+                  adjust_nprs += 1;
+                  new_term_months = Number(term_months) - Number(cnt) + Number(1);
+                  rate = Number((adjust_nprs -1) * Vadjust_amt) + Number(Vstart_rate) + Number(Vfirst_adjust_amt);
+                  if(rate < 0) {
+                     rate = 0;
+                  }
+                  if(rate > Vrate_cap) {
+                     rate = Vrate_cap;
+                  }
+                  pmt = computeMonthlyPayment(prin, new_term_months, rate);
+               }
+            }
+
+
+
+            i = rate / 100 / 12;
+
+            if(cnt < term_months) {
+
+               int_port = Math.round(prin * i * 100) / 100;
+               accum_int += int_port;
+			   accum_int_yr += int_port;
+               prin_port= Number(pmt) - Number(int_port);
+               accum_prin = Number(accum_prin) + Number(prin_port);
+			   accum_prin_yr += prin_port;
+               prin = Number(prin) - Number(prin_port);
+
+            } else {
+
+               int_port = Math.round(prin * i * 100) / 100;
+               accum_int += int_port;
+			   accum_int_yr += int_port;
+               prin_port= prin;
+			   accum_prin_yr += prin_port;
+               accum_prin = Number(accum_prin) + Number(prin_port);
+               prin = Number(prin) - Number(prin_port);
+               pmt = Number(prin_port) + Number(int_port);
+            }
+
+            accum_pmts += pmt;			
+            if(report == 1) {
+
+        currentdate = moment(startdate);
+        startdate.add(1, 'months');				
+    		while (Vday > 28 && moment(startdate).date() < Vday && moment(startdate).date() < moment(startdate).daysInMonth()) {
+	    		startdate.add((1), 'days');			
+		    	}						
+var currentmonthofyear = currentdate.format('MM');
+
+               pmtRows += "<tr><td align='right'><font face='arial'><small>" + currentdate.format('ll') + "</small>";
+               pmtRows += "</font></td><td align='right'><font face='arial'>";
+               pmtRows += "<small>" + fns(rate,2,0,2,1) + "</small></font></td>";
+               pmtRows += "<td align='right'><font face='arial'><small>" + fns(prin_port,2,1,1,1) + "</small>";
+               pmtRows += "</font></td><td align='right'><font face='arial'>";
+               pmtRows += "<small>" + fns(int_port,2,1,1,1) + "</small></font></td>";
+               pmtRows += "<td align='right'><font face='arial'>";
+               pmtRows += "<small>" + fns(pmt,2,1,1,1) + "</small></font></td>";
+               pmtRows += "<td align='right'><font face='arial'>";
+               pmtRows += "<small>" + fns(prin,2,1,1,1) + "</small></font></td></tr>";
+            }
+
+            if(report == 1 && currentmonthofyear == 12 || report == 1 && cnt == term_months) {
+
+               pmtRows += "<tr><td align='right' style='background-color:#dddddd !important'><font face='arial' style='font-weight:bold'>" + currentdate.format('YYYY') + "";
+               pmtRows += "</font></td><td align='right' style='background-color:#dddddd !important'><font face='arial' style='font-weight:bold'>";
+               pmtRows += "" + fns(rate,2,0,2,1) + "</font></td>";
+               pmtRows += "<td align='right' style='background-color:#dddddd !important'><font face='arial' style='font-weight:bold'>" + fns(accum_prin_yr,2,1,1,1) + "";
+               pmtRows += "</font></td><td align='right' style='background-color:#dddddd !important'><font face='arial' style='font-weight:bold'>";
+               pmtRows += "" + fns(accum_int_yr,2,1,1,1) + "</font></td>";
+               pmtRows += "<td align='right' style='background-color:#dddddd !important'><font face='arial' style='font-weight:bold'>";
+               pmtRows += "" + fns(accum_prin_yr+accum_int_yr,2,1,1,1) + "</font></td>";
+               pmtRows += "<td align='right' style='background-color:#dddddd !important'><font face='arial' style='font-weight:bold'>";
+               pmtRows += "" + fns(prin,2,1,1,1) + "</font></td></tr>";
+
+		 accum_prin_yr = 0;
+		 accum_int_yr = 0;
+
+
+			}
+
+
+
+
+         }
+         
+		 var avgmonth = ((accum_pmts+accum_others)/term_months);
+		  
+         document.calc.amountfinanced.value = fns(Vprincipal,2,1,1,1);
+         document.calc.extramonthlyexpenses.value = fns(Vextra,2,1,1,1);
+         document.calc.extramonthlyexpenses2.value = fns(Vextra,2,1,1,1);
+         document.calc.total_pmts.value = fns(accum_pmts,2,1,1,1);
+         document.calc.total_int.value = fns(accum_int,2,1,1,1);
+         if(pmt > Vstart_pmt) {
+            document.calc.max_pmt.value = fns(pmt,2,1,1,1);
+            document.calc.max_pmt_2.value = fns((pmt+Vextra),2,1,1,1);
+         } else {
+            document.calc.max_pmt.value = fns(Vstart_pmt,2,1,1,1);
+            document.calc.max_pmt_2.value = fns((pmt+Vextra),2,1,1,1);
+         }
+         document.calc.total_other_pmts.value = fns(accum_others,2,1,1,1);
+         document.calc.overall_total_pmts.value = fns((accum_pmts+accum_others),2,1,1,1);
+         document.calc.avgmonthlyamount.value = fns(((accum_pmts+accum_others)/term_months),2,1,1,1);
+
+         if(report == 1) {
+
+            var part1 = "<html><head><title>Amortization Schedule</title>  <link rel='stylesheet' href='https://mortgagecalculator.org/design/printlayout.css' type='text/css' media='print' /> <link href='https://www.mortgagecalculator.org/design/style.css' rel='stylesheet' media='screen'></head>";
+            part1 += "<b";
+            part1 += "od";
+            part1 += "y bgcolor= '#FFFFFF'>";
+            part1 += "<br /><br /><center><font face='arial'><big>";
+            part1 += "<strong>Adjustable Rate Mortgage Summary</strong></big></font></center> <br/> <center><a href='javascript:window.print()'><img src='https://www.mortgagecalculator.org/images/print-this.png' alt='print this schedule' id='printthis' border='0'/></a></center><br/>";
+
+
+            var part2 = "<center><table border=1 cellpadding=2 cellspacing=0 bordercolor='#EEEEEE'>";
+            part2 += "<tr><td colspan=4><font face='arial'><small>Mortgage Loan Amount:</small></font></td>";
+            part2 += "<td colspan='2' align='right'><font face='arial'>";
+            part2 += "<small>" + fns(Vprincipal,2,1,1,1) + "</small></font></td></tr>";
+            part2 += "<tr><td colspan=4><font face='arial'><small>Mortgage Term:</small></font></td>";
+            part2 += "<td colspan='2' align='right'><font face='arial'><small>" + VnumYears + " years</small>";
+            part2 += "</font></td></tr><tr><td colspan=4><font face='arial'><small>Beginning Interest Rate:";
+            part2 += "</small></font></td><td colspan='2' align='right'><font face='arial'>";
+            part2 += "<small>" + fns(Vstart_rate,3,0,2,1) + "</small></font></td></tr>";
+            part2 += "<tr><td colspan=4><font face='arial'><small>Beginning Monthly P&I Payment:";
+            part2 += "</small></font></td><td colspan='2' align='right'><font face='arial'>";
+            part2 += "<small>" + fns(Vstart_pmt,2,1,1,1) + "</small></font></td></tr>";
+            part2 += "<tr><td colspan=4><font face='arial'><small>Taxes &amp; Other Monthly Expenses:";
+            part2 += "</small></font></td><td colspan='2' align='right'><font face='arial'>";
+            part2 += "<small>" + fns(Vextra,2,1,1,1) + "</small></font></td></tr>";
+            part2 += "<tr><td colspan=4><font face='arial'><small>Total Initial Monthly Payments:";
+            part2 += "</small></font></td><td colspan='2' align='right'><font face='arial'>";
+            part2 += "<small>" + fns(Vstart_pmt+Vextra,2,1,1,1) + "</small></font></td></tr>";
+            part2 += "<tr><td colspan=4><font face='arial'><small>Maximum Monthly P&I Payment:";
+            part2 += "</small></font></td><td colspan='2' align='right'><font face='arial'>";
+            part2 += "<small>" + fns(pmt,2,1,1,1) + "</small></font></td></tr>";
+            part2 += "<tr><td colspan=4><font face='arial'><small>Taxes &amp; Other Monthly Expenses:";
+            part2 += "</small></font></td><td colspan='2' align='right'><font face='arial'>";
+            part2 += "<small>" + fns(Vextra,2,1,1,1) + "</small></font></td></tr>";
+            part2 += "<tr><td colspan=4><font face='arial'><small>Total Maximum Monthly Payments:";
+            part2 += "</small></font></td><td colspan='2' align='right'><font face='arial'>";
+            part2 += "<small>" + fns(pmt+Vextra,2,1,1,1) + "</small></font></td></tr>";
+            part2 += "<tr><td colspan=4><font face='arial'><small>Maximum Interest Rate:</small>";
+            part2 += "</font></td><td colspan='2' align='right'><font face='arial'>";
+            part2 += "<small>" + fns(Vrate_cap,3,0,2,1) + "</small></font></td></tr>";
+            part2 += "<tr><td colspan=4><font face='arial'><small>Expected Initial Rate Adjustment:";
+            part2 += "</small></font></td><td colspan='2' align='right'><font face='arial'>";
+            part2 += "<small>" + fns(Vfirst_adjust_amt,2,0,2,1) + "</small></font></td></tr>";
+            part2 += "<tr><td colspan=4><font face='arial'><small>Expected Further Rate Adjustments:";
+            part2 += "</small></font></td><td colspan='2' align='right'><font face='arial'>";
+            part2 += "<small>" + fns(Vadjust_amt,2,0,2,1) + "</small></font></td></tr>";
+            part2 += "<tr><td colspan=4><font face='arial'><small>Initial Fixed Rate Period:</small>";
+            part2 += "</font></td><td colspan='2' align='right'><font face='arial'>";
+            part2 += "<small>" + Vstart_months + " Months</small></font></td></tr><tr>";
+            part2 += "<td colspan=4><font face='arial'><small>";
+            part2 += "Adjustment Period:</small></font></td><td colspan='2' align='right'>";
+            part2 += "<font face='arial'><small>" + Vadjust_months + " Months</small>";
+            part2 += "</font></td></tr><tr><td colspan=4><font face='arial'><small>Total of All P&I";
+            part2 += " Monthly Payments:</small></font></td><td colspan='2' align='right'>";
+            part2 += "<font face='arial'><small>" + fns(accum_pmts,2,1,1,1) + "</small>";
+            part2 += "</font></td></tr><tr><td colspan=4><font face='arial'><small>Total Interest:";
+            part2 += "</small></font></td><td colspan='2' align='right'><font face='arial'>";
+            part2 += "<small>" + fns(accum_int,2,1,1,1) + "</small></font></td></tr>";
+            part2 += "<tr><td colspan=4><font face='arial'><small>Average";
+            part2 += " Monthly Payments:</small></font></td><td colspan='2' align='right'>";
+            part2 += "<font face='arial'><small>" + fns(avgmonth,2,1,1,1) + "</small>";
+            part2 += "</font></td></tr>";
+            part2 += "<tr><td colspan=6><center><font face='arial'><strong>Schedule of P&I Payments</strong>";
+            part2 += "</font><br /><font face='arial'><small><small>Excludes taxes, HOA &amp; insurance. Please allow for slight ";
+            part2 += "rounding differences.</small></small></font></center></td></tr>";
+            part2 += "<tr bgcolor='silver'><td align='center'><font face='arial'><small>";
+            part2 += "<strong>Date</strong></small></font></td><td align='center'><font face='arial'>";
+            part2 += "<small><strong>Rate</strong></small></font></td><td align='center'>";
+            part2 += "<font face='arial'><small><strong>Principal</strong></small></font></td>";
+            part2 += "<td align='center'><font face='arial'><small><strong>Interest</strong></small>";
+            part2 += "</font></td><td align='center'><font face='arial'><small><strong>Payment</strong>";
+            part2 += "</small></font></td><td align='center'><font face='arial'><small>";
+            part2 += "<strong>Balance</strong></small></font></td></tr>";
+
+            var part4 = "<tr><td colspan='2'><font face='arial'><strong>Grand Total";
+            part4 += "</font></td><td align='right'><font face='arial'>";
+            part4 += "<strong>" + fns(accum_prin,2,1,1,1) + "</strong></font>";
+            part4 += "</td><td align='right'><font face='arial'>";
+            part4 += "<strong>" + fns(accum_int,2,1,1,1) + "</strong></font></td>";
+            part4 += "<td align='right'><font face='arial'>";
+            part4 += "<strong>" + fns(accum_pmts,2,1,1,1) + "</strong></font></td>";
+            part4 += "<td> </td></tr></table><br /><center><form method='post'>";
+            part4 += "<input type='button' value='Close Window' class='styled-button' id='closethis' onClick='window.close()'>";
+            part4 += "</form></center></body></html>";
+
+            var schedule = (part1 + "" + part2 + "" + pmtRows + "" + part4 + "");   reportWin = window.open("","","width=1000,height=800,toolbar=yes,menubar=yes,scrollbars=yes");
+
+            reportWin.document.write(schedule);
+
+            reportWin.document.close();
+
+         }
+      }
+   }
+}
+
+function clear_results(form) {
+
+   document.calc.start_pmt.value = "";
+   document.calc.total_pmts.value = "";
+   document.calc.total_int.value = "";
+   document.calc.max_pmt.value = "";
+}</script>
+</head>
+
+
+<body>
+
+	<!--Begin header section-->
+	<header class="header-container">
+		<div class="wrapper">
+			<div class="logo">
+				<a href="https://www.mortgagecalculator.org/"><img src="https://www.mortgagecalculator.org/images/mortgage-calculator-logo.png" alt="Mortgage Calculator.org Logo." /></a>
+			</div>
+		</div>
+	</header>
+	<!--End header section-->
+	<!--Begin Content section-->
+	<section class="content-container">
+		<section class="menu-area">
+			<div class="wrapper">
+				<div class="main-menu">
+					<nav>
+						<ul class="centnav">
+							<li>
+								<a href="https://www.mortgagecalculator.org/">Mortgage Calcs</a>
+								<ul>
+									<li><a href="https://www.mortgagecalculator.org/calculators/mortgage-payment-calculator.php">30 yr Fixed</a></li>
+									<li><a href="https://www.mortgagecalculator.org/calculators/which-loan-is-better.php">15 vs 30 yr</a></li>
+									<li><a href="https://www.mortgagecalculator.org/calculators/second-mortgage-calculator.php">Second Mortgage</a></li>
+                                    <li><a href="https://www.mortgagecalculator.org/calculators/should-i-use-heloc.php">HELOC</a></li>
+								</ul>
+							</li>
+
+                            <li>
+								<a href="https://www.mortgagecalculator.org/calculators/should-i-refinance.php">Refinance</a>
+								<ul>
+									<li><a href="https://www.mortgagecalculator.org/calculators/should-i-refinance.php">Refi Calculator</a></li>
+									<li><a href="https://www.mortgagecalculator.org/helpful-advice/what-is-a-refinancing.php">Refi Advice</a></li>
+									<li><a href="https://www.mortgagecalculator.org/helpful-advice/costs-of-refinancing.php">Refi Costs</a></li>
+                                    <li><a href="https://www.mortgagecalculator.org/helpful-advice/top-reasons-to-refinance.php">When to Refi</a></li>
+								</ul>
+							</li>
+
+                            <li>
+								<a href="https://www.mortgagecalculator.org/mortgage-rates/">Rates</a>
+								<ul>
+									<li><a href="https://www.mortgagecalculator.org/calculators/what-is-the-real-apr-calculator.php">Real APR</a></li>
+									<li><a href="https://www.mortgagecalculator.org/calcs/fha-mortgage-qualifier.php">FHA</a> </li>
+									<li><a href="https://www.mortgagecalculator.org/mortgage-rates/va.php">VA</a></li>
+									<li><a href="https://www.mortgagecalculator.org/mortgage-rates/jumbo.php">Jumbo</a></li>
+								</ul>
+							</li>
+
+							<li>
+                            	<a href="https://www.mortgagecalculator.org/calcs/arm.php">ARM</a>
+									<ul>
+                                    <li><a href="https://www.mortgagecalculator.org/calcs/fixed-vs-arm.php">Fixed vs ARM</a></li>
+                                    <li><a href="https://www.mortgagecalculator.org/calculators/interest-only-calculator.php">Interest Only</a></li>
+									<li><a href="https://www.mortgagecalculator.org/calculators/interest-only--with-repayments-calculator.php">Interest Only w Extra</a></li>
+                                    <li><a href="https://www.mortgagecalculator.org/calcs/balloon.php">Balloon</a></li>
+                                    </ul>
+                            </li>
+
+							<li>
+								<a href="https://www.mortgagecalculator.org/calculators/affordability-calculator.php">Affordability</a>
+								<ul>
+									<li><a href="https://www.mortgagecalculator.org/calculators/buy-vs-rent-calculator.php">Rent or Buy</a></li>
+                                    <li><a href="https://www.mortgagecalculator.org/calculators/how-much-income-do-i-need-to-qualify.php">Income Requirements</a></li>
+									<li><a href="https://www.mortgagecalculator.org/helpful-advice/mortgage-qualifications.php">Mortgage Qualification</a></li>
+								</ul>
+							</li>
+
+                            <li>
+								<a href="https://www.mortgagecalculator.org/calcs/savings.php">Save Money</a>
+								<ul>
+									<li><a href="https://www.mortgagecalculator.org/calculators/what-if-i-pay-more-calculator.php">Extra Payments</a></li>
+									<li><a href="https://www.mortgagecalculator.org/calculators/standard-vs-bi-weekly-calculator.php">Biweekly</a></li>
+									<li><a href="https://www.mortgagecalculator.org/calculators/should-i-pay-points-calculator.php">Paying Points</a></li>
+                                    <li><a href="https://www.mortgagecalculator.org/calculators/tax-benefits-calculator.php">Tax Benefits</a></li>
+								</ul>
+							</li>
+
+							<li><a href="https://www.mortgagecalculator.org/helpful-advice/index.php">Advice</a>
+								<ul>
+									<li><a href="https://www.mortgagecalculator.org/helpful-advice/mortgage-qualifications.php">Mortgage Qualification</a></li>
+                                    <li><a href="https://www.mortgagecalculator.org/helpful-advice/types-of-mortgages.php">Types of Mortgages</a></li>
+									<li><a href="https://www.mortgagecalculator.org/helpful-advice/bad-credit-mortgage-loans.php">Improving Credit</a></li>
+                            		<li><a href="https://news.mortgagecalculator.org/">Industry News</a></li>
+                            	</ul>
+                            </li>
+
+							<li>
+								<a href="https://www.mortgagecalculator.org/calculators/index.php">Financial Calcs</a>
+                                <ul>
+									<li><a href="https://www.mortgagecalculator.org/calcs/amortization.php">Amortization</a></li>
+                                    <li><a href="https://www.mortgagecalculator.org/calcs/loan.php">Personal Loans</a></li>
+                                    <li><a href="https://www.mortgagecalculator.org/calcs/car.php">Car</a></li>
+									<li><a href="https://www.mortgagecalculator.org/calcs/cd.php">CD</a></li>
+								</ul>
+							</li>
+
+							<li><a href="https://www.mortgagecalculator.org/free-tools/">Widgets</a>
+                            	<ul>
+									<li><a href="https://www.mortgagecalculator.org/free-tools/">Sidebar Calculators</a></li>
+									<li><a href="https://www.mortgagecalculator.org/free-tools/javascript-mortgage-calculator.php">Full Page Calc</a></li>
+									<li><a href="https://news.mortgagecalculator.org/wp-mortgage-calculator-widget-plug-in-for-wordpress/">Wordpress</a></li>
+									<li><a href="https://www.mortgagecalculator.org/rates-widgets/mortgages/">Rate Tables</a></li>
+								</ul>
+							</li>
+						</ul>
+					</nav>
+				</div>
+			</div>
+		</section></section>
+
+		<section class="content-area">
+			<div class="wrapper">
+
+				<div class="sidebar">
+					<div class="block">
+                    <ul>
+
+						<li>
+							<div class="side-block"><div class="nomobilerates" style="width:290px; max-width:100%">								<h6>Current Mortgage Rates</h6>
+
+<iframe src="https://widgets.icanbuy.com/RateAverages.aspx?pubid=100&showtabs=mortgage&size=300&hideratesbtn=1&hidealltabs=1&todayratefontsize=18&lastweekratefontsize=13&openlinksinnewpage=1&external=mortgagecalculator.org.left.calcs.5.1.arm.php&redirecturl=https%3A%2F%2Fwww.mortgagecalculator.org%2Ffree-rate-quote%2F" border="0" width="100%" height="220px" scrolling="no"></iframe>
+</div></div>
+						</li>
+
+						<li>
+							<div class="side-block">
+
+<h6>Refinancing Tools</h6>
+<ul>
+<li><a href="https://www.mortgagecalculator.org/calculators/should-i-refinance.php">Refinance</a></li>
+<li><a href="https://www.mortgagecalculator.org/calculators/should-i-use-heloc.php">HELOC</a></li>
+</ul>
+							</div>
+						</li>
+
+						<li>
+							<div class="side-block">
+
+<h6>Mortgage Tools</h6>
+<ul>
+<li><a href="https://www.mortgagecalculator.org/calculators/mortgage-payment-calculator.php">Payment Amount </a></li>
+<li><a href="https://www.mortgagecalculator.org/calculators/what-is-the-real-apr-calculator.php">Real APR </a></li>
+<li><a href="https://www.mortgagecalculator.org/calculators/second-mortgage-calculator.php">PMI vs 2nd Mortgage</a></li>
+<li><a href="https://www.mortgagecalculator.org/calculators/mortgage-principal-calculator.php">Remaining Principal </a></li>
+<li><a href="https://www.mortgagecalculator.org/calculators/payment-per-thousand-calculator.php">Cost Per Thousand</a></li>
+</ul>
+							</div>
+						</li>
+
+						<li>
+							<div class="side-block">
+
+<h6>Loan Qualification</h6>
+<ul>
+<li><a href="https://www.mortgagecalculator.org/calculators/affordability-calculator.php">Home Affordability</a></li>
+<li><a href="https://www.mortgagecalculator.org/calculators/how-much-income-do-i-need-to-qualify.php">Income Requirements</a></li>
+<li><a href="https://www.mortgagecalculator.org/calcs/fha-mortgage-qualifier.php">FHA Qualification</a></li> 
+</ul>
+							</div>
+						</li>
+
+						<li>
+							<div class="side-block">
+
+<h6>Loan Comparison Tools</h6>
+<ul>
+<li><a href="https://www.mortgagecalculator.org/calculators/which-loan-is-better.php">Best Home Loan</a></li>
+<li><a href="https://www.mortgagecalculator.org/calculators/mortgage-length-calculator.php">Mortgage Length</a></li>
+<li><a href="https://www.mortgagecalculator.org/calculators/should-i-pay-points-calculator.php">Calculate Points</a></li>
+<li><a href="https://www.mortgagecalculator.org/calculators/buy-vs-rent-calculator.php">Rent vs Buy</a></li>
+</ul>
+							</div>
+						</li>
+
+						<li>
+							<div class="side-block">
+
+<h6>Money Saving Tools</h6>
+
+<ul>
+<li><a href="https://www.mortgagecalculator.org/calcs/cd.php">CDs </a></li>
+<li><a href="https://www.mortgagecalculator.org/calcs/fixed-annuity.php">Fixed Annuity </a></li>
+<li><a href="https://www.mortgagecalculator.org/calcs/annuity.php">Variable Annuity</a></li>
+<li><a href="https://www.mortgagecalculator.org/calculators/standard-vs-bi-weekly-calculator.php">Bi-weekly</a></li>
+<li><a href="https://www.mortgagecalculator.org/calculators/what-if-i-pay-more-calculator.php">Extra Payment</a></li>
+<li><a href="https://www.mortgagecalculator.org/calculators/tax-benefits-calculator.php">Tax Benefits </a></li>
+</ul>
+							</div>
+						</li>
+
+						<li>
+							<div class="side-block">
+
+<h6>Interest Only Loans</h6>
+<ul>
+<li><a href="https://www.mortgagecalculator.org/calculators/interest-only-calculator.php">Interest Only </a></li>
+<li><a href="https://www.mortgagecalculator.org/calculators/interest-only--with-repayments-calculator.php">Interest + Pay Extra</a></li>
+<li><a href="https://www.mortgagecalculator.org/calcs/reverse-mortgage.php">Reverse Mortgages </a></li>
+</ul>
+							</div>
+						</li>
+
+						<li>
+							<div class="side-block">
+
+<h6>Credit Cards </h6>
+<ul>
+<li><a href="https://www.mortgagecalculator.org/calculators/credit-card-minimum-payment.php">Minimum Credit Card Payments</a></li>
+<li><a href="https://www.mortgagecalculator.org/calculators/credit-card-payoff-goal.php">Pay Off Credit Cards</a></li>
+</ul>
+							</div>
+						</li>
+
+						<li>
+							<div class="side-block">
+
+<h6>More  Tools</h6>
+<ul>
+<li><a href="https://www.mortgagecalculator.org/calculators/canadian-mortgage-calculator.php">Canadian Mortgages</a></li>
+<li><a href="https://www.mortgagecalculator.org/download/">Desktop Mortgage Calculator</a></li>
+</ul>
+							</div>
+						</li>
+</ul>
+					<a class="close-btn" id="nav-close-btn" href="#top" title="Close">Return to Content</a>
+					</div>
+				</div>
+
+				<div class="content-right">
+					<a class="nav-btn" id="nav-open-btn" href="#nav" title="Sidebar">Navigation</a>
+<!-- END LEFT NAVIGATION -->
+
+
+ <img src="https://www.mortgagecalculator.org/images/5-1-arm-calculator.png" width="819" height="65" />
+		<div class="cal-block">
+						<div class="black-block">
+							<strong>Calculate 5/1 &amp; 5/5 ARM Home Loan Payments Online for Free</strong></div>
+<div class="cal-content">
+
+<div class="tabsmain">
+  
+  <input id="tab1" type="radio" name="tabs" checked>
+  <label for="tab1">Calculator</label>
+    
+  <input id="tab2" type="radio" name="tabs">
+  <label for="tab2">Rates</label>
+        
+  <section id="content1">
+
+		<h1>5YR Adjustable Rate Mortgage Calculator</h1>
+			
+<p>Thinking of getting a 30-year variable rate loan with a 5-year introductory fixed rate? Use this calculator to figure your expected initial monthly payments &amp; the expected payments after the loan's reset period. You can also use the button at the bottom of the calculator to print out a printable loan amortization table.</p>
+
+ <p>To help you see current market conditions and find a local lender <a href="#currentrates"><strong><font style="color:#0000ff">current Federal Way 5/1 ARM rates</font></strong></a> are published in a table below the calculator. </p>
+
+<form name="calc" method="post" action="#">
+  <table class="sortable" width='100%'>
+ <thead>
+ <tr>
+ <th>Home Loan Information</th>
+ <th>Amount</th> 
+ </tr>
+ </thead>
+<tbody>
+<tr>
+<td nowrap>
+Home Price [<a href="#" title="home value is used to calculate insurance premiums, property taxes, and if PMI is needed">?</a>]:
+</td>
+<td align="center">
+<input type="number" step="any" name="homeprice" size="8" value="400000" onKeyUp="clear_results(this.form);computeForm(this.form)" onfocus="if(this.value==this.defaultValue)this.value=''" onblur="if(this.value=='')this.value=this.defaultValue" tabindex="1"/>
+
+</td>
+</tr>
+
+<tr>
+<td nowrap>
+Down Payment [<a href="#" title="if the downpayment is under 20% PMI will typically be required">?</a>]:
+</td>
+<td align="center">
+<input type="number" step="any" name="downpayment" size="8" value="80000" onKeyUp="clear_results(this.form);computeForm(this.form)" onfocus="if(this.value==this.defaultValue)this.value=''" onblur="if(this.value=='')this.value=this.defaultValue" tabindex="2"/>
+
+</td>
+</tr>
+
+<tr>
+<td nowrap>
+Initial APR (%) [<a href="#" title="the introductory rate which a Hybrid ARM charges during the initial rate lock period">?</a>]: <a href="#currentrates"><strong>See Current Rates</strong></a>
+</td>
+<td align="center">
+<input type="number" step="any" name="start_rate" size="8" value="6.5" onKeyUp="clear_results(this.form);computeForm(this.form)" onfocus="if(this.value==this.defaultValue)this.value=''" onblur="if(this.value=='')this.value=this.defaultValue" tabindex="3"/>
+</td>
+</tr>
+
+<tr>
+<td nowrap>
+Lending Term (Years) [<a href="#" title="how many years the loan is amortized across, typically 30 for most residential mortgages">?</a>]:
+</td>
+<td align="center">
+<input type="number" step="any" name="numYears" size="8" value="30" onKeyUp="clear_results(this.form);computeForm(this.form)" onfocus="if(this.value==this.defaultValue)this.value=''" onblur="if(this.value=='')this.value=this.defaultValue" tabindex="4"/>
+</td>
+</tr>
+
+<tr>
+<td nowrap>
+Closing Costs ($, if included in loan) [<a href="#" title="enter $0 if not included in your loan. these costs include loan origination, appraisal, points, etc.">?</a>]:
+</td>
+<td align="center">
+<input type="number" step="any" name="closing" size="8" value="3680" onKeyUp="clear_results(this.form);computeForm(this.form)" onfocus="if(this.value==this.defaultValue)this.value=''" onblur="if(this.value=='')this.value=this.defaultValue" tabindex="14"/>
+</td>
+</tr>
+
+<tr>
+<td nowrap>
+<accronym title="Private Mortgage Insurance">PMI</accronym> (%) [<a href="#" title="if you put less than 20% down you will typically need to pay PMI">?</a>]:
+</td>
+<td align="center">
+<input type="number" step="any" name="pmi" size="8" value="0.5" onKeyUp="clear_results(this.form);computeForm(this.form)" onfocus="if(this.value==this.defaultValue)this.value=''" onblur="if(this.value=='')this.value=this.defaultValue" tabindex="12"/>
+</td>
+</tr>
+</tbody>
+</table>
+
+ <table class="sortable" width='100%'>
+ <thead>
+ <tr>
+ <th>Rate Adjustments</th>
+ <th>Amount</th> 
+ </tr>
+ </thead>
+<tbody>
+<tr>
+<td nowrap>
+Years Before 1<sup>ST</sup> Adjustment: [<a href="#" title="for a 5/1 ARM this would be the 5, as in 5 years">?</a>] </td>
+<td align="center">
+<input type="number" step="any" name="start_months" size="8" value="5" onKeyUp="clear_results(this.form);computeForm(this.form)" onfocus="if(this.value==this.defaultValue)this.value=''" onblur="if(this.value=='')this.value=this.defaultValue" tabindex="5"/>
+</td>
+</tr>
+
+<tr>
+<td nowrap>
+Expected First Adjustments (%) [<a href="#" title="this will typically be larger than other adjustments since some loans have an artificially low introductory rate &amp; market conditions have multiple years to change before this adjusts">?</a>]:
+</td>
+<td align="center">
+<input type="number" step="any" name="first_adjust_amt" size="8" value="2" onKeyUp="clear_results(this.form);computeForm(this.form)" onfocus="if(this.value==this.defaultValue)this.value=''" onblur="if(this.value=='')this.value=this.defaultValue" tabindex="6"/>
+</td>
+</tr>
+
+<tr>
+<td nowrap>
+Months Between Subsequent Adjustments [<a href="#" title="typically 12 for most ARMs, though if rates adjust twice a year it would be 6 &amp; it would be 24 if they adjust every other year">?</a>]:
+</td>
+<td align="center">
+<input type="number" step="any" name="adjust_months" size="8" value="12" onKeyUp="clear_results(this.form);computeForm(this.form)" onfocus="if(this.value==this.defaultValue)this.value=''" onblur="if(this.value=='')this.value=this.defaultValue" tabindex="7"/>
+</td>
+</tr>
+
+<tr>
+<td nowrap>
+Expected Subsequent Adjustments (%) [<a href="#" title="typically smaller than the initial adjustment">?</a>]:
+</td>
+<td align="center">
+<input type="number" step="any" name="adjust_amt" size="8" value=".5" onKeyUp="clear_results(this.form);computeForm(this.form)" onfocus="if(this.value==this.defaultValue)this.value=''" onblur="if(this.value=='')this.value=this.defaultValue" tabindex="8"/>
+</td>
+</tr>
+
+<tr>
+<td nowrap>
+Lifetime Adjustment Cap (%): [<a href="#" title="if rates started at 4% and were allowed to go up 6% to a max of 10% you would enter 6% here. typically lifetime cap is 5% or 6% on most ARM loans">?</a>] </td>
+<td align="center">
+<input type="number" step="any" name="rate_cap" size="8" value="5" onKeyUp="clear_results(this.form);computeForm(this.form)" onfocus="if(this.value==this.defaultValue)this.value=''" onblur="if(this.value=='')this.value=this.defaultValue" tabindex="9"/>
+</td>
+</tr>
+</tbody>
+</table>
+
+ <table class="sortable" width='100%'>
+ <thead>
+ <tr>
+ <th>Other Costs of Ownership</th>
+ <th>Amount</th> 
+ </tr>
+ </thead>
+<tbody>
+<tr>
+<td nowrap>
+Annual Property Taxes ($) [<a href="#" title="varies widely by state &amp; county">?</a>]:
+</td>
+<td align="center">
+<input type="number" step="any" name="propertytaxes" size="8" value="2700" onKeyUp="clear_results(this.form);computeForm(this.form)" onfocus="if(this.value==this.defaultValue)this.value=''" onblur="if(this.value=='')this.value=this.defaultValue" tabindex="10"/>
+</td>
+</tr>
+
+<tr>
+<td nowrap>
+Annual Home Insurance($) [<a href="#" title="more expensive homes typically cost more to insure">?</a>]:
+</td>
+<td align="center">
+<input type="number" step="any" name="homeinsurance" size="8" value="1500" onKeyUp="clear_results(this.form);computeForm(this.form)" onfocus="if(this.value==this.defaultValue)this.value=''" onblur="if(this.value=='')this.value=this.defaultValue" tabindex="11"/>
+</td>
+</tr>
+
+<tr>
+<td nowrap>
+Monthly <accronym title="Homeowner's Association">HOA</accronym> Dues ($) [<a href="#" title="your monthly dues, if your property falls within a homeowner's association">?</a>]:
+</td>
+<td align="center">
+<input type="number" step="any" name="hoa" size="8" value="0" onKeyUp="clear_results(this.form);computeForm(this.form)" onfocus="if(this.value==this.defaultValue)this.value=''" onblur="if(this.value=='')this.value=this.defaultValue" tabindex="13"/>
+</td>
+</tr>
+
+<tr>
+<td colspan="2" class="text-Mid">
+<input type="button" class="styled-button" name="compute" value="Calculate" onClick="computeForm(0)" tabindex="15"/>
+<input type="reset" class="styled-button" value="Reset" />
+</td>
+</tr>
+</tbody>
+</table>
+
+
+ <table class="sortable" width='100%'>
+ <thead>
+ <tr>
+ <th>Your Initial Payment</th>
+ <th>Amount</th> 
+ </tr>
+ </thead>
+<tbody>
+<tr>
+<td nowrap>
+Initial Monthly Principal &amp; Interest [<a href="#" title="the core initial loan payment">?</a>]:
+</td>
+<td align="center">
+<input type="text" name="start_pmt" size="15" tabindex="16"/>
+</td>
+</tr>
+
+<tr>
+<td nowrap>
+Monthly Taxes, Insurance + HOA [<a href="#" title="other costs of ownership">?</a>]:
+</td>
+<td align="center">
+<input type="text" name="extramonthlyexpenses" size="15" tabindex="17"/>
+</td>
+</tr>
+
+<tr>
+<td nowrap>
+Full Initial Monthly Payments [<a href="#" title="both of the above added together">?</a>]:
+</td>
+<td align="center">
+<input type="text" name="start_pmt_2" size="15" tabindex="18"/>
+</td>
+</tr>
+</tbody>
+</table>
+
+
+ <table class="sortable" width='100%'>
+ <thead>
+ <tr>
+ <th>Maximum Monthly Payments</th>
+ <th>Amount</th> 
+ </tr>
+ </thead>
+<tbody>
+<tr>
+<td nowrap>
+Maximum P&amp;I Monthly Payment [<a href="#" title="core monthly loan payment at either your rate cap if it is anticipated you will meet it, or whatever the peak rate is anticipated given your above entered rate adjustement information">?</a>]:
+</td>
+<td align="center">
+<input type="text" name="max_pmt" size="15" tabindex="19"/>
+</td>
+</tr>
+
+<tr>
+<td nowrap>
+Monthly Taxes, Insurance + HOA [<a href="#" title="other costs of ownership">?</a>]:
+</td>
+<td align="center">
+<input type="text" name="extramonthlyexpenses2" size="15" tabindex="20"/>
+</td>
+</tr>
+
+<tr>
+<td nowrap>
+Maximum Payment With Other Expenses [<a href="#" title="both of the above added together">?</a>]:
+</td>
+<td align="center">
+<input type="text" name="max_pmt_2" size="15" tabindex="21"/>
+</td>
+</tr>
+</tbody>
+</table>
+
+ <table class="sortable" width='100%'>
+ <thead>
+ <tr>
+ <th>Loan Totals</th>
+ <th>Amount</th> 
+ </tr>
+ </thead>
+<tbody>
+
+<tr>
+<td nowrap>
+Amount Financed [<a href="#" title="loan amount, including the closing costs, if rolled into loan">?</a>]:
+</td>
+<td align="center">
+<input type="text" name="amountfinanced" size="15" tabindex="22"/>
+</td>
+</tr>
+
+
+<tr>
+<td nowrap>
+Total Interest [<a href="#" title="estimated interest paid over the entire duration of the loan">?</a>]:
+</td>
+<td align="center">
+<input type="text" name="total_int" size="15" tabindex="23"/>
+</td>
+</tr>
+
+
+<tr>
+<td nowrap>
+Total monthly P&amp;I Payments [<a href="#" title="sum of all principal and interest payments">?</a>]:
+</td>
+<td align="center">
+<input type="text" name="total_pmts" size="15" tabindex="24"/>
+</td>
+</tr>
+
+<tr>
+<td nowrap>
+Total Taxes, Insurance + HOA [<a href="#" title="sum of all payments related to other costs of ownership">?</a>]:
+</td>
+<td align="center">
+<input type="text" name="total_other_pmts" size="15" tabindex="25"/>
+</td>
+</tr>
+
+<tr>
+<td nowrap>
+Total Loan Payments + Other Expenses [<a href="#" title="combining core loan payments and other costs of ownership throughout the duration of the loan">?</a>]:
+</td>
+<td align="center">
+<input type="text" name="overall_total_pmts" size="15" tabindex="26"/>
+</td>
+</tr>
+
+<tr>
+<td nowrap>
+Average Monthly Total [<a href="#" title="the all-in amount listed above, divided by the number of monthly payments">?</a>]:
+</td>
+<td align="center">
+<input type="text" name="avgmonthlyamount" size="15" tabindex="27"/>
+</td>
+</tr>
+</tbody>
+</table>
+
+
+ <table class="sortable" width='100%'>
+ <thead>
+<tr>
+<th colspan="2" class="text-Mid">Generate Loan Amortization Schedule?</th>
+</tr>
+ </thead>
+ <tbody>
+
+ <tr>
+<td colspan="2" class="text-Mid">Loan origination date:  <select name="loanoriginationmonth" id="loanoriginationmonth" size="1" class="dd-Style">
+ <option value="0">Month</option>
+ <option value="1" >Jan</option>
+ <option value="2" >Feb</option>
+ <option value="3" >Mar</option>
+ <option value="4" >Apr</option>
+ <option value="5"  selected="selected">May</option>
+ <option value="6" >Jun</option>
+ <option value="7" >Jul</option>
+ <option value="8" >Aug</option>
+ <option value="9" >Sep</option>
+ <option value="10" >Oct</option>
+ <option value="11" >Nov</option>
+ <option value="12" >Dec</option>
+ </select>
+ <input name="loanoriginationday" id="loanoriginationday" min="1" max="31" style="width: 5em;" size="4" type="number" onfocus="if(this.value==this.defaultValue)this.value=''" onblur="if(this.value=='')this.value=this.defaultValue" value="23"/>
+
+ <input name="loanoriginationyear" id="loanoriginationyear" min="-9999" max="9999" style="width: 5em;" size="4" type="number" onfocus="if(this.value==this.defaultValue)this.value=''" onblur="if(this.value=='')this.value=this.defaultValue" value="2026" />
+
+<script type="text/javascript">
+var date = new Date();
+var aday = date.getDate();
+var amonth = date.getMonth() + 1;
+var ayear = date.getFullYear();
+document.getElementById("loanoriginationyear").value = ayear;
+document.getElementById("loanoriginationday").value = aday;
+document.getElementById("loanoriginationmonth").value = amonth;
+</script> 
+ </td>
+</tr> 
+
+<tr>
+<td colspan="2" class="text-Mid">
+<input type="button" class="styled-button" name="compute" value="Create P&I Amortization Schedule" onClick="computeForm(1)" tabindex="28"/>
+</td>
+</tr>
+
+
+
+</tbody>
+</table>
+</form>
+
+  </section>
+    
+  <section id="content2">
+
+  </section>
+    
+     
+</div>
+
+<a name="currentrates"></a>
+<h2>Current 5-Year Hybrid ARM Rates</h2>
+<p>The following table shows the rates for ARM loans which reset after the fifth year. If no results are shown or you would like to compare the rates against other introductory periods you can use the products menu to select rates on loans that reset after 1, 3, 7 or 10 years. By default purchase loans are displayed. Clicking on the refinance button displays current refinance rates.</p>
+
+	
+<a name="currentrates"></a>
+<p>The following table shows current 30-year mortgage rates available in Federal Way. You can use the menus to select other loan durations, alter the loan amount, or change your location.</p>
+<div style="width: 100%">
+    <div style="max-width: 100%; text-align:center; margin: auto;">
+<iframe src="https://widgets.icanbuy.com/c/standard/us/en/mortgage/tables/Mortgage.aspx?siteid=0ce53ef9a8469eda&include_text_results=1&loan_type=purch&property_value=400000&loan_amount=320000&loan_product=PERIOD_FIXED_30YEARS&fha=0&va=0&state=WA&zip=98003&city=Federal Way&military_aff=0&external=mortgagecalculator.org.calcs.5.1.arm.php" style="width: 100%; border:0px;"></iframe>
+<script src="/js/iframeResizer.min.js" type="text/javascript"></script>
+<script type="text/javascript"> iFrameResize({ log: false, checkOrigin: false })</script>
+    </div>
+</div>
+
+
+<h2>What Are ARMs?</h2>
+<p>Adjustable-rate loans get their name from the fact that the rate of interest adjusts throughout the duration of the loan. </p>
+<p>While fixed-rate mortgages are far more popular in the United States than ARMs, most developed markets like the UK, Ireland, Canada, Australia, New Zealand &amp; Hong Kong typically lend primarily via adjustable or variable rates.</p>
+<p>ARM loans in the United States are typically structured over 30 years, though there are also 15-year options.</p>
+<h3>Common Definitions</h3>
+<ul>
+  <li><strong>Discounted rate:</strong> The initial rate charged when an ARM is originated. This rate may be significantly lower than the fully indexed rate. Teaser rates &amp; start rates are other names for this term. </li>
+  <li><strong>Index: </strong>A referenced economic indicator which is used to calculate ARM rate adjustments which increase or lower the rate of interest charged on the loan.</li>
+  <li><strong>Margin: </strong>The percentage added above the referenced index to price the ARM.</li>
+  <li><strong>Fully indexed rate:</strong> The sum of the index rate and the margin.</li>
+  <li><strong>3/1: </strong>The first number format refers to the initial period of time that a hybrid mortgage is fixed, whereas the second number refers to how frequently the rate can subsequently adjust after the fixed period. The most common ARM loans are 5/1 &amp; 7/1 loans with the 3/1 &amp; 10/1 being relatively less popular. Loans can also be structured using other less common formats. For example, one could have a 5/5 ARM which reset rates every 5 years. Or one could have a 2/28 or 3/27 ARM. With this format the first number tells you how long rates are fixed for &amp; the second number tells you how many years the loan will adjust for. Some of these loans may adjust every 6 months rather than annually. A 10-6 ARM means the initial rate of interest is constant for 10 years, and then the rate resets twice annually.</li>
+  <li><strong>Floor:</strong> A minimum rate guarantee which prevents the loan from falling below the initial loan rate or another set rate. This is an uncommon feature in prime ARMs, but is more common in subprime loans.</li>
+  <li><strong>Initial adjustment cap: </strong>The maximum amount the loan interest rate is able to change during the first rate reset which happens after the initial introductory period of the loan.</li>
+  <li><strong>Periodic reset cap: </strong>The maximum amount the loan interest rate is able to change during any adjustment after the initial adjustment. </li>
+  <li><strong>Lifetime cap: </strong>The maximum amount the loan interest rate is able to increase throughout the duration of the loan. This is typically set to 5%, though in some cases it can be 6%.</li>
+  <li><strong>Carryover:</strong> A portion of a rate move which was not reflected in the fully indexed rate due to a periodic adjustement cap. Some lenders may carry this amount over to the following year.</li>
+  <li><strong>Payment caps:</strong> Similar to rate caps, these caps apply to how much your monthly payment can change each year. If an Option-ARM has a payment cap of 6% and your monthly loan payment was $1,000 per month then the payment amount won't go above $1,060 the following year. Any unpaid interest on such an Option-ARM loan would then get added to the loan's balance.</li>
+  <li><strong>APR:</strong> the annual cost of credit reflecting all costs including points, origination fees &amp; mortgage insurance.</li>
+</ul>
+<p>Loans can use the same number or different numbers for the initial adjustment &amp; periodic reset. </p>
+<ul>
+  <li>A cap of 2/2/5 means the loan can change up to 2% on any adjustment up to a lifetime adjustment of 5% above the initial rate of interest. </li>
+  <li>A loan with a 2/1/5 cap can change 2% on the first adjustment, up to 1% on any subsequent adjustments, up to a lifetime adjustment of 5% above the initial rate of interest.</li>
+</ul>
+<p>In some cases where interest-rate caps prevent your loan from moving as much as the underlying index moved the lender may <em>carryover</em> the portion of the rate move which was not applied that year into subsequent years. For example, if rates increase 3% but your periodic cap only allows them to raise the loan a maximum of 2%, the additionl 1% could be applied to the rate adjustment the following year even if the referenced index rate does not increase that year.</p>
+<h3>Index </h3>
+<p>The index, often referred to as a reference rate, is a rate specified in the contract which the ARM rate will follow. Different lenders choose different indexes, but some of the most popular indexes are:</p>
+<ul>
+  <li>11th District Cost of Funds Index (COFI)</li>
+  <li>London Interbank Offer Rate (LIBOR)</li>
+  <li>FHFA Monthly Interest Rate Survey (<a href="https://www.fhfa.gov/DataTools/Downloads/Pages/Monthly-Interest-Rate-Data.aspx" target="_blank">MIRS</a>)</li>
+  <li>12-month Treasury Average Index (MTA)</li>
+  <li>Constant Maturity Treasury (CMT)</li>
+  <li>National Average Contract Mortgage Rate Bill Swap Rate (BBSW)</li>
+</ul>
+<p>Some lenders may choose to use a proprietary internal cost of funds index rather than a widely used external rate.</p>
+<h3>Margin</h3>
+<p>This percent is added to the index rate to determine the interest rate charged on the ARM loan.</p>
+<p>If a loan is indexed against COFI with a margin of 3% then if COFI goes from 1.9% to 2.7% the ARM's interest rate would shift from  4.9% to 5.7% APR.</p>
+<p>Adding the margin to the index gives one what is called the fully indexed rate.</p>
+<p>Some lenders may vary the amount of margin applied to the loan based on your credit score. Be sure to ask what happens to your margin if your credit score improves  or falls significantly.</p>
+<h3>When Do Rates Shift?</h3>
+<p>After the initial introductory period, rates usually reset each year on the anniversary of the mortgage. The exact date used to cite the new reference rate depends on the index used, but it is typically done about 45 days ahead of the anniversary of the loan.</p>
+<h3>Discount Points</h3>
+<p><a href="https://www.mortgagecalculator.org/calculators/should-i-pay-points-calculator.php">Buying points</a> allow a home buyer to pay for a lower rate of interest. Typically 1 point is equivalent to 1% of the loan's principal. For a $240,000 loan 1 point would be $2,400. Points can be paid upfront by the home buyer and/or seller. They can also be rolled into the loan's principal.</p>
+<p>On a fixed-rate mortgage the upfront points payment guarantees the lower rate of interest for the life of the loan. On an ARM loan any points payments may only hold the rate down during the  introductory rate period, with rates rising significantly thereafter.  Points are thus generally less valuable on ARMs than they are on FRMs.</p>
+<p>What's more, even if the referenced index rate does not rise, an ARM adjustment may drive your initial discounted rates up when the loan shifts from the initial rate to the fully indexed rate.</p>
+<h3>Pre-payment Penalties</h3>
+<p>Pre-payment penalties may make it hard to either sell your home or refinance into a fixed rate.</p>
+<p>Most prime mortgages allow prepayment without penalty, but some subprime ARM loans may charge a fee or penalty for pre-payment. These penaties are more common during the initial teaser rate period, though in some cases the penalty period may last a few years longer than the teaser rate.  Some pre-payment penalties may kick in when a loan is completely paid off, while other loans can be structured to charge a penalty even if the loan is only partially paid off ahead of schedule. </p>
+<ul>
+  <li><strong>Hard prepayment penalties</strong> kick in if you pay off the loan during the penalty period for any reason. </li>
+  <li><strong>Soft prepayment penalties</strong> kick in only if you refinance the loan during the penalty period.</li>
+</ul>
+<p>Be sure to ask if your loan contains a pre-payment penalty, how much it may cost,  how long it lasts &amp; what would trigger it.</p>
+<h3>Conversion Clauses</h3>
+<p>Some loans have a built-in conversion clause which allows the lender to convert the loan to a fully amortizing fixed-rate mortgage during certain time periods, like at the end of the first adjsutment period <em>or</em> when a loan is negative amoritizing and reaches 110% or 125% of the original loan amount. </p>
+<p>Your loan document should state when the loan is convertable, if there are any fees associated with the conversion &amp; what would set the rate of interest during a conversion.</p>
+<h2>How Do Historical Mortgage Rates Compare?</h2>
+		<p>When obtaining an ARM make sure to ask what the Annual Percentage Rate (APR) is on the loan. If the initial rate is lower than that rate one might expect payments to increase significantly even if the reference rate the loan is indexed against does not change.</p>
+		<p>Currently the spread between FRMs &amp; ARMs is quite low, which makes fixed-rates a relatively better deal. As interest rates rise, typically the spread between fixed &amp; adjustable loans increases significantly, which can make ARM loans a more attractive option.        </p>
+		<p>Here are historical average annual interest rates for popular home loan products.  2023 data is through the end of November.</p>
+		<table class="sortable" width="100%">
+		  <thead>
+		    <tr>
+		      <th>Year</th>
+		      <th>30-YR FRM Rate</th>
+		      <th>30-YR Points</th>
+		      <th>15-YR FRM Rate</th>
+		      <th>15-YR Points</th>
+		      <th>1-YR ARM Rate</th>
+		      <th>1-YR Points</th>
+		      <th>1-YR Margin</th>
+		      <th>5/1-YR ARM Rate</th>
+		      <th>5/1-YR Points</th>
+		      <th>5/1-YR Margin</th>
+	        </tr>
+	      </thead>
+		  <tbody>
+		    <tr>
+		      <td>2023</td>
+		      <td>6.81</td>
+		      <td>&nbsp;</td>
+		      <td>6.11</td>
+		      <td>&nbsp;</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td>&nbsp;</td>
+		      <td>&nbsp;</td>
+		      <td>&nbsp;</td>
+	        </tr>
+		    <tr>
+		      <td>2022</td>
+		      <td>5.34</td>
+		      <td>0.81</td>
+		      <td>4.58</td>
+		      <td>0.85</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td>4.09</td>
+		      <td>0.29</td>
+		      <td>2.75</td>
+	        </tr>
+		    <tr>
+		      <td>2021</td>
+		      <td>2.96</td>
+		      <td>0.68</td>
+		      <td>2.27</td>
+		      <td>0.64</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td>2.61</td>
+		      <td>0.29</td>
+		      <td>2.75</td>
+	        </tr>
+		    <tr>
+		      <td>2020</td>
+		      <td>3.11</td>
+		      <td>0.73</td>
+		      <td>2.60</td>
+		      <td>0.69</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td>3.07</td>
+		      <td>0.3</td>
+		      <td>2.75</td>
+	        </tr>
+		    <tr>
+		      <td>2019</td>
+		      <td>3.94</td>
+		      <td>0.5</td>
+		      <td>3.39</td>
+		      <td>0.5</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td>3.14</td>
+		      <td>0.3</td>
+		      <td>2.75</td>
+	        </tr>
+		    <tr>
+		      <td>2018</td>
+		      <td>4.54</td>
+		      <td>0.5</td>
+		      <td>4.00</td>
+		      <td>0.5</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td>3.82</td>
+		      <td>0.3</td>
+		      <td>2.76</td>
+	        </tr>
+		    <tr>
+		      <td>2017</td>
+		      <td>3.99</td>
+		      <td>0.5</td>
+		      <td>3.27</td>
+		      <td>0.5</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td>3.20</td>
+		      <td>0.4</td>
+		      <td>2.74</td>
+	        </tr>
+		    <tr>
+		      <td>2016</td>
+		      <td>3.65</td>
+		      <td>0.5</td>
+		      <td>2.93</td>
+		      <td>0.5</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td>2.87</td>
+		      <td>0.5</td>
+		      <td>2.74</td>
+	        </tr>
+		    <tr>
+		      <td>2015</td>
+		      <td>3.85</td>
+		      <td>0.6</td>
+		      <td>3.09</td>
+		      <td>0.6</td>
+		      <td>2.53</td>
+		      <td>0.3</td>
+		      <td>2.74</td>
+		      <td>2.94</td>
+		      <td>0.5</td>
+		      <td>2.74</td>
+	        </tr>
+		    <tr>
+		      <td>2014</td>
+		      <td>4.17</td>
+		      <td>0.6</td>
+		      <td>3.29</td>
+		      <td>0.6</td>
+		      <td>2.44</td>
+		      <td>0.4</td>
+		      <td>2.73</td>
+		      <td>3.02</td>
+		      <td>0.5</td>
+		      <td>2.74</td>
+	        </tr>
+		    <tr>
+		      <td>2013</td>
+		      <td>3.98</td>
+		      <td>0.7</td>
+		      <td>3.11</td>
+		      <td>0.7</td>
+		      <td>2.62</td>
+		      <td>0.4</td>
+		      <td>2.76</td>
+		      <td>2.88</td>
+		      <td>0.5</td>
+		      <td>2.75</td>
+	        </tr>
+		    <tr>
+		      <td>2012</td>
+		      <td>3.66</td>
+		      <td>0.7</td>
+		      <td>2.93</td>
+		      <td>0.7</td>
+		      <td>2.69</td>
+		      <td>0.5</td>
+		      <td>2.76</td>
+		      <td>2.78</td>
+		      <td>0.6</td>
+		      <td>2.74</td>
+	        </tr>
+		    <tr>
+		      <td>2011</td>
+		      <td>4.45</td>
+		      <td>0.7</td>
+		      <td>3.68</td>
+		      <td>0.7</td>
+		      <td>3.03</td>
+		      <td>0.6</td>
+		      <td>2.76</td>
+		      <td>3.31</td>
+		      <td>0.6</td>
+		      <td>2.74</td>
+	        </tr>
+		    <tr>
+		      <td>2010</td>
+		      <td>4.69</td>
+		      <td>0.7</td>
+		      <td>4.1</td>
+		      <td>0.7</td>
+		      <td>3.78</td>
+		      <td>0.6</td>
+		      <td>2.76</td>
+		      <td>3.82</td>
+		      <td>0.6</td>
+		      <td>2.74</td>
+	        </tr>
+		    <tr>
+		      <td>2009</td>
+		      <td>5.04</td>
+		      <td>0.7</td>
+		      <td>4.57</td>
+		      <td>0.7</td>
+		      <td>4.7</td>
+		      <td>0.6</td>
+		      <td>2.75</td>
+		      <td>4.75</td>
+		      <td>0.6</td>
+		      <td>2.74</td>
+	        </tr>
+		    <tr>
+		      <td>2008</td>
+		      <td>6.03</td>
+		      <td>0.6</td>
+		      <td>5.62</td>
+		      <td>0.6</td>
+		      <td>5.17</td>
+		      <td>0.6</td>
+		      <td>2.74</td>
+		      <td>5.74</td>
+		      <td>0.6</td>
+		      <td>2.75</td>
+	        </tr>
+		    <tr>
+		      <td>2007</td>
+		      <td>6.34</td>
+		      <td>0.4</td>
+		      <td>6.03</td>
+		      <td>0.4</td>
+		      <td>5.56</td>
+		      <td>0.6</td>
+		      <td>2.75</td>
+		      <td>6.07</td>
+		      <td>0.5</td>
+		      <td>2.76</td>
+	        </tr>
+		    <tr>
+		      <td>2006</td>
+		      <td>6.41</td>
+		      <td>0.5</td>
+		      <td>6.07</td>
+		      <td>0.5</td>
+		      <td>5.54</td>
+		      <td>0.7</td>
+		      <td>2.76</td>
+		      <td>6.08</td>
+		      <td>0.6</td>
+		      <td>2.77</td>
+	        </tr>
+		    <tr>
+		      <td>2005</td>
+		      <td>5.87</td>
+		      <td>0.6</td>
+		      <td>5.42</td>
+		      <td>0.6</td>
+		      <td>4.49</td>
+		      <td>0.7</td>
+		      <td>2.77</td>
+		      <td>5.32</td>
+		      <td>0.6</td>
+		      <td>2.78</td>
+	        </tr>
+		    <tr>
+		      <td>2004</td>
+		      <td>5.84</td>
+		      <td>0.7</td>
+		      <td>5.21</td>
+		      <td>0.6</td>
+		      <td>3.9</td>
+		      <td>0.7</td>
+		      <td>2.77</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+	        </tr>
+		    <tr>
+		      <td>2003</td>
+		      <td>5.83</td>
+		      <td>0.6</td>
+		      <td>5.17</td>
+		      <td>0.6</td>
+		      <td>3.76</td>
+		      <td>0.6</td>
+		      <td>2.76</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+	        </tr>
+		    <tr>
+		      <td>2002</td>
+		      <td>6.54</td>
+		      <td>0.6</td>
+		      <td>5.98</td>
+		      <td>0.6</td>
+		      <td>4.62</td>
+		      <td>0.7</td>
+		      <td>2.77</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+	        </tr>
+		    <tr>
+		      <td>2001</td>
+		      <td>6.97</td>
+		      <td>0.9</td>
+		      <td>6.5</td>
+		      <td>0.9</td>
+		      <td>5.82</td>
+		      <td>0.9</td>
+		      <td>2.77</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+	        </tr>
+		    <tr>
+		      <td>2000</td>
+		      <td>8.05</td>
+		      <td>1</td>
+		      <td>7.72</td>
+		      <td>1</td>
+		      <td>7.04</td>
+		      <td>1</td>
+		      <td>2.78</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+	        </tr>
+		    <tr>
+		      <td>1999</td>
+		      <td>7.44</td>
+		      <td>1</td>
+		      <td>7.06</td>
+		      <td>1</td>
+		      <td>5.99</td>
+		      <td>1.1</td>
+		      <td>2.79</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+	        </tr>
+		    <tr>
+		      <td>1998</td>
+		      <td>6.94</td>
+		      <td>1.1</td>
+		      <td>6.59</td>
+		      <td>1.1</td>
+		      <td>5.58</td>
+		      <td>1.1</td>
+		      <td>2.79</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+	        </tr>
+		    <tr>
+		      <td>1997</td>
+		      <td>7.6</td>
+		      <td>1.7</td>
+		      <td>7.13</td>
+		      <td>1.7</td>
+		      <td>5.61</td>
+		      <td>1.4</td>
+		      <td>2.79</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+	        </tr>
+		    <tr>
+		      <td>1996</td>
+		      <td>7.81</td>
+		      <td>1.7</td>
+		      <td>7.32</td>
+		      <td>1.7</td>
+		      <td>5.67</td>
+		      <td>1.4</td>
+		      <td>2.79</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+	        </tr>
+		    <tr>
+		      <td>1995</td>
+		      <td>7.93</td>
+		      <td>1.8</td>
+		      <td>7.48</td>
+		      <td>1.8</td>
+		      <td>6.06</td>
+		      <td>1.5</td>
+		      <td>2.8</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+	        </tr>
+		    <tr>
+		      <td>1994</td>
+		      <td>8.38</td>
+		      <td>1.8</td>
+		      <td>7.86</td>
+		      <td>1.8</td>
+		      <td>5.36</td>
+		      <td>1.5</td>
+		      <td>2.79</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+	        </tr>
+		    <tr>
+		      <td>1993</td>
+		      <td>7.31</td>
+		      <td>1.6</td>
+		      <td>6.83</td>
+		      <td>1.6</td>
+		      <td>4.58</td>
+		      <td>1.5</td>
+		      <td>2.77</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+	        </tr>
+		    <tr>
+		      <td>1992</td>
+		      <td>8.39</td>
+		      <td>1.7</td>
+		      <td>7.96</td>
+		      <td>1.7</td>
+		      <td>5.62</td>
+		      <td>1.7</td>
+		      <td>2.76</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+	        </tr>
+		    <tr>
+		      <td>1991</td>
+		      <td>9.25</td>
+		      <td>2</td>
+		      <td></td>
+		      <td></td>
+		      <td>7.09</td>
+		      <td>1.9</td>
+		      <td>2.77</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+	        </tr>
+		    <tr>
+		      <td>1990</td>
+		      <td>10.13</td>
+		      <td>2.1</td>
+		      <td></td>
+		      <td></td>
+		      <td>8.36</td>
+		      <td>2.1</td>
+		      <td>2.77</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+	        </tr>
+		    <tr>
+		      <td>1989</td>
+		      <td>10.32</td>
+		      <td>2.1</td>
+		      <td></td>
+		      <td></td>
+		      <td>8.8</td>
+		      <td>2.3</td>
+		      <td>2.77</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+	        </tr>
+		    <tr>
+		      <td>1988</td>
+		      <td>10.34</td>
+		      <td>2.1</td>
+		      <td></td>
+		      <td></td>
+		      <td>7.9</td>
+		      <td>2.3</td>
+		      <td>2.75</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+	        </tr>
+		    <tr>
+		      <td>1987</td>
+		      <td>10.21</td>
+		      <td>2.2</td>
+		      <td></td>
+		      <td></td>
+		      <td>7.83</td>
+		      <td>2.2</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+	        </tr>
+		    <tr>
+		      <td>1986</td>
+		      <td>10.19</td>
+		      <td>2.2</td>
+		      <td></td>
+		      <td></td>
+		      <td>8.43</td>
+		      <td>2.3</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+	        </tr>
+		    <tr>
+		      <td>1985</td>
+		      <td>12.43</td>
+		      <td>2.5</td>
+		      <td></td>
+		      <td></td>
+		      <td>10.05</td>
+		      <td>2.5</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+	        </tr>
+		    <tr>
+		      <td>1984</td>
+		      <td>13.88</td>
+		      <td>2.5</td>
+		      <td></td>
+		      <td></td>
+		      <td>11.51</td>
+		      <td>2.5</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+	        </tr>
+		    <tr>
+		      <td>1983</td>
+		      <td>13.24</td>
+		      <td>2.1</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+	        </tr>
+		    <tr>
+		      <td>1982</td>
+		      <td>16.04</td>
+		      <td>2.2</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+	        </tr>
+		    <tr>
+		      <td>1981</td>
+		      <td>16.63</td>
+		      <td>2.1</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+	        </tr>
+		    <tr>
+		      <td>1980</td>
+		      <td>13.74</td>
+		      <td>1.8</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+	        </tr>
+		    <tr>
+		      <td>1979</td>
+		      <td>11.2</td>
+		      <td>1.6</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+	        </tr>
+		    <tr>
+		      <td>1978</td>
+		      <td>9.64</td>
+		      <td>1.3</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+	        </tr>
+		    <tr>
+		      <td>1977</td>
+		      <td>8.85</td>
+		      <td>1.1</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+	        </tr>
+		    <tr>
+		      <td>1976</td>
+		      <td>8.87</td>
+		      <td>1.1</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+	        </tr>
+		    <tr>
+		      <td>1975</td>
+		      <td>9.05</td>
+		      <td>1.1</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+	        </tr>
+		    <tr>
+		      <td>1974</td>
+		      <td>9.19</td>
+		      <td>1.2</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+	        </tr>
+		    <tr>
+		      <td>1973</td>
+		      <td>8.04</td>
+		      <td>1</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+	        </tr>
+		    <tr>
+		      <td>1972</td>
+		      <td>7.38</td>
+		      <td>0.9</td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+		      <td></td>
+	        </tr>
+	      </tbody>
+	  </table>
+		<p>Source: <a href="http://www.freddiemac.com/pmms/" target="_blank">Freddie Mac PMMS</a></p>
+
+<h2>What is a Hybrid ARM?</h2>
+<p>Most <a href="https://www.mortgagecalculator.org/mortgage-rates/arm.php">adjustable-rate mortgages</a> have an introductory period where the rate of interest and monthly payments are fixed. After the initial introductory period the loan shifts from acting like a fixed-rate mortgage to behaving like an adjustable-rate mortgage, where rates are allowed to float or reset each year. If a loan is named a 5/1 ARM then what that means is the loan is fixed for the first 5 years &amp; then the rate resets each year thereafter. The initial loan interest rate is frequently discounted below the &quot;fully indexed&quot; rate one would get by adding the margin to the indexed reference rate.</p>
+<h3>Other Types of ARMs</h3>
+<p>These other loan formats were more popular during the housing bubble, but have become much less common since the bubble burst.</p>
+<h4>Low Doc / No Doc Loans</h4>
+<p>Lenders want to know you will be able to repay your loan before they make it. If a lender offers a &quot;low doc&quot; or &quot;no doc&quot; loan option that option will typically charge a higher rate of interest to make up for the added risk in lending you money.</p>
+<div class="videowrap">
+<iframe width="560" height="315" src="https://www.youtube.com/embed/a5uyw2HeLPU" frameborder="0" gesture="media" allowfullscreen></iframe>
+</div>
+<h4>Interest Only (I-O) ARMs</h4>
+<p>These loans act similar to other ARMs with the exception that the intitial fixed period of the loan only covers the accrued interest on the loan while leaving the principal unchanged. Once the teaser rate expires the loan automatically shifts into a regular amortizing ARM loan. For example, a 5/1 IO ARM would charge interest-only for the first 5 years of the loan, then at that point the loan would convert into an amortizing loan where the remaining principal is paid off over the subsequent 25 remaining years of the loan. It is effectively like 2 loans in one</p>
+<ul>
+  <li>an interest only loan for the introductory period</li>
+  <li>a regular ARM loan which amortizes over the remainder of the lending term (30 years - length of introductory period)</li>
+</ul>
+<p>The same could be said for a 3 year IO or a 10 year IO loan. They would charge a fixed rate of interest for 3 &amp; 10 years respectively, and then the loans would amortize at a floating interest rate for the remaining 27 &amp; 20 years respectively.</p>
+<p>Loans with a longer initial IO period have higher subsequent payments thereafter because they are forced to pay off interest AND the entire loan balance in a fewer number of subsequent years.</p>
+<p>IO loans typically charge a fixed rate of interest during the introductory IO period, but some loans can also charge variable rates during the interest-only portion of the loan.</p>
+<h4>Payment-Option ARMs</h4>
+<p>These  <a href="https://www.mortgagecalculator.org/calcs/io-arm.php">interest-only home loans</a> are typically 30-year ARMs which enable the borrower to &quot;pick-a-payment&quot; between four  amounts: a fully amortizing 30-year payment, a fully amortizing 15-year payment, an interest-only payment, and a specified minimum payment.</p>
+<p>When borrowers consistently make <a href="https://www.mortgagecalculator.org/calcs/option-arm.php">pay-option payments</a> below the accured interest the loan becomes negative amortizing, with the loan balance growing over time. Most option ARM contracts which allow for negative amortization have a maximium negative amortization limit (at 110% to 125% of the initial loan amount). When this neg am limit is reached the loan is recast &amp; minimum payments are automatically shifted to the fully amortizing payment.</p>
+<div class="videowrap">
+<iframe width="560" height="315" src="https://www.youtube.com/embed/ugwPPocSku4" frameborder="0" allowfullscreen></iframe>
+</div>
+<p>Payment caps are similar to rate caps, but they apply to how much your monthly payment can change each year rather than the rate of interest. If an Option-ARM has a payment cap of 6% and your monthly loan payment was $1,000 per month then the payment amount won't go above $1,060 the following year. Any unpaid interest on such an Option-ARM loan would then get added to the loan's balance, leading to negative amortization. </p>
+<p>Option ARMs typically recast automatically every 5 years to adjust the ARM to payment amounts that will ensure the loan is paid off over the initial 30-year loan term.</p>
+<p>If you only make the minimum payments near the end of a Payment-option ARM then you may also owe a balloon payment to pay off the remaining principal at the end of the loan. </p>
+<p>Here is a table courtesy the CFPB wich shows how loan payments can change over time for various types of ARM loans.</p>
+<p><img src="https://www.mortgagecalculator.org/images/arm-payment-comparisons.png" width="1000" height="727" alt="ARM payment comparisons." /></p>
+<h2>Fixed-rate vs ARMs</h2>
+<p>Fixed-rate loans guarantee a homeowner a set rate of interest and a fixed monthly payment amount throughout the duration of the loan. </p>
+<p>Banks use short-term deposits to fund longer duration lending. When banks fund 30-year loans it creates a duration mismatch which they must compensate for by charging a higher rate of interest.</p>
+<p>ARMs can charge lower rates of interest than fixed-rate loans because they help banks manage the asset-liability missmatch by transfering some of the interest rate shift risk onto the home buyer.</p>
+<h3>Graduated FRMs</h3>
+<p>Some fixed-rate loans start with an introductory rate for the first year or two &amp; then step to another interest rate for the duration of the loan. While these loans are not technically ARMs (since there is only 1 rate shift throughout the duration of the loan) that rate shift will still cause a monthly payment shift similar to what is seen with ARMs.</p>
+<h2>Advantages of ARMs</h2>
+<p>ARM loans enable lower initial monthly home payments, which can help young people with significant sutdent loan debt  qualify for a loan that might be just out of reach with a fixed-rate mortgage. If those home buyers aggressively pay down other higher-interest debts early in their loan &amp; obtain regular raises then their disposible income may rise faster than their monthly mortgage payments. If the home appreciates or rates fall further while the borrower's credit profile improves they can then refinance their ARM into a FRM.</p>
+<p>Historically homeowners in the United States have moved about once every 5 to 7 years. After the Great Recession the economy became less dynamic. According to the National Association of Realtors <a href="https://www.nar.realtor/reports/highlights-from-the-profile-of-home-buyers-and-sellers" target="_blank">Profile of Home Buyers and Sellers for 2017</a>, the average tenure has risen to 10 years. </p>
+<p>If a borrower does not intend to live in the home longterm, then it can make sense to leverage a lower rate adjustable loan &amp; then move before rates reset. </p>
+<p>Some ARM loans do not adjust rates downward if interest rates fall. Be sure to ask if there is a floor rate on your loan. If there is a floor rate, you may need to refinance to take advantage of falling rates.</p>
+<p>Many people in the real estate trade including house flippers leverage ARM loans to increase their profit margins.</p>
+<h2>Advantages of FRMs</h2>
+<p>Locking in a <a href="https://www.mortgagecalculator.org/mortgage-rates/30-year.php">fixed-rate</a> is a one-way bet for homeowners. If rates fall they are able to <a href="https://www.mortgagecalculator.org/helpful-advice/what-is-a-refinancing.php">refinance</a> into a lower rate loan, but if rates rise they get to keep their current rates.</p>
+People who are secure in their career, love where they live &amp; are certain they want to stay in the same place for an extended period of time should choose a fixed-rate mortgage to lock-in payment certainty. Those who are prone to worry &amp; those who believe interest rates are likely to rise sharply should also obtain an FRM. 
+<h2>Payment Comparison Table</h2>
+<p>The following table compares a $240,000  loan across common FRM &amp; ARM terms.</p>
+
+
+<table class="sortable" width="100%">
+<thead>
+  <tr>
+    <th>Loan</th>
+    <th>3/1 IO ARM</th>
+    <th>3/1 ARM</th>
+    <th>5/1 ARM</th>
+    <th>7/1 ARM</th>
+    <th>30 Year Fixed</th>
+    <th>15 Year Fixed</th>
+  </tr>
+</thead>
+<tbody>
+  <tr>
+    <td>Initial Payment</td>
+    <td>$662</td>
+    <td>$1,019.63</td>
+    <td>$1,060.37</td>
+    <td>$1,089.80</td>
+    <td>$1,119.66 </td>
+    <td>$1,670.12 </td>
+  </tr>
+  <tr>
+    <td>Avg Payment</td>
+    <td>$1,689.17</td>
+    <td>$1,586.77</td>
+    <td>$1,556.34</td>
+    <td>$1,515.66</td>
+    <td>$1,119.66 </td>
+    <td>$1,670.12 </td>
+  </tr>
+  <tr>
+    <td>Max Payment</td>
+    <td>$1,836.07</td>
+    <td>$1,680.09</td>
+    <td>$1,686.34</td>
+    <td>$1,676.45</td>
+    <td>$1,119.66 </td>
+    <td>$1,670.12 </td>
+  </tr>
+  <tr>
+    <td>Initial APR</td>
+    <td>3.31%</td>
+    <td>3.06%</td>
+    <td>3.37%</td>
+    <td>3.59%</td>
+    <td>3.81% </td>
+    <td>3.11%</td>
+  </tr>
+  <tr>
+    <td>Max APR</td>
+    <td>8.31%</td>
+    <td>3.06%</td>
+    <td>8.37%</td>
+    <td>8.59%</td>
+    <td>3.81% </td>
+    <td>3.11%</td>
+  </tr>
+  <tr>
+    <td>Total Interest</td>
+    <td>$368,101.73</td>
+    <td>$331,237.33</td>
+    <td>$320,281.21</td>
+    <td>$305,637.08</td>
+    <td>$163,079 </td>
+    <td>$60,622 </td>
+  </tr>
+</tbody>
+</table>
+<p>The above table presumes a 5% lifetime rate cap over the duration of all ARM loans. It also presumes a 2% initial rate adjustment followed by subsequent 1% rate adjustments up until the lifetime loan cap is reached. These payments are for principal &amp; interest, but do not include other costs of homeownership like insurance and property taxes.</p>
+<h4>Payments Over Time</h4>
+<p>The following table shows what the annual payments would be on a 5/1 ARM, presuming the same conditions as above.</p>
+
+<table class="sortable" width="100%">
+<thead>
+  <tr>
+    <th>Year</th>
+    <th>5/1 ARM Max  Payment</th>
+    <th>5/1 Max APR</th>
+    <th>5/1 Ending Balance</th>
+    <th>30 YR FRM Payment</th>
+    <th>30 YR  APR</th>
+    <th>30 YR  Balance</th>
+  </tr>
+</thead>
+<tbody>
+  <tr>
+    <td>1</td>
+    <td>$1,060.37</td>
+    <td>3.37%</td>
+    <td>$235,291.30</td>
+    <td>$1,119.66</td>
+    <td>3.81%</td>
+    <td>$235,632.33</td>
+  </tr>
+  <tr>
+    <td>2</td>
+    <td>$1,060.37</td>
+    <td>3.37%</td>
+    <td>$230,421.45</td>
+    <td>$1,119.66</td>
+    <td>3.81%</td>
+    <td>$231,095.32</td>
+  </tr>
+  <tr>
+    <td>3</td>
+    <td>$1,060.37</td>
+    <td>3.37%</td>
+    <td>$225,384.94</td>
+    <td>$1,119.66</td>
+    <td>3.81%</td>
+    <td>$226,382.40</td>
+  </tr>
+  <tr>
+    <td>4</td>
+    <td>$1,060.37</td>
+    <td>3.37%</td>
+    <td>$220,176.04</td>
+    <td>$1,119.66</td>
+    <td>3.81%</td>
+    <td>$221,486.74</td>
+  </tr>
+  <tr>
+    <td>5</td>
+    <td>$1,060.37</td>
+    <td>3.37%</td>
+    <td>$214,788.87</td>
+    <td>$1,119.66</td>
+    <td>3.81%</td>
+    <td>$216,401.27</td>
+  </tr>
+  <tr>
+    <td>6</td>
+    <td>$1,302.37</td>
+    <td>5.37%</td>
+    <td>$210,592.32</td>
+    <td>$1,119.66</td>
+    <td>3.81%</td>
+    <td>$211,118.60</td>
+  </tr>
+  <tr>
+    <td>7</td>
+    <td>$1,428.94</td>
+    <td>6.37%</td>
+    <td>$206,748.87</td>
+    <td>$1,119.66</td>
+    <td>3.81%</td>
+    <td>$205,631.13</td>
+  </tr>
+  <tr>
+    <td>8</td>
+    <td>$1,557.13</td>
+    <td>7.37%</td>
+    <td>$203,181.84</td>
+    <td>$1,119.66</td>
+    <td>3.81%</td>
+    <td>$199,930.92</td>
+  </tr>
+  <tr>
+    <td>9</td>
+    <td>$1,686.34</td>
+    <td>8.37% (lifetime cap)</td>
+    <td>$199,825.05</td>
+    <td>$1,119.66</td>
+    <td>3.81%</td>
+    <td>$194,009.67</td>
+  </tr>
+  <tr>
+    <td>10</td>
+    <td>$1,686.34</td>
+    <td>8.37% (lifetime cap)</td>
+    <td>$196,176.24</td>
+    <td>$1,119.66</td>
+    <td>3.81%</td>
+    <td>$187,858.84</td>
+  </tr>
+</tbody>
+</table>
+
+<h2>Historical ARM Marketshare</h2>
+<p>ARM loans were legalized nationally for federally chartered savings and loan institutions in 1981. By 1982 ARMs were widely issued with an estimated stock of $65 billion in loans by the end of the year. In 1983 $39 billion in additional stock was added. By 1984 ARMs accounted for about 60% of new conventional mortgages closed that year (exclusive of FHA &amp; VA loans). Loan volumes <a href="https://www.minneapolisfed.org/research/qr/qr932.pdf" target="_blank">grew</a> so quickly that Freddie Mac tightened lending criteria in 1984 &amp; Fannie Mae tightened their standards in 1985.</p>
+<p><img src="https://www.mortgagecalculator.org/images/arm-share-early-1980s.png" alt="ARM share of Conventional Mortgages from 1982 to 1984." width="1000" height="868"></p>
+<p>A similar spike in demand for ARMs happened in the early to mid 1990s. A smaller spike happened during the Internet stock bubble &amp; there was an echo during the waning days of the early 2000s housing bubble.</p>
+<p><img src="https://www.mortgagecalculator.org/images/arm-share-of-mortgages.png" width="1000" height="581" alt="ARM Share of Total Mortgage Market." /></p>
+
+<h4>Declining Fixed Rate Mortgage Interest Rates</h4>
+<p>When consumers buy an adjustable rate loan the bank is passing much of the rate risk onto the home buyer, whereas if the consumer chooses a fixed-rate loan the bank has to price the risk of interest rate moves into the loan. If rates increase and a homeowner financed using a fixed rate they are not impacted by shifting market rates. If rates fall during the loan the homeowner may be able to refinance.</p>
+<p>If rates are quite low the gap between ARM and FRM loans can be insufficent to make ARMs seem like a compelling deal. The decline in mortgage rates after the recession has drastically reduced consumer demand for adjustable-rate mortgages. 
+</p>
+<p>A number of factors drove down interest rates. Some of them include: the recession, slow economic growth after the recession, the Federal Reserve's quantitative easing programs, operation twist, the Federal Reserve buying  $1.25 trillion in agency Mortgage-Backed Securities (MBS), under-funded pension plans needing to get more yield than they could from treasuries &amp; some other central banks pushing their domestic interest rates to zero and even into negative numbers.</p>
+<h3>2004-2014 Mortgage Market Breakdown</h3>
+<table width="100%" class="sortable">
+<thead>
+  <tr>
+    <th>Loan Type</th>
+    <th>Loans</th>
+    <th>Sample Share</th>
+  </tr>
+</thead>
+<tbody>
+  <tr>
+    <td>30-year FRM</td>
+    <td>107,991</td>
+    <td>61.49%</td>
+  </tr>
+  <tr>
+    <td>15-year FRM</td>
+    <td>25,717</td>
+    <td>14.64%</td>
+  </tr>
+  <tr>
+    <td>FRM With Other Terms</td>
+    <td>17,221</td>
+    <td>9.81%</td>
+  </tr>
+  <tr>
+    <td>Non-FRM (ARMs + Atypical Loans)</td>
+    <td>24,685</td>
+    <td>14.06%</td>
+  </tr>
+</tbody>
+</table>
+<p>Source: <a href="https://www.bls.gov/opub/btn/volume-5/mobile/what-the-consumer-expenditure-survey-tells-us-about-mortgage-instruments-before-and-after-the-housing-collapse.htm" target="_blank">U.S. Bureau of Labor Statistics, 2004-2014 Consumer Expenditure Survey pooled sample</a>.</p>
+<table width="100%" class="sortable">
+<thead>
+  <tr>
+    <th>Year</th>
+    <th>Loans  in Sample</th>
+    <th>30-yr Fixed</th>
+    <th>15-yr Fixed</th>
+    <th>Other Fixed</th>
+    <th>Non-fixed</th>
+  </tr>
+</thead>
+<tbody>
+  <tr>
+    <td>2014</td>
+    <td>12,912</td>
+    <td>70.8%</td>
+    <td>13.4%</td>
+    <td>8.5%</td>
+    <td>7.3%</td>
+  </tr>
+  <tr>
+    <td>2013</td>
+    <td>13,806</td>
+    <td>70.7%</td>
+    <td>13.3%</td>
+    <td>8.8%</td>
+    <td>7.2%</td>
+  </tr>
+  <tr>
+    <td>2012</td>
+    <td>14,649</td>
+    <td>70.7%</td>
+    <td>13.6%</td>
+    <td>8.9%</td>
+    <td>6.8%</td>
+  </tr>
+  <tr>
+    <td>2011</td>
+    <td>15,133</td>
+    <td>71.7%</td>
+    <td>12.8%</td>
+    <td>9.1%</td>
+    <td>6.4%</td>
+  </tr>
+  <tr>
+    <td>2010</td>
+    <td>16,265</td>
+    <td>68.0%</td>
+    <td>14.2%</td>
+    <td>9.3%</td>
+    <td>8.5%</td>
+  </tr>
+  <tr>
+    <td>2009</td>
+    <td>17,155</td>
+    <td>65.6%</td>
+    <td>15.1%</td>
+    <td>9.8%</td>
+    <td>8.5%</td>
+  </tr>
+  <tr>
+    <td>2008</td>
+    <td>17,314</td>
+    <td>65.5%</td>
+    <td>15.0%</td>
+    <td>10.6%</td>
+    <td>9.0%</td>
+  </tr>
+  <tr>
+    <td>2007</td>
+    <td>17,257</td>
+    <td>56.4%</td>
+    <td>15.0%</td>
+    <td>11.4%</td>
+    <td>17.4%</td>
+  </tr>
+  <tr>
+    <td>2006</td>
+    <td>18,407</td>
+    <td>48.3%</td>
+    <td>14.0%</td>
+    <td>10.3%</td>
+    <td>27.4%</td>
+  </tr>
+  <tr>
+    <td>2005</td>
+    <td>17,666</td>
+    <td>47.0%</td>
+    <td>16.6%</td>
+    <td>10.0%</td>
+    <td>26.4%</td>
+  </tr>
+  <tr>
+    <td>2004</td>
+    <td>15,050</td>
+    <td>47.4%</td>
+    <td>17.9%</td>
+    <td>10.4%</td>
+    <td>24.3%</td>
+  </tr>
+</tbody>
+</table>
+<p>If anything the above tables understate the current dominance of the 30 year FRM.</p>
+<p>If one looks at the market as a whole, the popularity of using 15-year FRM to refinance makes the overall market composition look a bit more even than it would without refis. </p>
+<p><img src="https://www.mortgagecalculator.org/images/all-mortgage-originations.png" alt="All Mortgage Originations."></p>
+<p>If one looks exclusively at purchases FRMs are about 90% of the market.</p>
+<p><img src="https://www.mortgagecalculator.org/images/purchase-loans-only.png" alt="Purchase Loans Only."></p>
+<p>Source: <a href="https://www.urban.org/sites/default/files/publication/93516/sep_chartbook_final_0.pdf" target="_blank">Urban Institute</a></p>
+
+<h2>Risks Associated With ARM Loans</h2>
+<h3>Predatory Lending</h3>
+<p>Predatory lending happens when lenders make loans they know can not be paid off by the borrower. Even some of the largest lenders broadly engaged in this type of behavior during the housing bubble leading up to the Great Recession.</p>
+<p>A big part of the reason demand for ARMs was so high during the housing bubble &amp; prior to the housing crash was due to <a href="https://www.fbi.gov/stats-services/publications/mortgage-fraud-2006" target="_blank">systemic fraud</a>. It is easier to push a person who has no chance of paying the loan into a loan which has a lower upfront payment. That way the person can make payments until the loan is securitized and sold off. Just prior to the crash 80% of Citibank's home loans were misrepresented.</p>
+<blockquote>&quot;I started issuing warnings in June of 2006 and attempted to get management to address these critical risk issues. These warnings continued through 2007 and went to all levels of the Consumer Lending Group. We continued to purchase and sell to investors even larger volumes of mortgages through 2007. And defective mortgages increased during 2007 to over 80% of production.&quot; - <a href="https://www.mortgagecalculator.org/helpful-advice/fcic-2010-0407-richard-bowen.pdf" target="_blank">Richard M. Bowen, III</a>, Citigroup Business Chief Underwriter for Correspondent Lending in the Consumer Lending Group</blockquote>
+<p>This type of lending has become rare after increased banking regulations which came about due to the financial crisis. These regulations might get wound back though. In 2017 the Senate voted to <a href="https://www.bloomberg.com/news/articles/2017-10-25/consumer-bureau-s-arbitration-rule-overturned-by-vote-in-senate" target="_blank">make it harder for consumers to sue banks</a>.</p>
+<h3>Are ARM Loans Exceptionally Risky?</h3>
+<p>The above is not to say that ARM mortgages are exceptionally risky, but rather that financeers had greater incentive to push marginal borrowers into ARMs because the initial qualification was easier &amp; it was easier to make the initial teaser rate payments. </p>
+<p>Correlation is not causation.</p>
+<p>Those who have a solid financial footing and are aware of the potential costs of a rising interest rate environment are not necessarily being exposed to extreme levels of risk.</p>
+<h3>Payment Shock</h3>
+<p>It is important to see how your loan payments are likely to change over the life of the loan. Buying points allow a home buyer to pay for a lower rate of interest, but it still does not lower how much debt they must repay. On a fixed-rate mortgage the upfront points payment guarantees the lower rate of interest for the life of the loan. On an ARM loan any points payments may only hold the rate down during the initial introductory rate period, with rates rising significantly thereafter.  Points are thus far less valuable on ARMs than they are on FRMs. Worse yet, borrowers who do not realize points are temporary will end up seeing a bigger payment shock when their loan adjusts.</p>
+<p>Consumers who take ARM loans risk a payment shock when rates reset. Initial payments can be quite low during the teaser rate period, but when rates reset after the fixed period of a hybrid ARM loan payments can increase by hundreds of dollars per month from even relatively small moves in interest rates.</p>
+<p>While rate shifts may make some loans unaffordable, this factor was not the main cause of the broad decline in marketshare for ARM loans over the past decade.</p>
+<p>In addition to general scheduled rate resets, loans which have negative amortization that are recast can have major shifts in monthly repayments. Once again, here is the above displayed table from the CFPB, which shows how those making minimum payments may see their payments rise over time as their rates rise &amp; their loans are recast.</p>
+<p><img src="https://www.mortgagecalculator.org/images/arm-payment-comparisons.png" width="1000" height="727" alt="ARM payment comparisons." /></p>
+<h3>Disclosure Problems</h3>
+<p>During the bubble the advertised monthly ARM loan payments frequently excluded many common costs of home ownership including taxes and insurance. </p>
+<p>Here is typical window marketing for the time.</p>
+<p><img src="https://www.mortgagecalculator.org/images/subprime-mortgage-ad.jpg" width="800" height="600" alt="Subprime Mortgage Ad." /></p>
+<p>The most widely advertised mortgages catering to marginal borrowers <a href="http://www.utdallas.edu/~ugg041000/AdvertisingExpensiveMortgages.pdf" target="_blank">were often the most expensive &amp; most exploitative options</a>. These loans frequently targeted areas with a prevalence of minority, less educated &amp; poor borrowers.</p>
+<p>Countrywide was one of the biggest subprime lenders &amp; their CEO's license plate said &quot;fund em.&quot; Here is one of their ads.</p>
+<div class="videowrap">
+<iframe width="560" height="315" src="https://www.youtube.com/embed/Ei5OrV-CmHg" frameborder="0" allowfullscreen></iframe>
+</div>
+<p>The following commercial shows how a 3/1 IO styled subprime mortgage might have been marketed during the bubble.</p>
+<p>Can you get a $200,000 mortgage for $585 a month? Now you can!</p>
+<div class="videowrap">
+<iframe width="560" height="315" src="https://www.youtube.com/embed/59MzVkwmYl8" frameborder="0" allowfullscreen></iframe>
+</div>
+<p>In reality, the cost of such a loan at the then prevailing rate of 7% would have been closer to $1,700 per month if one wanted the loan to amortize in 30 years &amp; included other expenses like property taxes, PMI and homeowner's insurance. This would presume no closing costs &amp; no major home repairs.</p>
+
+
+<h2>Make An Informed Decision</h2>
+<p>Buying a home will probably be the biggest financial decision of your life. Make sure you understand your reference rate, margin &amp; how your monthly loan payments might change in the worst case scenario before signing an ARM loan contract.</p>
+<p>The CFPB <a href="http://files.consumerfinance.gov/f/201401_cfpb_booklet_charm.pdf" target="_blank">published</a> Consumer handbook on adjustable-rate mortgages, which offers consumers an introductory guide to ARM loans including a mortgage shopping worksheet. We've included an HTML version of their mortgage shopping worksheet below.  You can also download this worksheet &amp; bring it to your financial institution. We offer versions in the following formats: <a href="https://www.mortgagecalculator.org/mortgage-rates/cfpb-arm-workbook.pdf" target="_blank">PDF</a>, <a href="https://www.mortgagecalculator.org/mortgage-rates/cfpb-arm-workbook.docx" target="_blank">Word</a> &amp; <a href="https://www.mortgagecalculator.org/mortgage-rates/cfpb-arm-workbook.xlsx" target="_blank">Excel</a>.</p>
+<table width="100%" class="sortable">
+<thead>
+  <tr>
+    <th>Basic Loan Information</th>
+    <th>Fixed-Rate Mortgage</th>
+    <th>ARM 1</th>
+    <th>ARM 2</th>
+    <th>ARM 3</th>
+  </tr>
+</thead>
+<tbody>
+  <tr>
+    <td>Name of lender or broker &amp; contact information</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td>Mortgage amount</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td>Loan term (e.g., 15 years, 30 years)</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td>Loan description<br>
+      (e.g., fixed rate, 3/1 ARM, payment-option ARM, interest-only ARM)</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td><h3>Basic Figures for Comparison</h3></td>
+    <td>Fixed-Rate Mortgage</td>
+    <td>ARM 1</td>
+    <td>ARM 2</td>
+    <td>ARM 3</td>
+  </tr>
+  <tr>
+    <td>Fixed-rate mortgage interest rate and annual percentage rate (APR)<br>
+      (For graduated-payment or stepped-rate mortgages, use the ARM columns)</td>
+    <td>&nbsp;</td>
+    <td bgcolor="#20394C">&nbsp;</td>
+    <td bgcolor="#20394C">&nbsp;</td>
+    <td bgcolor="#20394C">&nbsp;</td>
+  </tr>
+  <tr>
+    <td><strong>ARM initial interest rate &amp; APR</strong><br> 
+    &nbsp; &nbsp; How long does the initial rate apply?</td>
+    <td bgcolor="#20394C">&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td>&nbsp; &nbsp; What will the interest rate be after the initial period?</td>
+    <td bgcolor="#20394C">&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td><strong>ARM Features</strong><br>
+    &nbsp; &nbsp; How often can the interest rate adjust?</td>
+    <td bgcolor="#20394C">&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td>&nbsp; &nbsp; What is the index and what is the current rate?</td>
+    <td bgcolor="#20394C">&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td>&nbsp; &nbsp; How low could the interest rate go on this loan?</td>
+    <td bgcolor="#20394C">&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td>What is the payment cap?</td>
+    <td bgcolor="#20394C">&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td>Can this loan have negative amortization (that is, increase in size)?</td>
+    <td bgcolor="#20394C">&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td>What is the limit to how much the balance can grow before the loan will be recalculated?</td>
+    <td bgcolor="#20394C">&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td>Is there a prepayment penalty if I pay off this mortgage early?</td>
+    <td>&nbsp;</td>
+
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td>How long does the penalty last? How much is it?</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td>Is there a balloon payment on this mortgage?<br>
+      If so, what is the estimated amount and when would it be due?</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td>What are the estimated origination fees and charges for this loan?</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td><h3>Monthly Payment Amounts</h3></td>
+    <td>Fixed-Rate Mortgage</td>
+    <td>ARM 1</td>
+    <td>ARM 2</td>
+    <td>ARM 3</td>
+  </tr>
+  <tr>
+    <td>What will the monthly payments be for the first year of the loan?</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td>Does this include taxes &amp; insurance? Condo or homeowner's association fees?<br>
+      If not, what are the estimates for these amounts?</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td>What will my monthly payment be after 2 months if the index rate...<br>
+      &nbsp; &nbsp; ... stays the same?</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td>&nbsp; &nbsp; ...goes up 2%?</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td>&nbsp; &nbsp; ...goes down 2%?</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td>What is the<strong> most </strong>my minimum monthly payment could be after 1 year?</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td>What is the<strong> most </strong>my minimum monthly payment could be after 3 years?</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+  <tr>
+    <td>What is the <strong>most </strong>my minimum monthly payment could be after 5 years?</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+    <td>&nbsp;</td>
+  </tr>
+</tbody>
+</table>
+<p>For any home loan you are interested in the lender should be able to give you the above information before requiring you to pay any nonrefundable fees. If you remain uncertain after speaking with your lender, please consider <a href="https://apps.hud.gov/offices/hsg/sfh/hcc/hcs.cfm" target="_blank">contacting a local housing counselor</a> or call the U.S. Department of Housing and Urban Development toll-free at 800-569-4287.</p>
+<p>If you found this guide helpful you may want to consider reading our <a href="https://www.mortgagecalculator.org/mortgage-rates/arm.php">comprehensive guide to adjustable-rate mortgages</a>.</p> 
+
+<script>
+var Fmcty = Fmcty || {};
+Fmcty['MortgageCalculatorDOTORG'] = {
+    values: {
+        "utm_campaign" : "mortgagecalclator.org",
+        "utm_source" : "www.mortgagecalculator.org/calcs/5-1-arm.php",
+        "utm_medium" : "calcs",
+    }
+}
+</script>
+
+
+<h3>Federal Way Home Buyers May Qualify For Low Downpayment Home Loan Options</h3>
+<p>Explore conventional mortgages, FHA loans, USDA loans, and VA loans to find out which option is right for you.</p> 
+<h2 align='center'>Find Out What Loan You Qualify For &amp; Get Pre-Approved Today</h2>
+<div class='rates'>        
+    <p align='center'>Check your options with a trusted Federal Way lender. </p>
+    <p align='center'>Answer a few questions below and connect with a lender who can help you save today!</p>
+    <div id='MRCquickquoteinsert'>
+        <div style='max-width: 800px; text-align:center; margin: auto;'>
+        <script type='text/javascript' src='https://www.mortgageresearchcenter.com/mrc.js?desc=refinance' data-mrc='MortgageCalculatorDOTORG' data-mrc-color='#1A87B9' async></script>
+        </div>
+    </div>
+</div>
+
+ 
+
+       
+				</div>
+
+			</div>
+		</section>
+	</section>
+	<!--End Content section-->
+
+	<!--Begin Footer section-->
+	<footer class="footer-container">
+		<div class="wrapper">
+			<div class="copyright">
+				&copy; 2007 - 2026 www.MortgageCalculator.org | <a href="https://www.mortgagecalculator.org/contact/"><font color="#FFFFFF">Contact Us</font></a> 
+			</div>
+		</div>
+	</footer>
+	<!--End Footer section-->
+
+	<!-- javascript
+	================================================== -->
+	<!-- Placed at the end of the document so the pages load faster -->
+	<script src="https://www.mortgagecalculator.org/scripts/jquery-1.11.2.min.js"></script>
+	<script src="https://www.mortgagecalculator.org/scripts/jquery-migrate-1.2.1.min.js"></script>
+	<script src="https://www.mortgagecalculator.org/scripts/jquery.meanmenu.js"></script>
+	<script src="https://www.mortgagecalculator.org/scripts/calculators.js"></script>
+    <script type="text/javascript" src="//assets.pinterest.com/js/pinit.js" data-pin-hover="true"></script>
+	<script src="https://www.mortgagecalculator.org/mint/?js" type="text/javascript"></script>
+    <script>var clicky_site_ids = clicky_site_ids || []; clicky_site_ids.push(101177635);</script>
+    <script async src="//static.getclicky.com/js"></script>
+    <noscript><p><img alt="Clicky" width="1" height="1" src="//in.getclicky.com/101177635ns.gif" /></p></noscript>
+	<script src="https://www.mortgagecalculator.org/scripts/main.js"></script>
+
+
+    
+
+
+</body>
+</html>

@@ -1,0 +1,31 @@
+{
+  "_meta": {
+    "source": "mortgagecalculator.org 'Mortgage Refinance Breakeven Calculator' article, 'Example A' worked example.",
+    "source_url": "https://www.mortgagecalculator.org/calcs/refinance-breakeven.php",
+    "captured_at": "2026-05-23",
+    "html_snapshot": "tests/fixtures/oracles/bankrate-html/mortgagecalculator_org_refinance_breakeven.html",
+    "substitution_note": [
+      "Bankrate's refi calculator (https://www.bankrate.com/mortgages/refinance-calculator/) and NerdWallet's (https://www.nerdwallet.com/mortgages/refinance-calculator) are both JS-rendered with no default-example output in the static HTML. We substituted with mortgagecalculator.org which publishes Example A and Example B inline.",
+      "Example A inputs: old $200,000 @ 5.000% with 240 months remaining; refi to 15-year (180mo) @ 3.250%; closing costs $6,000 (1 discount point + 1 origination point).",
+      "Engine matches old_pi ($1,319.91), new_pi ($1,405.34), and payment_change (+$85.43) to the cent.",
+      "Oracle text claims 'Months to Breakeven = 21' even though the monthly payment INCREASES. That definition is non-standard (it appears to be measuring something like 'months until cumulative lifetime-interest savings exceed closing costs', which is an interest-payoff breakeven, not a cashflow-savings breakeven). Engine reports simple_status='no_savings' for this scenario because monthly_savings < 0, which is the project's documented simple-breakeven definition. We assert the cashflow numbers (which agree) and document the 21-month claim as a different metric (NOT asserted)."
+    ]
+  },
+  "inputs": {
+    "refi_kind": "rate_and_term",
+    "old_loan_balance": "200000.00",
+    "old_annual_rate": "0.050000",
+    "old_remaining_months": 240,
+    "new_annual_rate": "0.032500",
+    "new_term_months": 180,
+    "closing_costs": "6000.00",
+    "discount_rate_annual": "0.050000"
+  },
+  "expected": {
+    "old_monthly_pi": "1319.91",
+    "new_monthly_pi": "1405.34",
+    "monthly_savings_signed": "-85.43",
+    "simple_breakeven_status": "no_savings",
+    "oracle_alternative_breakeven_21_months_not_asserted": "interest-savings breakeven; different definition from simple-cashflow breakeven"
+  }
+}

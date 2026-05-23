@@ -1,0 +1,51 @@
+{
+  "_meta": {
+    "family": "apr",
+    "source_url": "https://www.ecfr.gov/current/title-12/chapter-X/subchapter-C/part-1026/appendix-J-to-part-1026",
+    "citation_url": "https://www.ecfr.gov/current/title-12/chapter-X/subchapter-C/part-1026/appendix-J-to-part-1026",
+    "captured_at": "2026-05-23",
+    "reviewer_name": "household maintainer",
+    "reviewer_date": "2026-05-23"
+  },
+  "derivation": [
+    "# Hand-calculated derivation — Reg Z Appendix J identity case",
+    "Setup: a level-payment fully-amortizing loan with ZERO finance charges has",
+    "an APR equal to its nominal annual rate exactly. This is an algebraic",
+    "identity: the Reg Z Appendix J unit-period equation",
+    "  sum_advances * (1+i)^(-t) = sum_payments * (1+i)^(-s)",
+    "collapses to the standard PMT equation when finance_charges = 0, advances",
+    "is a single t=0 advance of the full principal, and payments is a level",
+    "annuity. The unique i that balances the equation is therefore the same r",
+    "that defines the PMT: i = r = annual_rate / 12.",
+    "",
+    "Loan: P = $100,000.00, annual rate = 12.000%, term = 360 months.",
+    "From handcalc/amortize.json derivation: PMT = $1,028.61.",
+    "",
+    "Step 1: amount_financed = P - finance_charges = $100,000 - 0 = $100,000.",
+    "Step 2: U-equation balances exactly at i = 0.01 (1% monthly).",
+    "Step 3: APR = i * unit_periods_per_year = 0.01 * 12 = 0.12 = 12.000000%.",
+    "",
+    "Engine assertion: exact Decimal equality on estimated_apr."
+  ],
+  "inputs": {
+    "loan": {
+      "principal": "100000.00",
+      "annual_rate": "0.120000",
+      "term_months": 360,
+      "origination_date": "2026-01-01"
+    },
+    "finance_charges": "0.00",
+    "advance_schedule": [
+      {"unit_period_offset": 0, "amount": "100000.00"}
+    ],
+    "payment_schedule": [
+      {"starting_unit_period": 1, "periods": 360, "amount": "1028.61"}
+    ],
+    "day_count": "30/360",
+    "unit_periods_per_year": 12,
+    "odd_first_period_days": 0
+  },
+  "expected": {
+    "estimated_apr": "0.120000"
+  }
+}

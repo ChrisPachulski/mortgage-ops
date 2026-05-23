@@ -1,0 +1,66 @@
+{
+  "_meta": {
+    "family": "arm",
+    "source_url": "https://files.consumerfinance.gov/f/201603_cfpb_booklet_charm.pdf",
+    "citation_url": "https://files.consumerfinance.gov/f/201603_cfpb_booklet_charm.pdf",
+    "captured_at": "2026-05-23",
+    "reviewer_name": "household maintainer",
+    "reviewer_date": "2026-05-23"
+  },
+  "derivation": [
+    "# Hand-calculated derivation — 5/1 ARM clean-reset case",
+    "Setup: 5/1 ARM on $200,000 / 30yr at initial 4.00%, margin 250bps, lifetime",
+    "cap 500bps (max 9%), initial cap 500bps, periodic cap 200bps, floor 0%.",
+    "Assumed index at first reset = 2.50%. Fully-indexed rate at first reset =",
+    "index + margin = 2.50% + 2.50% = 5.00%.",
+    "",
+    "Step 1: initial-cap ceiling at first reset = old rate + initial_cap_bps",
+    "        = 4.00% + 5.00% = 9.00%.",
+    "Step 2: lifetime ceiling = note_rate + lifetime_cap_bps = 4.00% + 5.00% = 9.00%.",
+    "Step 3: effective floor = max(margin, floor_rate) = max(2.50%, 0%) = 2.50%.",
+    "Step 4: new_rate = clamp(fully_indexed, floor, min(initial_ceiling, lifetime_ceiling))",
+    "                 = clamp(5.00%, 2.50%, min(9.00%, 9.00%))",
+    "                 = clamp(5.00%, 2.50%, 9.00%) = 5.00%.",
+    "Step 5: 5.00% lies strictly inside (floor, ceiling) — no cap binds.",
+    "        applied_cap = 'none'.",
+    "",
+    "Step 6: year-1..5 P&I — standard PMT on $200k / 360mo / 4.00%:",
+    "  r = 0.04 / 12 = 0.003333...; (1+r)^360 ~= 3.3134918;",
+    "  PMT = 200000 * r * (1+r)^360 / ((1+r)^360 - 1) ~= $954.83.",
+    "",
+    "Step 7: year-6 P&I — recompute PMT on residual balance over 300 months at 5%.",
+    "  Residual balance after 60 months at 4.00% on $200k = $180,895.14",
+    "  (computed by walking the schedule; engine emits exact-cent value).",
+    "  New PMT = 180895.14 * (0.05/12) * (1+0.05/12)^300 / ((1+0.05/12)^300 - 1)",
+    "          ~= $1,057.49."
+  ],
+  "inputs": {
+    "loan": {
+      "principal": "200000.00",
+      "annual_rate": "0.040000",
+      "term_months": 360,
+      "origination_date": "2026-01-01",
+      "loan_type": "arm"
+    },
+    "arm_terms": {
+      "initial_period_months": 60,
+      "reset_period_months": 12,
+      "initial_cap_bps": 500,
+      "periodic_cap_bps": 200,
+      "lifetime_cap_bps": 500,
+      "floor_rate": "0.000000",
+      "margin_bps": 250,
+      "index_series_id": "HANDCALC_ARM_5_1",
+      "note_rate": null
+    },
+    "assumed_index_rate": "0.025000"
+  },
+  "expected": {
+    "year1_p_and_i": "954.83",
+    "year1_rate": "0.040000",
+    "year5_ending_balance": "180895.14",
+    "year6_p_and_i": "1057.49",
+    "year6_rate": "0.050000",
+    "first_reset_applied_cap": "none"
+  }
+}

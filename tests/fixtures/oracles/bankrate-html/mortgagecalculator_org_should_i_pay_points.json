@@ -1,0 +1,38 @@
+{
+  "_meta": {
+    "source": "mortgagecalculator.org 'Should I Pay Points?' calculator article, 'Discount Points Example' section.",
+    "source_url": "https://www.mortgagecalculator.org/calculators/should-i-pay-points-calculator.php",
+    "captured_at": "2026-05-23",
+    "html_snapshot": "tests/fixtures/oracles/bankrate-html/mortgagecalculator_org_should_i_pay_points.html",
+    "substitution_note": [
+      "Bankrate's points calculator (https://www.bankrate.com/mortgages/mortgage-points-calculator/) returns HTTP 404. We substituted with mortgagecalculator.org which publishes a worked example as static HTML.",
+      "The page's WITH-POINTS value of $954.83 at 4.0%/30yr/$200,000 is correct (matches engine + npf.pmt + closed-form PMT formula).",
+      "The page's NO-POINTS value of $993.10 at 4.5%/30yr/$200,000 is INCORRECT — the correct value is $1,013.37 (verified three independent ways: lib.amortize.build_schedule, numpy_financial.pmt, and the textbook closed-form PMT formula). This appears to be a copy-paste error in the article (possibly originally written for a $195,000 loan amount).",
+      "We assert the engine matches the CORRECT no-points value ($1,013.37) and the CORRECT with-points value ($954.83). The oracle's $993.10 is intentionally NOT asserted — see tests/fixtures/oracles/README.md 'Discovered discrepancies' for the full forensic.",
+      "The page's claim of '5 years and 9 months' breakeven on $4,000 / $38.27 is also internally inconsistent ($4,000 / $38.27 = 104.5 months, not 69). The engine breakeven against the CORRECT savings ($1013.37 - $954.83 = $58.54/mo) is $4000 / $58.54 = 68.33 → ceil 69 months — which happens to match the oracle's 5yr-9mo claim arithmetically. So the oracle's BREAKEVEN line was correct but inconsistent with the (wrong) no-points P&I."
+    ]
+  },
+  "inputs": {
+    "loan_no_points": {
+      "principal": "200000.00",
+      "annual_rate": "0.045000",
+      "term_months": 360
+    },
+    "loan_with_points": {
+      "principal": "200000.00",
+      "annual_rate": "0.040000",
+      "term_months": 360
+    },
+    "points_cost": "4000.00",
+    "hold_period_months": 360,
+    "discount_rate_annual": "0.050000"
+  },
+  "expected": {
+    "no_points_monthly_pi": "1013.37",
+    "with_points_monthly_pi": "954.83",
+    "monthly_savings": "58.54",
+    "simple_breakeven_months": 69,
+    "oracle_text_says_993_10_but_is_wrong": "1013.37",
+    "oracle_text_breakeven_69_months_is_correct": true
+  }
+}

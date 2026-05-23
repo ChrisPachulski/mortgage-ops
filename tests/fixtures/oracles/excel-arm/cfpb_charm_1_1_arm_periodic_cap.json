@@ -1,0 +1,50 @@
+{
+  "_meta": {
+    "source": "CFPB Consumer Handbook on Adjustable-Rate Mortgages (CHARM) — §3.5.1 'Periodic adjustment caps' worked example.",
+    "source_url": "https://files.consumerfinance.gov/f/201603_cfpb_booklet_charm.pdf",
+    "captured_at": "2026-05-23",
+    "csv_companion": "tests/fixtures/oracles/excel-arm/cfpb_charm_1_1_arm_periodic_cap.csv",
+    "substitution_note": [
+      "Vertex42's ARM Excel template (https://www.vertex42.com/ExcelTemplates/arm-calculator.html) requires Excel/LibreOffice to render; we cannot open Excel autonomously. Per the task brief, we substituted with HUD/CFPB's published ARM worked example (CFPB CHARM consumer booklet, §3.5.1).",
+      "The CHARM example is a 1/1 ARM (initial period = 12 months; resets annually). $200,000 / 30yr / initial 6.00%; periodic-cap = 2pp. At first reset the index has risen so the fully-indexed rate would be 9%; the periodic cap holds the new rate at 8% (=6%+2pp).",
+      "Engine reproduces the CHARM payments to the cent:",
+      "  year-1 payment $1,199.10 at 6.00%",
+      "  year-2 payment with cap $1,461.72 at 8.00% (engine.applied_cap='initial')",
+      "  year-2 payment without cap $1,600.42 at 9.00%",
+      "Difference CHARM cites: $1,600.42 - $1,461.72 = $138.70/month = $1,664.40/year — both arithmetic identities the engine independently produces."
+    ]
+  },
+  "arm_request": {
+    "loan": {
+      "principal": "200000.00",
+      "annual_rate": "0.060000",
+      "term_months": 360,
+      "origination_date": "2026-01-01",
+      "loan_type": "arm"
+    },
+    "arm_terms": {
+      "initial_period_months": 12,
+      "reset_period_months": 12,
+      "initial_cap_bps": 200,
+      "periodic_cap_bps": 200,
+      "lifetime_cap_bps": 600,
+      "floor_rate": "0.000000",
+      "margin_bps": 300,
+      "index_series_id": "CHARM_EXAMPLE_1_1",
+      "note_rate": null
+    },
+    "assumed_index_rate": "0.060000"
+  },
+  "expected": {
+    "year1_p_and_i": "1199.10",
+    "year1_rate": "0.060000",
+    "year1_balance_after_period_12": "197543.99",
+    "year2_p_and_i_capped": "1461.72",
+    "year2_rate_capped": "0.080000",
+    "year2_p_and_i_uncapped_counterfactual": "1600.42",
+    "year2_rate_uncapped_counterfactual": "0.090000",
+    "monthly_cap_savings": "138.70",
+    "annual_cap_savings": "1664.40",
+    "first_reset_applied_cap": "initial"
+  }
+}
