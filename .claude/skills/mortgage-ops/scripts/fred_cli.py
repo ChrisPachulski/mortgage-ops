@@ -112,6 +112,18 @@ def main() -> int:
         print(json.dumps(envelope))
         return 0
 
+    # D-12-LIVE02-01 cache-first ordering: a valid fresh local cache MUST be
+    # readable without FRED_API_KEY. The API key is only required when a
+    # network fetch is actually needed (cache miss / stale entry). The prior
+    # ordering checked the key first and short-circuited the cache, which
+    # defeated the whole point of the 7-day TTL for users who hadn't exported
+    # FRED_API_KEY but had a fresh cache on disk.
+    from lib.fred_cache import _load_cache, get_cached_or_fetch, is_fresh
+
+    cached_entry = _load_cache(series_id)
+    if cached_entry is not None and is_fresh(cached_entry):
+        return _emit(cached_entry)
+
     api_key = os.environ.get("FRED_API_KEY")
     if not api_key:
         return _emit(
@@ -126,14 +138,6 @@ def main() -> int:
                 "error": "FRED_API_KEY not set in environment; ask the user for the current rate.",
             }
         )
-
-    # D-12-LIVE02-01 cache-first: Plan 12-02 wires through lib.fred_cache with
-    # read-through semantics at data/cache/fred_{series_id}.json (per-series
-    # file shape pinned by SKILL.md citations, NOT the RESEARCH §Example 1
-    # combined `fred-cache.json`). The fetcher closure below is invoked only on
-    # cache miss / stale; subsequent invocations within the 7-day TTL window
-    # skip the urllib call entirely.
-    from lib.fred_cache import get_cached_or_fetch
 
     # T-12-01-02 mitigation: redacted source_url ALWAYS uses the hand-built
     # `api_key=***` form; the real key is never str-interpolated into any output

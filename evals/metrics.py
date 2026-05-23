@@ -152,8 +152,10 @@ def score_route_match(
     # D-12-SC3-01 Pitfall #2b cross-check (exempt all-static oracles)
     expected_nums = expected.get("expected_numbers", []) or []
     expected_scripts = expected.get("expected_scripts", []) or []
-    all_static = bool(expected_nums) and not expected_scripts and all(
-        e.get("provenance") == "static" for e in expected_nums
+    all_static = (
+        bool(expected_nums)
+        and not expected_scripts
+        and all(e.get("provenance") == "static" for e in expected_nums)
     )
     has_numeric_output = bool(extract_numbers(model_response))
     has_any_subprocess = len(sub_calls) > 0
@@ -171,9 +173,7 @@ def score_route_match(
     for spec in expected.get("expected_scripts", []) or []:
         script_name = spec.get("script", "")
         matching = [
-            c
-            for c in sub_calls
-            if any(script_name in str(arg) for arg in c.get("cmd", []))
+            c for c in sub_calls if any(script_name in str(arg) for arg in c.get("cmd", []))
         ]
         if not matching:
             return False
@@ -205,8 +205,4 @@ def detect_hallucinations(
             continue
         stdout_nums.update(extract_numbers(str(call.get("stdout", ""))))
 
-    return [
-        n
-        for n in response_nums
-        if not any(abs(n - s) <= tolerance for s in stdout_nums)
-    ]
+    return [n for n in response_nums if not any(abs(n - s) <= tolerance for s in stdout_nums)]

@@ -768,9 +768,14 @@ def _build_program_result(
     if target_loan_type == "conventional" and ltv > Decimal("0.80"):
         monthly_pmi_for_request = monthly_mi
 
+    # Per-program DTI ceiling (B-5): FHA/VA/Jumbo differ from Conventional's
+    # 0.50 (see _DTI_CEILING_BY_PROGRAM). Hardcoding 0.50 for every program
+    # would silently misclassify cells (false-positive WATCH on FHA, false-
+    # negative GO on VA). Look up the program-specific value here so matrix
+    # eligibility matches the stress-block ceiling used by Plan 14-03.
     forward_request = ForwardModeRequest(
         household=affordability_household,
-        max_dti=Decimal("0.500000"),
+        max_dti=_DTI_CEILING_BY_PROGRAM[program],
         target_loan_type=target_loan_type,
         term_months=term_months,
         annual_rate=annual_rate,

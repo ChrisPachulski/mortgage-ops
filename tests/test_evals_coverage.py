@@ -20,7 +20,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-import frontmatter  # type: ignore[import-not-found]
+import frontmatter  # type: ignore[import-untyped,import-not-found,unused-ignore]
 import pytest
 from evals.runner import EXPECTED_DIR, PROMPTS_DIR, run_all
 

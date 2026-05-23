@@ -24,8 +24,7 @@ import re
 from pathlib import Path
 
 SKILL_MD: Path = (
-    Path(__file__).resolve().parent.parent
-    / ".claude" / "skills" / "mortgage-ops" / "SKILL.md"
+    Path(__file__).resolve().parent.parent / ".claude" / "skills" / "mortgage-ops" / "SKILL.md"
 )
 
 
@@ -123,7 +122,11 @@ def test_fred_context_reference_doc_has_required_sections() -> None:
     arm-mechanics.md template + Citation Index appendix."""
     doc_path = (
         Path(__file__).resolve().parent.parent
-        / ".claude" / "skills" / "mortgage-ops" / "references" / "fred-context.md"
+        / ".claude"
+        / "skills"
+        / "mortgage-ops"
+        / "references"
+        / "fred-context.md"
     )
     body = doc_path.read_text()
     required_headings = [

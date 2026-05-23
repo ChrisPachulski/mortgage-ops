@@ -10,6 +10,7 @@ import json
 import subprocess
 import sys
 import time
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -175,6 +176,75 @@ def _run_cli_with_mocked_save_cache(exc_class: str, exc_args_repr: str) -> dict[
     )
     payload: dict[str, object] = json.loads(completed.stdout.strip().splitlines()[-1])
     return payload
+
+
+def test_fred_cli_cache_hit_without_api_key_returns_cached_envelope() -> None:
+    """Cache-first ordering: a fresh local cache MUST be readable without
+    FRED_API_KEY set. The API key is only required when a fetch is actually
+    needed (cache miss / stale). Pre-fix, the missing-key check short-circuited
+    the cache lookup, defeating the 7-day TTL for users who hadn't exported the
+    key.
+
+    Subprocess-driven so the CLI's lazy ``from lib.fred_cache import _load_cache``
+    binds to the real ``CACHE_DIR``. Writes a fresh cache file under the real
+    ``data/cache/`` (per-series ``fred_MORTGAGE15US.json``) and cleans up
+    afterward — chosen over monkeypatching because ``_load_cache`` captures
+    ``CACHE_DIR`` as a default-arg binding at definition time. Uses
+    MORTGAGE15US to avoid colliding with any MORTGAGE30US cache another test
+    might leave behind.
+    """
+    project_root = Path(__file__).resolve().parent.parent
+    cache_dir = project_root / "data" / "cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    cache_file = cache_dir / "fred_MORTGAGE15US.json"
+
+    # ISO 8601 with 'Z' suffix; fetched_at within 7d of currentDate 2026-05-23
+    # so is_fresh() returns True. Hardcoded recent date so the test is
+    # deterministic regardless of freezegun usage elsewhere.
+    fresh_iso = (datetime.now(UTC) - timedelta(hours=1)).isoformat().replace("+00:00", "Z")
+    cached_envelope = {
+        "series_id": "MORTGAGE15US",
+        "value": "5.94",
+        "observation_date": "2026-05-15",
+        "fetched_at": fresh_iso,
+        "source_url": (
+            "https://api.stlouisfed.org/fred/series/observations?"
+            "series_id=MORTGAGE15US&api_key=***&file_type=json&sort_order=desc&limit=1"
+        ),
+        "fred_realtime_start": "2026-05-15",
+        "fred_realtime_end": "2026-05-15",
+        "error": None,
+    }
+    # schema_version pinned in lib.fred_cache.SCHEMA_VERSION = 1; mirror inline
+    # to avoid importing lib at module scope (keeps this test hermetic).
+    payload = {"schema_version": 1, "entries": {"MORTGAGE15US": cached_envelope}}
+    pre_existed = cache_file.exists()
+    saved_content = cache_file.read_text() if pre_existed else None
+    cache_file.write_text(json.dumps(payload))
+
+    try:
+        env = {k: v for k, v in __import__("os").environ.items() if k != "FRED_API_KEY"}
+        result = subprocess.run(
+            [sys.executable, str(SCRIPT_PATH), "MORTGAGE15US", "--latest"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            env=env,
+        )
+        assert result.returncode == 0, f"stdout={result.stdout!r} stderr={result.stderr!r}"
+        envelope = json.loads(result.stdout)
+        # Cache hit — no missing-key complaint despite FRED_API_KEY unset.
+        assert envelope["error"] is None, f"unexpected error: {envelope['error']!r}"
+        assert envelope["value"] == "5.94"
+        assert envelope["series_id"] == "MORTGAGE15US"
+        assert envelope["fetched_at"] == fresh_iso
+        assert envelope["source_url"] is not None
+        assert "api_key=***" in envelope["source_url"]  # redaction preserved
+    finally:
+        if pre_existed and saved_content is not None:
+            cache_file.write_text(saved_content)
+        else:
+            cache_file.unlink(missing_ok=True)
 
 
 def test_fred_cli_lock_timeout_returns_exit_0_with_error_envelope() -> None:

@@ -404,9 +404,7 @@ def test_SUBA_05_stress_mode_routes_sweeps_over_5_to_subagent() -> None:
     # the threshold is strictly >5 (matches literal SC-2 wording); per
     # Plan 11-04 D-02 cross-phase update protocol this branch executed because
     # Phase 10 had shipped at task time.
-    canonical_sentence = (
-        "If `scenario_count > 5`, dispatch to `stress-test-agent`"
-    )
+    canonical_sentence = "If `scenario_count > 5`, dispatch to `stress-test-agent`"
     assert canonical_sentence in stress_md, (
         "SUBA-05: modes/stress.md must contain the canonical sentence "
         f"{canonical_sentence!r} verbatim (per Plan 11-04 LOCKED DECISION "

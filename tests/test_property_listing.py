@@ -105,6 +105,16 @@ def test_rejects_float_price_strict_true() -> None:
         _make_min_listing(price=625000.0)
 
 
+def test_rejects_zero_price() -> None:
+    """price=0 must raise — Money alias allows ge=0 for other uses, but a
+    listing's price=0 would explode downstream LTV / cash-to-close denominators
+    in lib/property_analysis.py. Boundary type rejects strictly."""
+    with pytest.raises(ValidationError) as exc_info:
+        _make_min_listing(price=Decimal("0"))
+    # Validator emits a clear message naming the field and value.
+    assert "Property price must be > 0" in str(exc_info.value)
+
+
 # --- zip + property_type validators -------------------------------------------
 
 

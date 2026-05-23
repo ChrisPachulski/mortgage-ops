@@ -54,7 +54,7 @@ def test_evals_prompts_dir_has_23_prompts() -> None:
 def test_each_mode_has_at_least_one_prompt(mode: str) -> None:
     """SC-5: every one of 7 modes must have >=1 prompt with `mode: {name}` frontmatter.
     Flipped from xfail by Plan 12-05."""
-    import frontmatter  # type: ignore[import-not-found]
+    import frontmatter  # type: ignore[import-untyped,import-not-found,unused-ignore]
 
     matches = []
     for p in PROMPTS_DIR.glob("*.md"):

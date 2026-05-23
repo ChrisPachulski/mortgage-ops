@@ -41,7 +41,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from lib.models import Money, Rate  # noqa: TC001  # Pydantic resolves field annotations at runtime
 
@@ -73,3 +73,14 @@ class Household(BaseModel):
             "when household.yml omits the field."
         ),
     )
+
+    @field_validator("monthly_income")
+    @classmethod
+    def _monthly_income_strictly_positive(cls, v: Decimal) -> Decimal:
+        # Money alias allows ge=0 for legitimate zero-balance uses elsewhere;
+        # for a household's monthly_income, 0 would explode downstream DTI
+        # calculations in lib/property_analysis.py. Reject at this boundary so
+        # the Money alias remains general-purpose.
+        if v == Decimal("0"):
+            raise ValueError(f"Monthly income must be > 0; got {v}")
+        return v

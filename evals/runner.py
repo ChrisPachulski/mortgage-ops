@@ -186,9 +186,7 @@ def synthesize_stub_transcript(
         val = entry["value"]
         # Format as money for decimals, plain for others
         try:
-            formatted = (
-                f"${Decimal(str(val)):,.2f}" if "." in str(val) else str(val)
-            )
+            formatted = f"${Decimal(str(val)):,.2f}" if "." in str(val) else str(val)
         except Exception:
             formatted = str(val)
         response_lines.append(f"{entry['label']}: {formatted}")
@@ -238,9 +236,7 @@ def run_all(prompts_dir: Path) -> HarnessReport:
         try:
             route_ok, score, failures = run_replay_stub(prompt)
         except FileNotFoundError as exc:
-            report.failures.append(
-                FailureReport(prompt.stem, "missing_oracle", str(exc))
-            )
+            report.failures.append(FailureReport(prompt.stem, "missing_oracle", str(exc)))
             continue
         if route_ok:
             report.route_match_count += 1
@@ -286,19 +282,14 @@ def main(argv: list[str] | None = None) -> int:
     # ships fail-loudly; single-file scoring is deferred to v1.1 once the
     # plumbing (per-stem filter through ``run_all``) lands.
     if not target.is_dir():
-        parser.error(
-            f"single-file scoring not supported in v1; pass a directory. Got: {target}"
-        )
+        parser.error(f"single-file scoring not supported in v1; pass a directory. Got: {target}")
     prompts_dir = target
 
     report = run_all(prompts_dir)
     print(json.dumps(report.to_dict(), indent=2))
     # SC-4 requires BOTH numeric_match_rate AND route_match_rate >= gate.
     return (
-        0
-        if report.numeric_match_rate >= args.gate
-        and report.route_match_rate >= args.gate
-        else 1
+        0 if report.numeric_match_rate >= args.gate and report.route_match_rate >= args.gate else 1
     )
 
 

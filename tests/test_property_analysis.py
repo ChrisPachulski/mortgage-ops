@@ -565,6 +565,59 @@ def test_va_cell_constructs_valid_affordability_request() -> None:
     assert "VA-FUNDING-FEE-FINANCED" in cell.eligible_reasons
 
 
+def test_matrix_eligibility_uses_per_program_dti_ceiling() -> None:
+    """B-5 follow-on: matrix eligibility must thread the per-program DTI ceiling
+    through ForwardModeRequest.max_dti — NOT a hardcoded 0.500000.
+
+    A household tuned so DTI sits between VA's 0.41 (block) and Conventional's
+    0.50 (eligible) proves the lookup is wired correctly: same household, same
+    listing, same DP — Conv30 stays eligible, VA30 blocks with DTI-CAP-VA.
+    Under the previous hardcoded max_dti=0.50, VA30 would have been silently
+    marked eligible.
+    """
+    # Tuned so back-end DTI lands roughly at 0.46 — above 0.41 (VA), below 0.50
+    # (Conv). Listing kept low enough that 20% DP works against $5k income.
+    household = _make_clean_household(
+        monthly_income=Decimal("5000.00"),
+        monthly_obligations=Decimal("300.00"),
+    )
+    profile = _make_clean_profile(va_eligible=True)
+    listing = _make_clean_listing(price="400000.00")
+
+    conv30_cell = _build_program_result(
+        "Conv30", Decimal("0.20"), listing, household, profile, _TEST_RATE
+    )
+    va30_cell = _build_program_result(
+        "VA30", Decimal("0.20"), listing, household, profile, _TEST_RATE
+    )
+
+    # Sanity: both cells land in the band we designed for. If this fails the
+    # fixture drifted; pin the band rather than the exact value so small
+    # changes to escrow / funding-fee math don't bit-rot the test.
+    assert Decimal("0.41") < conv30_cell.dti_back < Decimal("0.50"), (
+        f"Conv30 DTI {conv30_cell.dti_back} not in (0.41, 0.50) band — fixture drifted"
+    )
+    assert Decimal("0.41") < va30_cell.dti_back < Decimal("0.50"), (
+        f"VA30 DTI {va30_cell.dti_back} not in (0.41, 0.50) band — fixture drifted"
+    )
+
+    # Conv30 eligible because its ceiling is 0.50 and DTI < 0.50.
+    assert conv30_cell.eligible is True, (
+        f"Conv30 should be eligible (DTI {conv30_cell.dti_back} < 0.50 ceiling); "
+        f"got blockers: {conv30_cell.blocker_reasons}"
+    )
+
+    # VA30 blocked because its ceiling is 0.41 and DTI > 0.41. Blocker must
+    # come from the DTI cap predicate — DTI-CAP-VA verbatim. Under the old
+    # hardcoded max_dti=0.50 this cell would have been silently eligible.
+    assert va30_cell.eligible is False, (
+        f"VA30 should block on DTI cap (DTI {va30_cell.dti_back} > 0.41 ceiling)"
+    )
+    assert any("DTI-CAP-VA" in r for r in va30_cell.blocker_reasons), (
+        f"expected DTI-CAP-VA in blocker_reasons; got {va30_cell.blocker_reasons}"
+    )
+
+
 def test_provenanced_value_none_unwraps_to_zero() -> None:
     """B-4: ProvenancedMoney(value=None, ...) and None wrappers both unwrap
     to Decimal('0.00') in escrow paths without raising TypeError."""
@@ -1356,4 +1409,19 @@ def test_sfh_jumbo_bay_area_golden(
 
     # Jumbo30 row materialized at the 5th-program slot (D-14-MATRIX-03).
     assert "Jumbo30" in report.matrix.programs_present
-    assert report.tax.over_750k_cap_per_program["Jumbo30"] is True
+    # B-5 follow-on: with the corrected Jumbo DTI ceiling 0.43, Jumbo30 is no
+    # longer eligible at preferred 20% DP in this fixture (dti_back=0.442426 >
+    # 0.43). The tax block only materializes rows for eligible-at-preferred-DP
+    # cells, so over_750k_cap_per_program is empty here. Eligibility at higher
+    # DPs (the 25% slot keeps Jumbo30 under the ceiling) prevents the cascade
+    # from reaching Level 1.
+    assert "Jumbo30" not in report.tax.over_750k_cap_per_program
+    jumbo_25 = next(
+        c
+        for c in report.matrix.cells
+        if c.program == "Jumbo30" and c.down_payment_pct == Decimal("0.250000")
+    )
+    assert jumbo_25.eligible is True, (
+        "Jumbo30 should remain eligible at 25% DP — keeps verdict cascade at "
+        "Level 2 instead of dropping to Level 1 (all-DPs-ineligible)"
+    )

@@ -137,6 +137,7 @@ def _load_phase14_household_from_yaml(path: Path) -> Household:
 
     import yaml
     from lib.household import Household
+    from lib.money import quantize_cents
 
     raw = yaml.safe_load(path.read_text())["household"]
     monthly_income = sum(
@@ -152,8 +153,8 @@ def _load_phase14_household_from_yaml(path: Path) -> Household:
     )
     fico = min(int(a["credit_score"]) for a in raw["applicants"])
     return Household(
-        monthly_income=monthly_income.quantize(Decimal("0.01")),
-        monthly_obligations=monthly_obligations.quantize(Decimal("0.01")),
+        monthly_income=quantize_cents(monthly_income),
+        monthly_obligations=quantize_cents(monthly_obligations),
         fico=fico,
         liquid_reserves=Decimal(raw.get("liquid_reserves", "0.00")),
         state_fips=raw["location"]["state_fips"],
@@ -212,16 +213,17 @@ def main() -> int:
 
     # Step A — --output-dir hardening (ASVS V5 / Pitfall PATTERNS L920-930).
     #
-    # Reject paths containing ".." segments (defense-in-depth path-traversal
-    # rejection) and paths that don't resolve to an existing directory the
-    # orchestrator can write to. The MUST-HAVE clause in the plan recommends a
-    # strict project-root prefix check; the test bed (test_success_envelope_shape)
-    # exercises pytest's tmp_path which lives at /private/var/folders/... on
-    # macOS — strictly outside project root. We therefore use the more practical
-    # gate "resolves to an existing directory + no '..' parts" which (a) keeps
-    # the path-traversal rejection (test_output_dir_outside_project_rejected
-    # passes a non-existent /tmp/foo-property-out path), and (b) lets pytest
-    # tmp_path subprocess tests run end-to-end.
+    # Reject:
+    #   1. paths containing ".." segments (defense-in-depth path-traversal),
+    #   2. paths that don't resolve to an existing directory,
+    #   3. paths whose resolved location is NOT inside the project root.
+    #
+    # Containment uses Path.is_relative_to(project_root) against the FULLY
+    # resolved (symlink-followed) output dir vs. the fully resolved project
+    # root, so e.g. /tmp/foo-property-out, ~/Desktop/reports, or a symlink
+    # pointing outside the repo all fail closed. This closes the medium-
+    # severity gap where the previous "directory exists" gate accepted any
+    # writable directory anywhere on disk.
     raw_output_dir = args.output_dir
     if ".." in raw_output_dir.parts:
         _emit_error_envelope(
@@ -241,6 +243,12 @@ def main() -> int:
         _emit_error_envelope(
             "output_dir_unwritable",
             f"output-dir does not exist or is not a directory: {output_dir}",
+        )
+        return 0
+    if not output_dir.is_relative_to(project_root):
+        _emit_error_envelope(
+            "output_dir_unwritable",
+            (f"output-dir must be inside the project root ({project_root}); got {output_dir}"),
         )
         return 0
 

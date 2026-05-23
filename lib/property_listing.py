@@ -85,6 +85,17 @@ class PropertyListing(BaseModel):
     zpid: Annotated[str, Field(pattern=r"^\d+$")]
     fetched_at: datetime
 
+    @field_validator("price")
+    @classmethod
+    def _price_strictly_positive(cls, v: Decimal) -> Decimal:
+        # Money alias allows ge=0 for legitimate zero-down / zero-balance uses
+        # elsewhere; for a listing's price, 0 would explode downstream
+        # consumers (LTV / DTI denominators in lib/property_analysis.py). Reject
+        # at this boundary so the Money alias remains general-purpose.
+        if v == Decimal("0"):
+            raise ValueError(f"Property price must be > 0; got {v}")
+        return v
+
     @field_validator("baths")
     @classmethod
     def _baths_half_step(cls, v: Decimal | None) -> Decimal | None:

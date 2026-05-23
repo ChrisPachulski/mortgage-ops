@@ -45,12 +45,9 @@ def test_prose_only_number_fails_both_gates() -> None:
     }
     sub_calls: list[dict[str, object]] = []  # no subprocess invocation
     assert (
-        score_numeric_match("Your payment is $1,264.14", expected, sub_calls)
-        == NumericScore.FAIL
+        score_numeric_match("Your payment is $1,264.14", expected, sub_calls) == NumericScore.FAIL
     )
-    assert (
-        score_route_match("Your payment is $1,264.14", expected, sub_calls) is False
-    )
+    assert score_route_match("Your payment is $1,264.14", expected, sub_calls) is False
 
 
 def test_stdout_sourced_number_passes_both_gates() -> None:
@@ -71,8 +68,7 @@ def test_stdout_sourced_number_passes_both_gates() -> None:
                 "/tmp/x.json",
             ],
             "stdin": (
-                '{"loan": {"principal": "200000.00", "annual_rate": "0.065", '
-                '"term_months": 360}}'
+                '{"loan": {"principal": "200000.00", "annual_rate": "0.065", "term_months": 360}}'
             ),
             "stdout": '{"monthly_pi": "1264.14"}',
             "stderr": "",
@@ -92,12 +88,9 @@ def test_stdout_sourced_number_passes_both_gates() -> None:
         "expected_route_keywords": ["amortize"],
     }
     assert (
-        score_numeric_match("Your payment is $1,264.14", expected, sub_calls)
-        == NumericScore.PASS
+        score_numeric_match("Your payment is $1,264.14", expected, sub_calls) == NumericScore.PASS
     )
-    assert (
-        score_route_match("Your payment is $1,264.14", expected, sub_calls) is True
-    )
+    assert score_route_match("Your payment is $1,264.14", expected, sub_calls) is True
 
 
 def test_cmd_arg_only_number_fails_numeric_match() -> None:
@@ -137,10 +130,7 @@ def test_cmd_arg_only_number_fails_numeric_match() -> None:
             }
         ],
     }
-    assert (
-        score_numeric_match("Principal: $400,000.00", expected, sub_calls)
-        == NumericScore.FAIL
-    )
+    assert score_numeric_match("Principal: $400,000.00", expected, sub_calls) == NumericScore.FAIL
 
 
 def test_static_provenance_number_exempt_from_stdout_rule() -> None:
@@ -163,9 +153,7 @@ def test_static_provenance_number_exempt_from_stdout_rule() -> None:
         ],
     }
     assert (
-        score_numeric_match(
-            "The IRS Pub 936 cap is $750,000.00", expected, sub_calls
-        )
+        score_numeric_match("The IRS Pub 936 cap is $750,000.00", expected, sub_calls)
         == NumericScore.PASS
     )
 

@@ -6,8 +6,16 @@ listing_json + analysis_json use DuckDB's native JSON type (enables ->>
 operators for Phase 14 query convenience).
 
 Reuses lib.fred_cache.with_cache_lock (Phase 12 Python port of
-orchestration/lockfile.mjs:withLock) — lock-dir is db_path.parent (data/),
-so this writer serializes against the Phase 9 Node writer on the same DB file.
+orchestration/lockfile.mjs:withLock) but OVERRIDES the lock filename to
+``.lock`` AND pins the lock directory to the repo-rooted ``data/`` (see
+``LOCK_DIR`` below). Lock-dir is decoupled from ``db_path`` because
+``orchestration/lockfile.mjs`` (lines 24-25) hardcodes the repo-rooted
+``data/.lock`` regardless of which DuckDB file the Node writer touches.
+Python must match that behavior so the cross-language mutex stays mutually
+exclusive even when ``MORTGAGE_OPS_DB_PATH`` overrides ``db_path`` to live
+outside the repo. The default ``.fred-cache.lock`` filename is wrong for
+this caller — FRED and DuckDB writers must share the SAME lock basename to
+be mutually exclusive.
 
 All ``duckdb`` imports are lazy (inside function bodies) per D-18.
 
@@ -31,7 +39,20 @@ from lib.fred_cache import with_cache_lock
 if TYPE_CHECKING:
     from lib.property_listing import PropertyListing
 
-DB_PATH: Final[Path] = Path(__file__).parent.parent / "data" / "mortgage-ops.duckdb"
+REPO_ROOT: Final[Path] = Path(__file__).resolve().parent.parent
+"""Repo root: ``lib/property_persistence.py`` is one level deep so
+``Path(__file__).resolve().parent.parent`` is ``<repo>/``. ``.resolve()`` makes
+this robust to symlinks (e.g. macOS ``/var`` → ``/private/var``)."""
+
+LOCK_DIR: Final[Path] = REPO_ROOT / "data"
+"""Repo-rooted ``<repo>/data/`` — the directory ``orchestration/lockfile.mjs``
+(lines 24-25) hardcodes for ``LOCK_PATH``. The Node writer ALWAYS locks
+``<repo>/data/.lock`` even when ``MORTGAGE_OPS_DB_PATH`` overrides the DB
+location (see ``orchestration/db-write.mjs``). Python conforms: lock-dir is
+decoupled from ``db_path.parent`` so the two writers stay mutually exclusive
+when the DB lives outside the repo."""
+
+DB_PATH: Final[Path] = REPO_ROOT / "data" / "mortgage-ops.duckdb"
 SCHEMA_VERSION: Final[int] = 1
 
 CREATE_TABLE_SQL: Final[str] = """
@@ -84,19 +105,42 @@ def _ensure_schema(con: Any) -> None:
     con.execute(CREATE_TABLE_SQL)
 
 
+DUCKDB_LOCK_FILENAME: Final[str] = ".lock"
+"""Mirror ``orchestration/lockfile.mjs:LOCK_PATH`` basename. Source of truth is
+the Node writer (do NOT change Node code). Both writers must hold the same
+basename in ``data/`` to be mutually exclusive — see ``write_listing`` below."""
+
+
 def write_listing(
     listing: PropertyListing,
     household_hash: str,
     db_path: Path = DB_PATH,
 ) -> None:
-    """PROP-02 + PERS-08: persist a validated listing. Wrapped in with_cache_lock
-    so Python and Node writers serialize on the same data/.lock file.
+    """PROP-02 + PERS-08: persist a validated listing.
+
+    Acquires ``<repo>/data/.lock`` (NOT ``.fred-cache.lock``, NOT
+    ``<db_path.parent>/.lock``) via
+    ``with_cache_lock(LOCK_DIR, lock_filename='.lock')`` so this Python writer
+    serializes against ``orchestration/lockfile.mjs:withLock``, which is the
+    Node writer's mutex. The shared lock-dir is the repo-rooted ``data/``
+    (``orchestration/lockfile.mjs`` lines 24-25 hardcode this) and the shared
+    basename is ``.lock``. Both must match for cross-process mutex semantics
+    to hold even when ``MORTGAGE_OPS_DB_PATH`` overrides ``db_path``.
     """
     import duckdb  # D-18 lazy-import
 
-    # Lock-dir is db_path.parent (data/), NOT a subdirectory — so this serializes
-    # against the Phase 9 Node writer (orchestration/db-write.mjs:cmdInsert*).
-    with with_cache_lock(db_path.parent, reason=f"write zpid={listing.zpid}"):
+    # Lock path = REPO_ROOT/data/.lock — byte-identical to
+    # orchestration/lockfile.mjs:LOCK_PATH (lines 24-25 of that file pin it to
+    # ``dirname(dirname(__filename))/data/.lock``, NOT a path derived from the
+    # DB file). Using ``db_path.parent`` here would diverge from Node whenever
+    # MORTGAGE_OPS_DB_PATH points outside ``<repo>/data/``, leaving the two
+    # writers NOT mutually exclusive. Using ``.fred-cache.lock`` (the
+    # with_cache_lock default) was the original PROP-02 contract bug.
+    with with_cache_lock(
+        LOCK_DIR,
+        reason=f"write zpid={listing.zpid}",
+        lock_filename=DUCKDB_LOCK_FILENAME,
+    ):
         con = duckdb.connect(str(db_path))
         try:
             _ensure_schema(con)

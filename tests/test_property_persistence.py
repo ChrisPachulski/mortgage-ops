@@ -15,6 +15,7 @@ from lib.property_listing import PropertyListing, ProvenancedMoney
 from lib.property_persistence import (
     CREATE_TABLE_SQL,
     DB_PATH,
+    LOCK_DIR,
     SCHEMA_VERSION,
     _ensure_schema,
     compute_household_hash,
@@ -198,27 +199,172 @@ def test_malformed_listing_json_falls_through(tmp_path: Path) -> None:
 
 
 def test_write_acquires_data_lock(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """PERS-08: write_listing acquires the lockfile in db_path.parent (data/.lock)."""
+    """PERS-08: write_listing acquires the lockfile at ``<repo>/data/.lock``.
+
+    Verifies BOTH (a) lock-dir is the repo-rooted ``LOCK_DIR`` (decoupled from
+    ``db_path.parent``), AND (b) lock basename is exactly ``.lock`` — matching
+    ``orchestration/lockfile.mjs:LOCK_PATH`` (lines 24-25 of that file).
+
+    The dir check closes the cross-language edge case where
+    ``MORTGAGE_OPS_DB_PATH`` points outside ``<repo>/data/``: Node hardcodes
+    ``<repo>/data/.lock`` regardless of DB path, so Python must too — or the
+    two writers stop being mutually exclusive.
+
+    The basename check closes the original PROP-02 concurrency contract bug:
+    pre-fix the writer was holding ``.fred-cache.lock`` while the Node writer
+    held ``.lock``, so the two were NOT mutually exclusive.
+    """
     from contextlib import contextmanager
 
     from lib import property_persistence
 
     acquired_dirs: list[Any] = []
+    acquired_filenames: list[str] = []
 
     @contextmanager
     def _spy_lock(cache_dir: Any, **kwargs: Any) -> Any:
         acquired_dirs.append(cache_dir)
+        # Capture explicit lock_filename kwarg — None means caller fell back
+        # to the with_cache_lock default (`.fred-cache.lock`), which is the
+        # PROP-02 bug. We require the caller to pass ``.lock`` explicitly.
+        acquired_filenames.append(kwargs.get("lock_filename", ""))
         yield {"acquired_at": "spy", "pid": -1, "reason": kwargs.get("reason", "")}
 
     monkeypatch.setattr(property_persistence, "with_cache_lock", _spy_lock)
 
+    # db_path lives in tmp_path/subdir — intentionally NOT under <repo>/data/.
+    # write_listing must STILL acquire <repo>/data/.lock (LOCK_DIR), matching
+    # the Node writer's hardcoded path.
     db = tmp_path / "subdir" / "t.duckdb"
     db.parent.mkdir(parents=True, exist_ok=True)
     write_listing(_make_listing(), household_hash="abc", db_path=db)
 
     assert len(acquired_dirs) == 1
-    # lock-dir is db_path.parent, NOT a subdir (serializes with Phase 9 Node writer)
-    assert acquired_dirs[0] == db.parent
+    # lock-dir is the repo-rooted LOCK_DIR, NOT db.parent — serializes with
+    # Phase 9 Node writer even when MORTGAGE_OPS_DB_PATH overrides db_path.
+    assert acquired_dirs[0] == LOCK_DIR, (
+        f"write_listing must pass LOCK_DIR (<repo>/data/) to share Node writer's "
+        f"mutex regardless of db_path. Got: {acquired_dirs[0]!r}, expected: {LOCK_DIR!r}"
+    )
+    assert acquired_dirs[0] != db.parent, (
+        "write_listing must NOT key the lock off db.parent — Node's "
+        "orchestration/lockfile.mjs (lines 24-25) hardcodes <repo>/data/.lock "
+        "regardless of MORTGAGE_OPS_DB_PATH."
+    )
+    # Lock basename MUST equal ``.lock`` to match orchestration/lockfile.mjs.
+    assert acquired_filenames[0] == ".lock", (
+        f"write_listing must pass lock_filename='.lock' to share Node writer's "
+        f"mutex (orchestration/lockfile.mjs:LOCK_PATH = data/.lock). "
+        f"Got: {acquired_filenames[0]!r}"
+    )
+
+
+def test_write_creates_lockfile_with_exact_filename_dot_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """PROP-02 concurrency contract: a real write_listing call (with only
+    LOCK_DIR redirected to tmp_path for test isolation, NOT the lock primitive
+    itself) MUST create / hold ``<LOCK_DIR>/.lock`` — byte-identical basename
+    to ``orchestration/lockfile.mjs:LOCK_PATH``. A test that verifies "some
+    lock file in the right directory" is not enough; the BASENAME must match
+    the Node writer or the two are not mutually exclusive.
+
+    Strategy: redirect LOCK_DIR to tmp_path so we don't touch the real
+    ``<repo>/data/.lock``. Then hold the same ``.lock`` ourselves via the
+    underlying with_cache_lock primitive in tmp_path, and call write_listing
+    in a thread with a short timeout. If write_listing is asking for
+    ``.lock``, it will block (timeout). If it's asking for
+    ``.fred-cache.lock`` (the original bug), it will succeed and we'll see
+    the wrong-basename file appear.
+    """
+    import threading
+    from datetime import timedelta
+
+    from lib import property_persistence
+    from lib.fred_cache import FredCacheLockError, with_cache_lock
+
+    # Redirect LOCK_DIR to tmp_path so this test exercises the lock contract
+    # WITHOUT touching the real <repo>/data/.lock. The contract under test is
+    # "write_listing locks <LOCK_DIR>/.lock"; redirecting LOCK_DIR is the
+    # canonical unit-isolation move.
+    monkeypatch.setattr(property_persistence, "LOCK_DIR", tmp_path)
+
+    db = tmp_path / "t.duckdb"
+    lock_dir = tmp_path
+    listing = _make_listing()
+
+    blocker_held = threading.Event()
+    blocker_release = threading.Event()
+
+    def _hold_dot_lock() -> None:
+        # Hold the SAME basename Node uses. If write_listing asks for ``.lock``,
+        # it will be blocked here.
+        with with_cache_lock(lock_dir, reason="test-blocker", lock_filename=".lock"):
+            blocker_held.set()
+            blocker_release.wait(timeout=10)
+
+    holder = threading.Thread(target=_hold_dot_lock, daemon=True)
+    holder.start()
+    assert blocker_held.wait(timeout=5), "blocker thread did not acquire .lock"
+
+    # While ``.lock`` is held, ``data/.lock`` should be present with that exact basename.
+    dot_lock = lock_dir / ".lock"
+    assert dot_lock.exists(), f"expected {dot_lock} to exist while held"
+    assert dot_lock.name == ".lock"
+    # And there must NOT be a separate ``.fred-cache.lock`` doing the work.
+    fred_lock = lock_dir / ".fred-cache.lock"
+    assert not fred_lock.exists(), (
+        "write_listing must not fall back to .fred-cache.lock — that is the "
+        "PROP-02 bug. The Node writer uses .lock, so the Python writer must too."
+    )
+
+    # Now attempt write_listing with a very short timeout — it should BLOCK
+    # because we're holding the right basename. If it succeeds quickly,
+    # the Python writer is locking a different file (the bug).
+    write_error: list[BaseException] = []
+
+    def _try_write() -> None:
+        try:
+            # Patch timeout via monkey on _acquire_lock? Simpler: rely on
+            # ``with_cache_lock`` raising FredCacheLockError after timeout
+            # when blocker holds the lock. We use a fresh import so we can
+            # inject a short timeout via override.
+            from lib import fred_cache as _fc
+            from lib import property_persistence as _pp
+
+            orig = _fc.with_cache_lock
+
+            from contextlib import contextmanager
+
+            @contextmanager
+            def _short_to(cache_dir: Any, **kwargs: Any) -> Any:
+                kwargs["timeout"] = timedelta(milliseconds=500)
+                with orig(cache_dir, **kwargs) as lk:
+                    yield lk
+
+            _pp.with_cache_lock = _short_to  # type: ignore[attr-defined,assignment]
+            try:
+                write_listing(listing, household_hash="abc", db_path=db)
+            finally:
+                _pp.with_cache_lock = orig  # type: ignore[attr-defined]
+        except BaseException as exc:
+            write_error.append(exc)
+
+    writer = threading.Thread(target=_try_write, daemon=True)
+    writer.start()
+    writer.join(timeout=5)
+    blocker_release.set()
+    holder.join(timeout=5)
+
+    assert not writer.is_alive(), "writer thread did not return"
+    assert write_error, (
+        "write_listing did NOT block on .lock — it must be using a different "
+        "lock filename (PROP-02 contract bug)."
+    )
+    assert isinstance(write_error[0], FredCacheLockError), (
+        f"expected FredCacheLockError from blocked write_listing; got "
+        f"{type(write_error[0]).__name__}: {write_error[0]!r}"
+    )
 
 
 # ---------- Household hash (Q4 default) ----------

@@ -78,6 +78,16 @@ def test_rejects_float_monthly_income_strict_true() -> None:
         Household(**_make_clean_household_kwargs(monthly_income=12000.0))
 
 
+def test_rejects_zero_monthly_income() -> None:
+    """monthly_income=0 must raise — Money alias allows ge=0 for other uses,
+    but a household's monthly_income=0 would explode downstream DTI denominators
+    in lib/property_analysis.py. Boundary type rejects strictly."""
+    with pytest.raises(ValidationError) as exc_info:
+        Household(**_make_clean_household_kwargs(monthly_income=Decimal("0")))
+    # Validator emits a clear message naming the field and value.
+    assert "Monthly income must be > 0" in str(exc_info.value)
+
+
 # --- fico bounds -------------------------------------------------------------
 
 

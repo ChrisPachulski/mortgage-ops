@@ -19,10 +19,18 @@ the CLI layer adds AFTER this call. The first-brace regex fallback (Pitfall
 from __future__ import annotations
 
 import os
-from typing import Final
+from typing import Any, Final
 
 SONNET_MODEL: Final[str] = "claude-sonnet-4-6"
 SONNET_MAX_TOKENS: Final[int] = 4096
+
+# Module-level injection seam for the Anthropic client constructor.
+# Tests monkeypatch this attribute directly (e.g.,
+# `monkeypatch.setattr("lib.property_extractor.Anthropic", _factory)`) so the
+# real anthropic SDK is never imported during mocked tests. Production runs
+# resolve the real class lazily inside `extract_listing` to keep module import
+# cheap (the SDK pulls in heavy submodules like anthropic.lib.vertex).
+Anthropic: Any = None
 
 EXTRACTION_PROMPT: Final[str] = """\
 You are extracting structured property data from a Zillow listing's HTML.
@@ -73,9 +81,13 @@ def extract_listing(html: str, source_url: str) -> dict[str, object] | None:
     to the gap-fill CLI conversation layer.
     """
     try:
-        import anthropic
+        global Anthropic
+        if Anthropic is None:
+            import anthropic
 
-        client = anthropic.Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+            Anthropic = anthropic.Anthropic
+
+        client = Anthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
         response = client.messages.parse(
             model=SONNET_MODEL,
             max_tokens=SONNET_MAX_TOKENS,

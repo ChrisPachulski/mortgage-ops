@@ -14,13 +14,17 @@ import json
 import os
 from typing import Any
 
-import httpx
 import pytest
+
+# IMPORTANT: import the module (not the function) so monkeypatch on
+# `lib.property_extractor.extract_listing` (e.g. the `mock_sonnet` conftest
+# fixture) actually intercepts call sites. Constant imports are safe because
+# they are immutable Final values used only in smoke assertions.
+from lib import property_extractor
 from lib.property_extractor import (
     EXTRACTION_PROMPT,
     SONNET_MAX_TOKENS,
     SONNET_MODEL,
-    extract_listing,
 )
 
 # ---------- Helpers ----------
@@ -71,20 +75,38 @@ class _FakeClient:
 
 
 def _install_fake_anthropic(monkeypatch: pytest.MonkeyPatch, **kwargs: Any) -> None:
-    """Install a fake anthropic.Anthropic factory returning a controlled client."""
-    import anthropic
+    """Install a fake Anthropic-client factory at the point of use inside
+    `lib.property_extractor`.
+
+    Patches the module-level `Anthropic` injection seam rather than reaching
+    into the real `anthropic` package — this keeps the real SDK out of the
+    import graph for mocked tests (the real package eagerly imports
+    `anthropic.lib.vertex` and friends, which adds ~10s of cold-cache import
+    overhead and was the source of the original test-suite hang).
+    """
 
     def _factory(api_key: str | None = None) -> _FakeClient:
         return _FakeClient(**kwargs)
 
-    monkeypatch.setattr(anthropic, "Anthropic", _factory)
+    monkeypatch.setattr("lib.property_extractor.Anthropic", _factory)
 
 
-def _make_http_response(status: int) -> httpx.Response:
-    """Build a minimal httpx.Response with a Request so anthropic exception
-    constructors (which dereference response.request) succeed."""
-    req = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
-    return httpx.Response(status, request=req)
+# Synthetic stand-ins for the anthropic SDK exception classes used by the
+# failure-mode tests. The production code in `lib.property_extractor` catches
+# bare `Exception`, so any Exception subclass exercises the always-exit-0
+# contract identically — and importing the real `anthropic` package just to
+# instantiate its exception types would defeat the whole point of mocking
+# (the real SDK is the thing causing the import-time hang we are fixing).
+class _FakeAuthenticationError(Exception):
+    """Stand-in for anthropic.AuthenticationError (401)."""
+
+
+class _FakeRateLimitError(Exception):
+    """Stand-in for anthropic.RateLimitError (429)."""
+
+
+class _FakeAPIConnectionError(Exception):
+    """Stand-in for anthropic.APIConnectionError (transport failure)."""
 
 
 # ---------- Module-constant smoke tests ----------
@@ -146,7 +168,9 @@ def test_extract_listing_returns_dict_on_clean_json(monkeypatch: pytest.MonkeyPa
         }
     )
     _install_fake_anthropic(monkeypatch, response=_FakeResponse(canned))
-    result = extract_listing("<html>...</html>", "https://zillow.com/.../12345_zpid/")
+    result = property_extractor.extract_listing(
+        "<html>...</html>", "https://zillow.com/.../12345_zpid/"
+    )
     assert isinstance(result, dict)
     assert result["price"] == "625000.00"
     assert result["property_type"] == "SFH"
@@ -157,7 +181,7 @@ def test_extract_listing_strips_prose_prefix(monkeypatch: pytest.MonkeyPatch) ->
     """Pitfall 18: prose prefix -> first-brace regex extractor still finds JSON."""
     raw = 'Here is the data:\n\n{"price": "625000.00", "zip": "94110", "property_type": "SFH"}'
     _install_fake_anthropic(monkeypatch, response=_FakeResponse(raw))
-    result = extract_listing("<html>", "https://zillow.com/.../1_zpid/")
+    result = property_extractor.extract_listing("<html>", "https://zillow.com/.../1_zpid/")
     assert result == {"price": "625000.00", "zip": "94110", "property_type": "SFH"}
 
 
@@ -165,40 +189,33 @@ def test_extract_listing_strips_prose_prefix(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_extract_listing_returns_none_on_auth_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    """AuthenticationError -> None (never raises; always-exit-0)."""
-    import anthropic
+    """AuthenticationError-equivalent -> None (never raises; always-exit-0).
 
-    _install_fake_anthropic(
-        monkeypatch,
-        exc=anthropic.AuthenticationError("bad key", response=_make_http_response(401), body=None),
-    )
-    assert extract_listing("<html>", "https://zillow.com/.../1_zpid/") is None
+    Uses a local stand-in (`_FakeAuthenticationError`) instead of the real
+    `anthropic.AuthenticationError` so the mocked test does not pull in the
+    heavy `anthropic` SDK. The production code catches bare `Exception` so
+    any Exception subclass exercises the same code path.
+    """
+    _install_fake_anthropic(monkeypatch, exc=_FakeAuthenticationError("bad key"))
+    assert property_extractor.extract_listing("<html>", "https://zillow.com/.../1_zpid/") is None
 
 
 def test_extract_listing_returns_none_on_rate_limit(monkeypatch: pytest.MonkeyPatch) -> None:
-    """RateLimitError -> None."""
-    import anthropic
-
-    _install_fake_anthropic(
-        monkeypatch,
-        exc=anthropic.RateLimitError("429", response=_make_http_response(429), body=None),
-    )
-    assert extract_listing("<html>", "https://zillow.com/.../1_zpid/") is None
+    """RateLimitError-equivalent -> None."""
+    _install_fake_anthropic(monkeypatch, exc=_FakeRateLimitError("429"))
+    assert property_extractor.extract_listing("<html>", "https://zillow.com/.../1_zpid/") is None
 
 
 def test_extract_listing_returns_none_on_network_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    """APIConnectionError -> None."""
-    import anthropic
-
-    req = httpx.Request("POST", "https://api.anthropic.com/v1/messages")
-    _install_fake_anthropic(monkeypatch, exc=anthropic.APIConnectionError(request=req))
-    assert extract_listing("<html>", "https://zillow.com/.../1_zpid/") is None
+    """APIConnectionError-equivalent -> None."""
+    _install_fake_anthropic(monkeypatch, exc=_FakeAPIConnectionError("transport down"))
+    assert property_extractor.extract_listing("<html>", "https://zillow.com/.../1_zpid/") is None
 
 
 def test_extract_listing_returns_none_on_generic_exception(monkeypatch: pytest.MonkeyPatch) -> None:
     """Outer try catches Exception per Phase 12 CR-02 always-exit-0 contract."""
     _install_fake_anthropic(monkeypatch, exc=RuntimeError("boom"))
-    assert extract_listing("<html>", "https://zillow.com/.../1_zpid/") is None
+    assert property_extractor.extract_listing("<html>", "https://zillow.com/.../1_zpid/") is None
 
 
 def test_extract_listing_returns_none_on_empty_response_content(
@@ -206,7 +223,7 @@ def test_extract_listing_returns_none_on_empty_response_content(
 ) -> None:
     """Empty response.content list -> None."""
     _install_fake_anthropic(monkeypatch, response=_FakeResponse("", empty=True))
-    assert extract_listing("<html>", "https://zillow.com/.../1_zpid/") is None
+    assert property_extractor.extract_listing("<html>", "https://zillow.com/.../1_zpid/") is None
 
 
 def test_extract_listing_returns_none_on_non_text_block(
@@ -214,19 +231,19 @@ def test_extract_listing_returns_none_on_non_text_block(
 ) -> None:
     """First content block with type != 'text' -> None."""
     _install_fake_anthropic(monkeypatch, response=_FakeResponse("ignored", wrong_type=True))
-    assert extract_listing("<html>", "https://zillow.com/.../1_zpid/") is None
+    assert property_extractor.extract_listing("<html>", "https://zillow.com/.../1_zpid/") is None
 
 
 def test_extract_listing_returns_none_on_malformed_json(monkeypatch: pytest.MonkeyPatch) -> None:
     """Sonnet returns 'not json {{{ broken' -> None via json.JSONDecodeError catch."""
     _install_fake_anthropic(monkeypatch, response=_FakeResponse("not json {{{ broken"))
-    assert extract_listing("<html>", "https://zillow.com/.../1_zpid/") is None
+    assert property_extractor.extract_listing("<html>", "https://zillow.com/.../1_zpid/") is None
 
 
 def test_extract_listing_returns_none_when_no_braces(monkeypatch: pytest.MonkeyPatch) -> None:
     """Response with no brace pair at all -> None (regex returns no match)."""
     _install_fake_anthropic(monkeypatch, response=_FakeResponse("absolutely no json here at all"))
-    assert extract_listing("<html>", "https://zillow.com/.../1_zpid/") is None
+    assert property_extractor.extract_listing("<html>", "https://zillow.com/.../1_zpid/") is None
 
 
 # ---------- HTML truncation guard ----------
@@ -254,10 +271,10 @@ def test_extract_listing_truncates_html_at_200k(monkeypatch: pytest.MonkeyPatch)
     def _factory(api_key: str | None = None) -> _CapturingClient:
         return _CapturingClient()
 
-    import anthropic
-
-    monkeypatch.setattr(anthropic, "Anthropic", _factory)
-    extract_listing(big, "https://zillow.com/.../1_zpid/")
+    # Patch the module-level injection seam (see `_install_fake_anthropic`
+    # docstring) so the real anthropic SDK is never imported.
+    monkeypatch.setattr("lib.property_extractor.Anthropic", _factory)
+    property_extractor.extract_listing(big, "https://zillow.com/.../1_zpid/")
     # The prompt contains its own template scaffold plus the truncated HTML;
     # 200_000 'x' chars must appear, 200_001 must NOT.
     assert "x" * 200_000 in captured["content"]
@@ -272,9 +289,19 @@ def test_extract_listing_truncates_html_at_200k(monkeypatch: pytest.MonkeyPatch)
 def test_mock_sonnet_fixture_returns_none_for_unknown_html(
     mock_sonnet: Any,
 ) -> None:
-    """The conftest fixture returns None when no extracted/{sha}.json fixture exists."""
+    """The conftest fixture returns None when no extracted/{sha}.json fixture exists.
+
+    Must call through `property_extractor.extract_listing` (module-qualified)
+    so the `mock_sonnet` fixture's `monkeypatch.setattr` on
+    `lib.property_extractor.extract_listing` actually intercepts the call —
+    a bare `extract_listing(...)` would resolve to a stale local binding from
+    the original module import and bypass the mock (calling the real Sonnet
+    API, which is exactly the hang we are fixing).
+    """
     assert (
-        extract_listing("<html>no fixture for this</html>", "https://zillow.com/.../9_zpid/")
+        property_extractor.extract_listing(
+            "<html>no fixture for this</html>", "https://zillow.com/.../9_zpid/"
+        )
         is None
     )
 
@@ -305,5 +332,7 @@ def test_extract_listing_live_smoke() -> None:
         + '{"zpid":"12345","price":625000,"zipcode":"94110","propertyTypeDimension":"SingleFamily"}}}}</script>'
         + "</html>"
     )
-    result = extract_listing(html, "https://zillow.com/homedetails/x/12345_zpid/")
+    result = property_extractor.extract_listing(
+        html, "https://zillow.com/homedetails/x/12345_zpid/"
+    )
     assert result is None or isinstance(result, dict)

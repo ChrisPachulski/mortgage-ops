@@ -179,13 +179,21 @@ def _acquire_lock(
     *,
     timeout: timedelta = DEFAULT_TIMEOUT,
     reason: str = "",
+    lock_filename: str = LOCK_FILENAME,
 ) -> dict[str, Any]:
     """Mirror ``orchestration/lockfile.mjs:acquireLock`` — read-back-and-verify CAS.
 
     Returns the lock JSON if acquired; raises ``FredCacheLockError`` on timeout.
+
+    ``lock_filename`` defaults to ``.fred-cache.lock`` (FRED cache contract).
+    The DuckDB writer (``lib.property_persistence.write_listing``) passes
+    ``.lock`` instead so it serializes against ``orchestration/lockfile.mjs``
+    (the Node writer's ``data/.lock``). Both filename choices preserve the
+    same read-back-verify CAS / 60s stale recovery / 100ms poll semantics —
+    only the file basename changes.
     """
     cache_dir.mkdir(parents=True, exist_ok=True)
-    lock_path = cache_dir / LOCK_FILENAME
+    lock_path = cache_dir / lock_filename
     deadline_ms = _now_ms() + int(timeout.total_seconds() * 1000)
 
     while _now_ms() < deadline_ms:
@@ -218,9 +226,18 @@ def _acquire_lock(
     )
 
 
-def _release_lock(cache_dir: Path, my_lock: dict[str, Any]) -> None:
-    """Mirror ``orchestration/lockfile.mjs:releaseLock`` — only unlink if we own it."""
-    lock_path = cache_dir / LOCK_FILENAME
+def _release_lock(
+    cache_dir: Path,
+    my_lock: dict[str, Any],
+    *,
+    lock_filename: str = LOCK_FILENAME,
+) -> None:
+    """Mirror ``orchestration/lockfile.mjs:releaseLock`` — only unlink if we own it.
+
+    ``lock_filename`` MUST match the value passed to ``_acquire_lock`` for the
+    same lock; ``with_cache_lock`` threads this through automatically.
+    """
+    lock_path = cache_dir / lock_filename
     existing = _read_lock(lock_path)
     if (
         existing is not None
@@ -238,20 +255,32 @@ def with_cache_lock(
     *,
     timeout: timedelta = DEFAULT_TIMEOUT,
     reason: str = "",
+    lock_filename: str = LOCK_FILENAME,
 ) -> Iterator[dict[str, Any]]:
     """Context manager: acquire lock, yield lock JSON, release on exit.
 
     Mirror ``orchestration/lockfile.mjs:withLock``. Always releases even on
     exception.
 
+    ``lock_filename`` defaults to ``.fred-cache.lock`` so FRED-cache callers
+    are unchanged. ``lib.property_persistence.write_listing`` overrides this
+    to ``.lock`` to share the Node writer's mutex
+    (``orchestration/lockfile.mjs:LOCK_PATH = data/.lock``). The CAS /
+    stale-recovery / poll semantics are identical regardless of filename.
+
     Raises:
         FredCacheLockError: if acquisition times out.
     """
-    lock = _acquire_lock(cache_dir, timeout=timeout, reason=reason)
+    lock = _acquire_lock(
+        cache_dir,
+        timeout=timeout,
+        reason=reason,
+        lock_filename=lock_filename,
+    )
     try:
         yield lock
     finally:
-        _release_lock(cache_dir, lock)
+        _release_lock(cache_dir, lock, lock_filename=lock_filename)
 
 
 # ---------------------------------------------------------------------------

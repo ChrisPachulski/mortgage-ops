@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
   "id": "sfh_jumbo_bay_area",
-  "source": "Plan 14-06 hand-calc; Santa Clara CA SFH @ $1,850,000 with $28,000/mo household at 20% DP; $1,480,000 loan_amount exceeds Santa Clara conforming high-cost limit $1,249,125 (data/reference/conforming-limits-2026.yml) AND FHA high-cost ceiling $1,249,125 (data/reference/fha-limits-2026.yml) → Conv30/Conv15 blocked by FHFA-LIMIT-CONFORMING, FHA30 blocked by HUD-LIMIT-CEILING-EXCEEDED, Jumbo30 row materializes as the 4th program and is eligible at preferred 20% DP. Verdict cascade Level 3 WATCH STRESS-INCOME-SHOCK fires on Jumbo30.",
+  "source": "Plan 14-06 hand-calc; Santa Clara CA SFH @ $1,850,000 with $28,000/mo household at 20% DP; $1,480,000 loan_amount exceeds Santa Clara conforming high-cost limit $1,249,125 (data/reference/conforming-limits-2026.yml) AND FHA high-cost ceiling $1,249,125 (data/reference/fha-limits-2026.yml) → Conv30/Conv15 blocked by FHFA-LIMIT-CONFORMING, FHA30 blocked by HUD-LIMIT-CEILING-EXCEEDED, Jumbo30 row materializes as the 4th program but is blocked at preferred 20% DP by DTI-CAP-JUMBO (dti_back=0.442426 > Jumbo ceiling 0.43 per _DTI_CEILING_BY_PROGRAM). Verdict cascade Level 2 NO_GO NO-ELIGIBLE-AT-PREFERRED-DP fires because zero programs are eligible at 20% DP while at least one DP slot (25%) keeps Jumbo30 eligible so Level 1 does not match.",
   "rounding": "ROUND_HALF_UP",
-  "notes": "Cascade level 3 (WATCH STRESS-INCOME-SHOCK) per lib.property_verdict.synthesize: at preferred 20% DP only Jumbo30 is eligible (Conv30/Conv15 carry FHFA-LIMIT-CONFORMING-06-085 blocker because the $1,480,000 financed exceeds the Santa Clara CA county high-cost limit of $1,249,125; FHA30 raises NotImplementedError from lib.rules.loan_type.classify (loan > FHA ceiling) which Plan 14-05's _build_program_result catches and emits as HUD-LIMIT-CEILING-EXCEEDED per D-14-MATRIX-02 explicit-ineligible-rows). The lone Jumbo30 eligible cell then fails the income-shock stress: stressed DTI = (11387.94 + 1000) / (28000 × 0.70) = 0.632038 > Jumbo30 ceiling 0.43 → VERDICT_WATCH_STRESS_INCOME_FAIL fires before any GO branch reaches. Hand-calc anchors via lib.amortize.build_schedule on $1,480,000 principal @ 6.5%/30yr (fixed, since Jumbo30 program maps to loan_type='fixed' in _make_cell_loan and _build_program_result) → monthly_pi=$9354.61 (12mo interest sum=$95,712.94). PITI Jumbo30 = 9354.61 + (22000/12=1833.33) + (2400/12=200.00) + 0 (HOA) + 0 (no PMI at 80% LTV) = $11,387.94 (Pitfall 6 quantize-once). Tax: qualified_loan_limit=$750,000 (mfj filing); Jumbo30 $1,480,000 > $750k → over_750k_cap_per_program['Jumbo30']=true (IRS Pub 936 partial-deductibility flag set; Phase 15 renders 'see CPA' callout). 24 cells = 4 programs × 6 DPs (D-14-MATRIX-03 jumbo-row materialization).",
+  "notes": "Cascade level 2 (NO_GO NO-ELIGIBLE-AT-PREFERRED-DP) per lib.property_verdict.synthesize: at preferred 20% DP zero programs are eligible — Conv30/Conv15 blocked by FHFA-LIMIT-CONFORMING-06-085 (financed $1,480,000 > Santa Clara county high-cost limit $1,249,125), FHA30 blocked by HUD-LIMIT-CEILING-EXCEEDED (FHA county ceiling exceeded), and Jumbo30 blocked by DTI-CAP-JUMBO because dti_back=(11387.94 + 1000) / 28000 = 0.442426 exceeds the per-program Jumbo ceiling 0.43 (CFPB ATR/QM safe harbor for non-QM jumbo; see lib/property_analysis.py:_DTI_CEILING_BY_PROGRAM). Level 1 does not match because Jumbo30 IS eligible at 25% DP (loan=$1,387,500 keeps PITI under the 0.43 ceiling). Hand-calc anchors at preferred 20% DP via lib.amortize.build_schedule on $1,480,000 principal @ 6.5%/30yr (fixed; Jumbo30 maps to loan_type='fixed' in _make_cell_loan and _build_program_result) → monthly_pi=$9354.61. PITI Jumbo30 = 9354.61 + (22000/12=1833.33) + (2400/12=200.00) + 0 (HOA) + 0 (no PMI at 80% LTV) = $11,387.94 (Pitfall 6 quantize-once). Tax block builds nothing at preferred DP (no eligible cells), so first_year_interest_per_program and over_750k_cap_per_program are empty maps; qualified_loan_limit still echoes $750,000 (mfj filing). 24 cells = 4 programs × 6 DPs (D-14-MATRIX-03 jumbo-row materialization).",
   "_meta": {
     "citation": "ANLZ-01 + ANLZ-02 + ANLZ-03 + VERD-01: covers D-14-MATRIX-03 (Jumbo30 5th-row materialization on price > conforming), D-14-MATRIX-02 (Conv/FHA cells present-but-ineligible with populated numerics per ANLZ-02), ANLZ-03 (auxiliary blocks at preferred DP — tax block over_750k flag fires), and VERD-01 cascade Level 3 (D-14-VERDICT-02 income-shock falsifiable predicate).",
     "engine_version": "Phase 14 Plan 14-06",
@@ -48,14 +48,14 @@
   },
   "expected_response": {
     "verdict": {
-      "level": "WATCH",
-      "headline_reason": "Income-shock stress breaches DTI ceiling for 1 eligible program(s)",
+      "level": "NO_GO",
+      "headline_reason": "No program qualifies at preferred DP 0.200000",
       "reasons": [
         {
-          "predicate_code": "STRESS-INCOME-SHOCK",
-          "computed_value": "0.632038",
-          "program": "Jumbo30",
-          "dp_pct": null
+          "predicate_code": "NO-ELIGIBLE-AT-PREFERRED-DP",
+          "computed_value": "0.200000",
+          "program": null,
+          "dp_pct": "0.200000"
         }
       ]
     },
@@ -123,20 +123,16 @@
           "piti": "11387.94",
           "dti_back": "0.442426",
           "ltv": "0.800000",
-          "eligible": true,
-          "blocker_reasons": [],
+          "eligible": false,
+          "blocker_reasons": ["DTI-CAP-JUMBO"],
           "eligible_reasons": []
         }
       ]
     },
     "tax": {
       "qualified_loan_limit": "750000.00",
-      "over_750k_cap_per_program": {
-        "Jumbo30": true
-      },
-      "first_year_interest_per_program": {
-        "Jumbo30": "95712.94"
-      },
+      "over_750k_cap_per_program": {},
+      "first_year_interest_per_program": {},
       "filing_status": "mfj"
     },
     "warnings": ["PMI-RATE-ESTIMATED"]

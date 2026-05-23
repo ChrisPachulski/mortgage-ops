@@ -31,8 +31,12 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
 
 # ---------------------------------------------------------------------------
 # Skill-folder script path (RESEARCH OQ2 RESOLVED — matches Phase 13
@@ -95,12 +99,26 @@ def _run_cli(
 
 
 @pytest.fixture
-def tmp_reports(tmp_path: Path) -> Path:
-    """MODE-03: scratch reports/ dir under tmp_path so the orchestrator's
-    NNN sequencer starts at 1 each test (no cross-test pollution)."""
-    out = tmp_path / "reports"
+def tmp_reports(tmp_path: Path) -> Iterator[Path]:
+    """MODE-03: scratch reports/ dir for the orchestrator so its NNN sequencer
+    starts at 1 each test (no cross-test pollution).
+
+    The directory MUST live inside the project root because property_analyze.py
+    enforces project-root containment on --output-dir (ASVS V5 path-traversal
+    hardening). We create a unique subdir under <project_root>/reports/.test-tmp/
+    keyed off the pytest tmp_path's basename so parallel runs don't collide,
+    and clean it up at teardown.
+    """
+    import shutil
+
+    base = PROJECT_ROOT / "reports" / ".test-tmp"
+    base.mkdir(parents=True, exist_ok=True)
+    out = base / tmp_path.name
     out.mkdir()
-    return out
+    try:
+        yield out
+    finally:
+        shutil.rmtree(out, ignore_errors=True)
 
 
 @pytest.fixture
@@ -185,14 +203,12 @@ def test_success_envelope_shape(
     assert Path(env["report_path"]).is_file()
 
 
-def test_error_envelope_always_exit_0(tmp_path: Path) -> None:
+def test_error_envelope_always_exit_0(tmp_path: Path, tmp_reports: Path) -> None:
     """MODE-03 + D-15-ORCH-03 KEY INVARIANT: bad listing input → error
     envelope on stdout + returncode 0 (NOT exit 2 — that's reserved for
     argparse only per Phase 12 WR-02 + D-15-ORCH-03)."""
     bad = tmp_path / "bad.json"
     bad.write_text("{}")  # missing required PropertyListing fields
-    out_dir = tmp_path / "reports"
-    out_dir.mkdir()
     result = _run_cli(
         "--listing",
         str(bad),
@@ -201,7 +217,7 @@ def test_error_envelope_always_exit_0(tmp_path: Path) -> None:
         "--profile",
         str(PROJECT_ROOT / "config" / "profile.example.yml"),
         "--output-dir",
-        str(out_dir),
+        str(tmp_reports),
     )
     assert result.returncode == 0, (
         f"D-15-ORCH-03 violated: returncode={result.returncode}; envelope must "
@@ -215,7 +231,7 @@ def test_error_envelope_always_exit_0(tmp_path: Path) -> None:
     assert env["verdict"] is None
 
 
-def test_pydantic_validation_envelope_on_stderr(tmp_path: Path) -> None:
+def test_pydantic_validation_envelope_on_stderr(tmp_path: Path, tmp_reports: Path) -> None:
     """MODE-03 + WR-02 closure: when listing JSON violates PropertyListing
     Pydantic contract (e.g., float price violates Money/Decimal discipline),
     the 6-key Pydantic envelope (type/loc/msg/input/url + optional ctx) is
@@ -224,8 +240,6 @@ def test_pydantic_validation_envelope_on_stderr(tmp_path: Path) -> None:
     bad = tmp_path / "bad.json"
     # JSON float for price violates Money's Decimal-from-string contract
     bad.write_text('{"price": 625000.00}')
-    out_dir = tmp_path / "reports"
-    out_dir.mkdir()
     result = _run_cli(
         "--listing",
         str(bad),
@@ -234,7 +248,7 @@ def test_pydantic_validation_envelope_on_stderr(tmp_path: Path) -> None:
         "--profile",
         str(PROJECT_ROOT / "config" / "profile.example.yml"),
         "--output-dir",
-        str(out_dir),
+        str(tmp_reports),
     )
     assert result.returncode == 0
     stderr_envelope = json.loads(result.stderr)
@@ -377,6 +391,41 @@ def test_output_dir_outside_project_rejected(
     assert env["error"]["code"] == "output_dir_unwritable", (
         f"out-of-project --output-dir should return code='output_dir_unwritable'; "
         f"got {env['error']['code']!r}"
+    )
+
+
+def test_existing_out_of_tree_output_dir_rejected(
+    tmp_path: Path,
+    golden_listing: Path,
+    household_yml: Path,
+    profile_yml: Path,
+) -> None:
+    """MODE-03 + ASVS V5: containment guard rejects an EXISTING directory that
+    lives outside the project root (the previous gate only checked is_dir() and
+    so accepted any writable directory anywhere on disk). pytest's tmp_path
+    resolves to /private/var/folders/... on macOS — strictly outside the repo.
+    """
+    out_dir = tmp_path / "outside-project-reports"
+    out_dir.mkdir()
+    result = _run_cli(
+        "--listing",
+        str(golden_listing),
+        "--household",
+        str(household_yml),
+        "--profile",
+        str(profile_yml),
+        "--output-dir",
+        str(out_dir),
+    )
+    assert result.returncode == 0
+    env = json.loads(result.stdout)
+    assert env["error"] is not None
+    assert env["error"]["code"] == "output_dir_unwritable", (
+        f"existing-but-out-of-tree --output-dir should return "
+        f"code='output_dir_unwritable'; got {env['error']['code']!r}"
+    )
+    assert "project root" in env["error"]["message"].lower(), (
+        f"error message should reference project-root containment; got {env['error']['message']!r}"
     )
 
 
