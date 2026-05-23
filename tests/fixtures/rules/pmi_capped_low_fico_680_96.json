@@ -1,0 +1,9 @@
+{
+  "citation": "MGIC Rate Card 'Standard MI' BPMI (form 71-43345 series, effective 2024-03-04), pmi_capped_fallback row -> 0.0078 (FICO 680 is below the 700-719 floor; D-16-PMI-02 cap)",
+  "source_url": "https://www.mgic.com/rates/rate-cards",
+  "comment": "Hand-calc: fico=680, ltv=Decimal('0.96') -> NO row matches (fico<700 falls below the abridged-table floor) -> capped fallback at pmi_capped_fallback.annual_rate=0.0078. Reason tag: PMI-RATE-CAPPED-MGIC-ABRIDGED-680-0.96. Proves D-16-PMI-02 silent cap (no raise) for sub-700 FICO scores.",
+  "fico": 680,
+  "ltv": "0.96",
+  "expected_annual_rate": "0.0078",
+  "expected_reason_tag": "PMI-RATE-CAPPED-MGIC-ABRIDGED-680-0.96"
+}

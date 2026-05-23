@@ -1,0 +1,9 @@
+{
+  "citation": "MGIC Rate Card 'Standard MI' BPMI (form 71-43345 series, effective 2024-03-04), row [FICO 760+ x LTV 80.01-85] -> 0.0019",
+  "source_url": "https://www.mgic.com/rates/rate-cards",
+  "comment": "Hand-calc: fico=760, ltv=Decimal('0.83') -> row [fico_min=760, fico_max=850, ltv_min=0.80, ltv_max=0.85] (exclusive-lower / inclusive-upper) -> annual_rate=0.0019. Reason tag: PMI-RATE-ESTIMATED-MGIC-80-85-760+. High-quality corner of the abridged 4x4 schedule.",
+  "fico": 760,
+  "ltv": "0.83",
+  "expected_annual_rate": "0.0019",
+  "expected_reason_tag": "PMI-RATE-ESTIMATED-MGIC-80-85-760+"
+}
