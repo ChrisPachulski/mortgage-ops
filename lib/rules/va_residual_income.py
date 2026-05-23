@@ -15,9 +15,12 @@ What this predicate decides:
 Inputs:
     region: Region (Literal from lib.rules.types — VA's four regions)
     family_size: int (>= 1; VA tables published for sizes 1..5; sizes >5 add
-                      per_extra_member_increment ($80) per additional member)
+                      a band-specific per-extra-member increment per additional
+                      member — $75 for loans < $80k, $80 for loans >= $80k —
+                      per VA M26-7 Ch 4 Topic 7)
     loan_amount: Decimal (positive; selects table_above_80k or table_below_80k
-                          based on $80,000 threshold)
+                          based on $80,000 threshold; same band also selects
+                          the per-extra-member increment)
     actual_residual_income: Decimal (current household residual income to compare
                                      against the table minimum)
 
@@ -78,8 +81,9 @@ def minimum_required(
     loan_amount: Decimal,
 ) -> Decimal:
     """Return the VA M26-7 minimum residual income for the given region / family
-    size / loan band. Family sizes > 5 add per_extra_member_increment per
-    additional member.
+    size / loan band. Family sizes > 5 add a band-specific per-extra-member
+    increment per additional member: $75 for loans below the $80,000 threshold
+    and $80 for loans at or above the threshold (VA M26-7 Ch 4 Topic 7).
     """
     if family_size < 1:
         raise ValueError(f"family_size must be >= 1, got {family_size}")
@@ -88,13 +92,19 @@ def minimum_required(
 
     ref = load_reference("va-residual-income")
     threshold = Decimal(ref[LOAN_BAND_THRESHOLD_KEY])
-    table_key = "table_above_80k" if loan_amount >= threshold else "table_below_80k"
+    is_above_band = loan_amount >= threshold
+    table_key = "table_above_80k" if is_above_band else "table_below_80k"
+    increment_key = (
+        "per_extra_member_increment_above_80k"
+        if is_above_band
+        else "per_extra_member_increment_below_80k"
+    )
     table = ref[table_key][region]
 
     base_family_size = min(family_size, 5)
     base = Decimal(table[str(base_family_size)])
     if family_size > 5:
-        extra = (family_size - 5) * Decimal(ref["per_extra_member_increment"])
+        extra = (family_size - 5) * Decimal(ref[increment_key])
         base = base + extra
     return quantize_cents(base)
 

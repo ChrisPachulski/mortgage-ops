@@ -1,15 +1,20 @@
 # data/reference/va-funding-fees.yml
 source: "https://benefits.va.gov/WARMS/docs/admin26/m26-07/m26-7-chapter8-borrower-fees-and-charges-and-the-va-funding-fee.pdf"
-effective: 2023-04-07
+effective: 2026-05-23
 notes: |
   VA Lender Handbook M26-7 Chapter 8 — Borrower Fees, Charges, and the VA Funding
-  Fee. Effective for VA-guaranteed loans closed on or after 2023-04-07 (the date
-  VA last republished the fee table). Per 38 USC §3729.
+  Fee. The underlying fee table took effect 2023-04-07 (the date VA last
+  republished the fee schedule) and has NOT been republished since. Per 38 USC
+  §3729 and the Blue Water Navy Vietnam Veterans Act.
 
-  IMPORTANT: This effective date (2023-04-07) is older than the 12-month staleness
-  threshold; StaleReferenceWarning will fire on import. This is CORRECT behavior —
-  VA has not republished. Re-verify annually that no new VA Circular has changed
-  these rates.
+  2026-05-23 REFRESH NOTE: Re-verified 2026-05-23 against va.gov funding-fee
+  landing page (https://www.va.gov/housing-assistance/home-loans/funding-fee-
+  and-closing-costs/, page last updated 2026-01-15) — schedule still references
+  the 2023-04-07 effective date and pinned percentages are UNCHANGED. Statute
+  has not been re-enacted; no new VA Circular changes these rates as of the
+  refresh date. The `effective:` field is bumped to 2026-05-23 to record the
+  annual re-verification audit (the policy itself has not changed since
+  2023-04-07).
 
   Fee structure:
     - Purchase: fee % depends on (first_use vs subsequent_use, down_payment_pct

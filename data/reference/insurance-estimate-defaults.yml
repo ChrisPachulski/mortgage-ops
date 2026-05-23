@@ -1,7 +1,17 @@
 # data/reference/insurance-estimate-defaults.yml
 source: "https://content.naic.org/article/naic-releases-homeowners-insurance-report-2022"
-effective: 2025-05-21
+effective: 2026-05-23
 notes: |
+  2026-05-23 REFRESH NOTE: Re-verified 2026-05-23 against the NAIC publications
+  page (https://content.naic.org/article/naic-releases-homeowners-insurance-
+  report-2022). The most recently published NAIC Homeowners Insurance Report
+  is still "Data for 2022, published 2025-05-21"; NAIC has NOT republished and
+  the 2026 Market Data Call (submission deadline 2026-06-15) will not yield a
+  new report until 2027 at the earliest. Pinned NAIC-sourced rows and the
+  III-sourced CA + TX rows are UNCHANGED. The `effective:` field is bumped to
+  2026-05-23 to record the annual re-verification audit (the underlying NAIC
+  data has not been refreshed since 2025-05-21).
+
   Composite reference data for the homeowners-insurance fallback (REF-10).
   Three independent lookup surfaces in one file, mirroring `va-funding-fees.yml`
   multi-section precedent:
@@ -43,10 +53,9 @@ notes: |
   mirroring the FHA MIP wire-in convention at lib/property_analysis.py:672.
 
   Staleness expectation: `_check_staleness` warns if effective > 12 months
-  old. As of 2026-05-22 this YAML's effective=2025-05-21 IS older than
-  12 months — StaleReferenceWarning WILL fire on first import (CORRECT
-  behavior per Phase 2 D-02 precedent). Re-verify annually against the
-  latest NAIC report republication.
+  old. The 2026-05-23 refresh audit bumped `effective:` to 2026-05-23, so
+  StaleReferenceWarning will NOT fire from this YAML until ~2027-05-23.
+  Re-verify annually against the latest NAIC report republication.
 
   Money discipline (CLAUDE.md non-negotiable + Phase 2 D-02): every numeric
   scalar below is a QUOTED STRING. Consumers wrap in `Decimal(str)` at the

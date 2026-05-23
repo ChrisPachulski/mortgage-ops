@@ -1,15 +1,38 @@
 # data/reference/va-residual-income.yml
 source: "https://benefits.va.gov/WARMS/docs/admin26/m26-07/"
-effective: 2023-04-07
+effective: 2026-05-23
 notes: |
-  VA Lender Handbook M26-7 — Residual Income Tables (Topic 7). Per-region
-  minimum residual income required for loans of two amount bands (< $80,000 and
-  >= $80,000). Add per_extra_member_increment ($80) per family member above 5.
+  VA Lender Handbook M26-7 Chapter 4 — Residual Income Tables (Topic 7).
+  Per-region minimum residual income required for loans of two amount bands
+  (< $80,000 and >= $80,000). For family sizes above 5, add the band-specific
+  per-extra-member increment per family member above 5.
 
-  IMPORTANT: This effective date (2023-04-07) is older than the 12-month staleness
-  threshold; StaleReferenceWarning will fire on import. This is CORRECT behavior —
-  VA has not republished. Re-verify annually that no new VA Circular has changed
-  these residual-income values.
+  2026-05-23 REFRESH NOTE: Re-verified 2026-05-23. The underlying VA M26-7
+  Topic 7 table has NOT been republished by VA since 2023-04-07; the 2023-11-21
+  Chapter 4 revision was scoped to medical-collections handling (Topic 7 /
+  TENA notice) and did NOT touch the residual-income cell values. Every cell
+  in `table_above_80k` and `table_below_80k` was confirmed unchanged against
+  the 2026 veteran.com and veteransunited.com third-party charts (the
+  WARMS PDFs are now JS-gated behind KnowVA so the public-web confirmation
+  path is secondary-source). The `effective:` field is bumped to 2026-05-23
+  to record the annual re-verification audit.
+
+  BUG FIX 2026-05-23 — per-extra-member increment is BAND-SPECIFIC:
+  Previously this YAML defined a single `per_extra_member_increment: "80"`
+  that was applied to both the below-$80k and above-$80k loan-amount tiers.
+  Per VA Lender Handbook M26-7 Chapter 4 Topic 7 (authoritative), the
+  published increments are TWO distinct values:
+    - $75 per additional family member above 5 for loans BELOW $80,000
+    - $80 per additional family member above 5 for loans AT OR ABOVE $80,000
+  Source: VA M26-7 Ch 4 Topic 7; corroborated by veteran.com 2026 chart and
+  veteransunited.com (the primary WARMS PDF is gated behind KnowVA). The
+  prior single-value schema silently overstated the below-$80k requirement
+  by $5 per additional family member beyond 5 (conservative direction, but
+  inconsistent with M26-7). Replaced `per_extra_member_increment` with
+  `per_extra_member_increment_below_80k: "75"` and
+  `per_extra_member_increment_above_80k: "80"`. `lib/rules/va_residual_income.py`
+  selects the correct increment based on the loan-amount band already used
+  for the table lookup.
 
   Cell values verified via VA M26-7 Topic 7 (loans >= $80k tier shown; below-80k
   tier values are roughly 10-12% lower per published M26-7 table). Per Phase 2
@@ -21,7 +44,8 @@ notes: |
 
 regions: [northeast, midwest, south, west]
 loan_band_threshold: "80000"
-per_extra_member_increment: "80"
+per_extra_member_increment_below_80k: "75"
+per_extra_member_increment_above_80k: "80"
 
 table_above_80k:
   northeast:

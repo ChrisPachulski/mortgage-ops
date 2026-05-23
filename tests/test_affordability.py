@@ -118,12 +118,18 @@ def _lookup_va_threshold(
     """
     ref = _yaml.safe_load(VA_RESIDUAL_YAML_PATH.read_text())
     threshold = Decimal(ref["loan_band_threshold"])
-    table_key = "table_above_80k" if loan_amount >= threshold else "table_below_80k"
+    is_above_band = loan_amount >= threshold
+    table_key = "table_above_80k" if is_above_band else "table_below_80k"
+    increment_key = (
+        "per_extra_member_increment_above_80k"
+        if is_above_band
+        else "per_extra_member_increment_below_80k"
+    )
     table = ref[table_key][region]
     base_family_size = min(family_size, 5)
     base = Decimal(table[str(base_family_size)])
     if family_size > 5:
-        extra = (family_size - 5) * Decimal(ref["per_extra_member_increment"])
+        extra = (family_size - 5) * Decimal(ref[increment_key])
         base = base + extra
     return base
 

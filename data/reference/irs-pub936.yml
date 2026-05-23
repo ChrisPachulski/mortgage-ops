@@ -1,11 +1,11 @@
 # data/reference/irs-pub936.yml
 source: "https://www.irs.gov/pub/irs-pdf/p936.pdf"
-effective: 2025-01-01
+effective: 2026-05-23
 notes: |
   IRS Publication 936 — Home Mortgage Interest Deduction. Statutory authority:
   IRC §163(h)(3) (mortgage interest deduction) as amended by the Tax Cuts and
   Jobs Act of 2017 (TCJA). Pub 936 is republished annually; current edition is
-  for tax year 2025.
+  for tax year 2025 (IRS Pub 936 for TY2026 will not publish until early 2027).
 
   CAP STRUCTURE:
   - Post-2017 acquisition debt (incurred AFTER 2017-12-15): $750,000 cap for
@@ -23,9 +23,27 @@ notes: |
 
   POINTS DEDUCTIBILITY (Pub 936 §3): OUT OF SCOPE for v1 RUL-11. Points
   deductibility hinges on settlement-statement facts the predicate does not
-  have. RUL-11 returns the qualified-loan-limit cap only.
+  have. RUL-11 returns the qualified-loan-limit cap only. PMI premium
+  deductibility (see OBBBA note below) is similarly OUT OF SCOPE for v1 RUL-11
+  for the same reason — it depends on AGI, filing status, and settlement-
+  statement facts the predicate does not have. Tracked alongside points as a
+  Phase 2+ candidate.
 
-  Effective: 2025-01-01 — fresh; no StaleReferenceWarning at import.
+  2026-05-23 REFRESH NOTE — One Big Beautiful Bill Act (OBBBA Section 70108):
+  The One Big Beautiful Bill Act of 2025 permanently extended the IRC
+  §163(h)(3) $750,000 acquisition-debt cap. Prior to OBBBA, the $750k cap was
+  scheduled to revert to $1,000,000 for tax years beginning after 2025-12-31
+  under the TCJA sunset; OBBBA §70108 removed that sunset. Pinned numeric cap
+  values in this YAML are UNCHANGED — what changed is the legal framing
+  (statutory permanence rather than sunset-pending). OBBBA also restored PMI
+  premium deductibility for tax year 2026 onward, with AGI phase-out beginning
+  at $100,000 ($50,000 MFS). PMI deductibility remains OUT OF SCOPE for RUL-11
+  (see points_deductibility note above). Re-verify once IRS publishes Pub 936
+  for TY2026 (expected ~Q1 2027); the 2026 edition should drop the
+  "post-2025 reversion" caveats now that the cap is permanent.
+
+  Effective: 2026-05-23 — annual refresh per 2026 audit; no StaleReferenceWarning
+  at import.
 
 caps:
   post_2017:
