@@ -1,0 +1,54 @@
+# .github/workflows/audit.yml
+#
+# Scheduled dependency & security audit. Runs once a week (Mondays 14:00 UTC)
+# and can also be triggered manually via the "Run workflow" button.
+#
+# This workflow is intentionally NOT wired to push or pull_request events:
+#   * It is a long-lived background check, not a PR gate.
+#   * Vulnerability databases update on their own cadence; we don't need to
+#     re-run on every commit.
+#   * The existing .github/workflows/ci.yml owns PR-blocking checks.
+#
+# On High/Critical findings the job exits non-zero, which (a) marks the run
+# red in the Actions tab and (b) triggers GitHub's default email
+# notification to the repo's watchers. See docs/dependency-review.md for the
+# triage runbook.
+name: Audit
+
+on:
+  schedule:
+    # 14:00 UTC every Monday (cron is always UTC on GitHub-hosted runners).
+    - cron: '0 14 * * 1'
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: "0.11.7"
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Sync deps (frozen)
+        run: uv sync --locked --dev
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install Node deps (orchestration)
+        run: npm ci
+
+      - name: Run dependency audit
+        run: bash scripts/audit-deps.sh
