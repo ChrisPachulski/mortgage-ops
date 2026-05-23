@@ -1,0 +1,31 @@
+# Scenario D: ARM 5/1 refi candidate vs. an existing conv-30yr at 7.5%.
+#
+# Existing loan: $400k principal @ 7.5%, 30yr fixed, 5 years in (so 300 months
+# remaining of a 360-month note). Old balance amortized down to roughly
+# $377,920 by t=60 (engine-emitted; pinned by snapshot).
+#
+# Refi offer: 5/1 ARM at 6.25% initial rate (data/known-loans.yml arm-5-1)
+# for the full remaining 300-month term. The refi_npv CLI uses the INITIAL
+# fixed rate as new_annual_rate (Phase 6 v1 scope; ARM payment-path modeling
+# beyond the initial fixed period is owned by arm_simulate.py, not refi_npv).
+# 5% discount rate (borrower marginal opportunity cost; references/refi-npv.md).
+#
+# CLI: .claude/skills/mortgage-ops/scripts/refi_npv.py --input <json>
+#
+# Sign convention: outflows negative, savings positive (D-04 + SC-1 anchor).
+cli: refi_npv
+request:
+  refi_kind: rate_and_term
+  old_loan_balance: "377920.00"
+  old_annual_rate: "0.075000"
+  old_remaining_months: 300
+  new_annual_rate: "0.062500"   # 5/1 ARM initial fixed rate per known-loans.yml
+  new_term_months: 300
+  closing_costs: "3500.00"
+  discount_rate_annual: "0.050000"
+  analysis_horizon_months: null  # full new term
+  after_tax_mode: false
+  marginal_tax_rate: null
+  filing_status: null
+  has_grandfathered_debt: false
+  new_loan_monthly_pi_override: null

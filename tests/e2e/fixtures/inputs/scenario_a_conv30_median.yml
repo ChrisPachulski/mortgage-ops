@@ -1,0 +1,50 @@
+# Scenario A: Conventional 30-year fixed, median market.
+#
+# $500k SFH, 20% down -> $400k loan @ 6.81% (FRED MORTGAGE30US PMMS week of
+# 2026-04-24, per data/known-loans.yml conv-30yr-fixed). King WA-flavored
+# taxes + insurance escrow. Two-applicant household at $10k joint monthly
+# income.
+#
+# CLI: .claude/skills/mortgage-ops/scripts/affordability.py --input <json>
+#
+# Reference scenario — straight conforming path; should NOT be blocked.
+cli: affordability
+request:
+  mode: forward
+  household:
+    location:
+      state_fips: "53"
+      county_fips: "033"
+      county_name: "King"
+      state: "WA"
+      zip: "98101"
+    applicants:
+      - name: "A"
+        gross_monthly_income: "5500.00"
+        credit_score: 740
+      - name: "B"
+        gross_monthly_income: "4500.00"
+        credit_score: 720
+    size: 2
+    monthly_debts:
+      auto: "0.00"
+      student_loans: "0.00"
+      credit_cards: "0.00"
+      other: "0.00"
+    escrow:
+      property_tax_monthly: "417.00"   # ~ $5,000 / yr King WA flavor on $500k assessed
+      insurance_monthly: "125.00"
+      hoa_monthly: "0.00"
+    va: null
+    current_housing_payment: "0.00"
+  max_dti: "0.430000"
+  target_loan_type: "conventional"
+  term_months: 360
+  annual_rate: "0.068100"      # FRED MORTGAGE30US 2026-04-24 (data/known-loans.yml)
+  apr: null
+  apor: null
+  monthly_pmi: null            # LTV == 0.80, exactly at HPA-PMI threshold (PMI not required)
+  endorsement_date_override: "2026-05-01"
+  junior_liens: []
+  loan_amount: "400000.00"
+  property_value: "500000.00"

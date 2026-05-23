@@ -1,0 +1,1828 @@
+{
+  "after_tax_npv": null,
+  "analysis_horizon_months_used": 300,
+  "breakeven": {
+    "npv_months": 12,
+    "npv_status": "ok",
+    "simple_months": 12,
+    "simple_status": "ok"
+  },
+  "cash_proceeds": null,
+  "cashflows": [
+    {
+      "amount": "-3500.00",
+      "direction": "outflow",
+      "kind": "closing_costs",
+      "period": 0
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 1
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 2
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 3
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 4
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 5
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 6
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 7
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 8
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 9
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 10
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 11
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 12
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 13
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 14
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 15
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 16
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 17
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 18
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 19
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 20
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 21
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 22
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 23
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 24
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 25
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 26
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 27
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 28
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 29
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 30
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 31
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 32
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 33
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 34
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 35
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 36
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 37
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 38
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 39
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 40
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 41
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 42
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 43
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 44
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 45
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 46
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 47
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 48
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 49
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 50
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 51
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 52
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 53
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 54
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 55
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 56
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 57
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 58
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 59
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 60
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 61
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 62
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 63
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 64
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 65
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 66
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 67
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 68
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 69
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 70
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 71
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 72
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 73
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 74
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 75
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 76
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 77
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 78
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 79
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 80
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 81
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 82
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 83
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 84
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 85
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 86
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 87
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 88
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 89
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 90
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 91
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 92
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 93
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 94
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 95
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 96
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 97
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 98
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 99
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 100
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 101
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 102
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 103
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 104
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 105
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 106
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 107
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 108
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 109
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 110
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 111
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 112
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 113
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 114
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 115
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 116
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 117
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 118
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 119
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 120
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 121
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 122
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 123
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 124
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 125
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 126
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 127
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 128
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 129
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 130
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 131
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 132
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 133
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 134
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 135
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 136
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 137
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 138
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 139
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 140
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 141
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 142
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 143
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 144
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 145
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 146
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 147
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 148
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 149
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 150
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 151
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 152
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 153
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 154
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 155
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 156
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 157
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 158
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 159
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 160
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 161
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 162
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 163
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 164
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 165
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 166
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 167
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 168
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 169
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 170
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 171
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 172
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 173
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 174
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 175
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 176
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 177
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 178
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 179
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 180
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 181
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 182
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 183
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 184
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 185
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 186
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 187
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 188
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 189
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 190
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 191
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 192
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 193
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 194
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 195
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 196
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 197
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 198
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 199
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 200
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 201
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 202
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 203
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 204
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 205
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 206
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 207
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 208
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 209
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 210
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 211
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 212
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 213
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 214
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 215
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 216
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 217
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 218
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 219
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 220
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 221
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 222
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 223
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 224
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 225
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 226
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 227
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 228
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 229
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 230
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 231
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 232
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 233
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 234
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 235
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 236
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 237
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 238
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 239
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 240
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 241
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 242
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 243
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 244
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 245
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 246
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 247
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 248
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 249
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 250
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 251
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 252
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 253
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 254
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 255
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 256
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 257
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 258
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 259
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 260
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 261
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 262
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 263
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 264
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 265
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 266
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 267
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 268
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 269
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 270
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 271
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 272
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 273
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 274
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 275
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 276
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 277
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 278
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 279
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 280
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 281
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 282
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 283
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 284
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 285
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 286
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 287
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 288
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 289
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 290
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 291
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 292
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 293
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 294
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 295
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 296
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 297
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 298
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 299
+    },
+    {
+      "amount": "299.78",
+      "direction": "inflow",
+      "kind": "monthly_savings",
+      "period": 300
+    }
+  ],
+  "discount_rate_annual_used": "0.050000",
+  "monthly_payment_delta": null,
+  "monthly_savings": "299.78",
+  "new_monthly_pi": "2493.02",
+  "npv": "47780.38",
+  "old_monthly_pi": "2792.80",
+  "refi_kind": "rate_and_term",
+  "total_interest_delta": null,
+  "warnings": []
+}

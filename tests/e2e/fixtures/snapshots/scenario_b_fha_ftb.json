@@ -1,0 +1,26 @@
+{
+  "assumed_ltv_pct": null,
+  "assumed_monthly_mi": null,
+  "blocked": false,
+  "blocked_by": null,
+  "cltv": "0.946723",
+  "dti_back": "0.359723",
+  "dti_front": "0.291302",
+  "financed_loan_amount": "343660.63",
+  "implied_pi": null,
+  "loan_amount": "337750.00",
+  "loan_type": "fha_standard",
+  "ltv": "0.946723",
+  "max_loan_amount": null,
+  "mode": "forward",
+  "monthly_mi": "143.19",
+  "monthly_pi": "2206.18",
+  "piti": "2767.37",
+  "property_value": "363000.00",
+  "total_gross_monthly_income": "9500.00",
+  "total_monthly_debts": "650.00",
+  "warnings": [
+    "Reference data 'fha-mip-rates' has effective=2023-03-20, which is more than 12 months old (threshold: 2025-05-23). Annual regulatory refresh may be overdue.",
+    "ATR-QM-NOT-EVALUATED-MISSING-APR-OR-APOR"
+  ]
+}

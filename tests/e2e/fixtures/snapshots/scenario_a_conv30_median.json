@@ -1,0 +1,26 @@
+{
+  "assumed_ltv_pct": null,
+  "assumed_monthly_mi": null,
+  "blocked": false,
+  "blocked_by": null,
+  "cltv": "0.800000",
+  "dti_back": "0.315237",
+  "dti_front": "0.315237",
+  "financed_loan_amount": "400000.00",
+  "implied_pi": null,
+  "loan_amount": "400000.00",
+  "loan_type": "conforming",
+  "ltv": "0.800000",
+  "max_loan_amount": null,
+  "mode": "forward",
+  "monthly_mi": "0.00",
+  "monthly_pi": "2610.37",
+  "piti": "3152.37",
+  "property_value": "500000.00",
+  "total_gross_monthly_income": "10000.00",
+  "total_monthly_debts": "0.00",
+  "warnings": [
+    "ATR-QM-NOT-EVALUATED-MISSING-APR-OR-APOR",
+    "FANNIE-LLPA-720-739-75-80"
+  ]
+}

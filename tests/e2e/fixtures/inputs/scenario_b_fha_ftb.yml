@@ -1,0 +1,50 @@
+# Scenario B: FHA first-time buyer (UFMIP + annual MIP active, loan eligible).
+#
+# $363k SFH, $25,250 down (~7% down) -> base loan $337,750 + UFMIP financed
+# (1.75% = $5,910.63) -> financed loan $343,660.63 at financed LTV ~0.9467
+# (in the 0.90-0.95 band of data/reference/fha-mip-rates.yml standard-tier
+# 181-360mo -> annual MIP 0.0050). Single applicant @ $9,500/mo, modest
+# non-housing debts to keep DTI back under the 0.43 FHA cap.
+#
+# Property value chosen so financed LTV (= origination_LTV * 1.0175) stays
+# UNDER the 0.965 FHA HUD-Handbook-4000.1 ceiling — exercises the UFMIP
+# auto-finance + annual MIP code path WITHOUT tripping LTV-CEILING-FHA.
+#
+# CLI: .claude/skills/mortgage-ops/scripts/affordability.py --input <json>
+cli: affordability
+request:
+  mode: forward
+  household:
+    location:
+      state_fips: "53"
+      county_fips: "033"
+      county_name: "King"
+      state: "WA"
+      zip: "98101"
+    applicants:
+      - name: "FTB"
+        gross_monthly_income: "9500.00"
+        credit_score: 680
+    size: 1
+    monthly_debts:
+      auto: "350.00"
+      student_loans: "200.00"
+      credit_cards: "100.00"
+      other: "0.00"
+    escrow:
+      property_tax_monthly: "303.00"
+      insurance_monthly: "115.00"
+      hoa_monthly: "0.00"
+    va: null
+    current_housing_payment: "0.00"
+  max_dti: "0.430000"
+  target_loan_type: "fha"
+  term_months: 360
+  annual_rate: "0.066500"      # representative FHA from data/known-loans.yml fha-30yr
+  apr: null
+  apor: null
+  monthly_pmi: null
+  endorsement_date_override: "2026-05-01"
+  junior_liens: []
+  loan_amount: "337750.00"     # base loan; UFMIP auto-financed to $343,660.63
+  property_value: "363000.00"  # ~7% down keeps financed LTV under 0.965 FHA ceiling

@@ -1,0 +1,53 @@
+# Scenario C: Jumbo Bay Area (Solano County).
+#
+# $1.2M SFH, 25% down -> $900k loan. Solano County (06/095) has a baseline
+# conforming limit of $832,750 per data/reference/conforming-limits-2026.yml,
+# so a $900k loan classifies as JUMBO and target_loan_type='jumbo' is
+# accepted by TARGET_LOAN_TYPE_CROSSWALK. DTI back lands ~0.41, under the
+# 0.43 jumbo ceiling, so the loan must STAY eligible.
+#
+# CLI: .claude/skills/mortgage-ops/scripts/affordability.py --input <json>
+#
+# Solano is part of the greater Bay Area and is one of the two Bay Area
+# counties NOT at the high-cost ceiling — perfect for forcing a true jumbo
+# classification at a household-realistic price point.
+cli: affordability
+request:
+  mode: forward
+  household:
+    location:
+      state_fips: "06"
+      county_fips: "095"
+      county_name: "Solano CA"
+      state: "CA"
+      zip: "94533"
+    applicants:
+      - name: "A"
+        gross_monthly_income: "12000.00"
+        credit_score: 760
+      - name: "B"
+        gross_monthly_income: "8000.00"
+        credit_score: 740
+    size: 2
+    monthly_debts:
+      auto: "550.00"
+      student_loans: "0.00"
+      credit_cards: "150.00"
+      other: "0.00"
+    escrow:
+      property_tax_monthly: "1100.00"   # ~ 1.1% CA prop tax / 12 on $1.2M
+      insurance_monthly: "250.00"
+      hoa_monthly: "0.00"
+    va: null
+    current_housing_payment: "0.00"
+  max_dti: "0.430000"
+  target_loan_type: "jumbo"
+  term_months: 360
+  annual_rate: "0.069500"      # representative jumbo from data/known-loans.yml jumbo-30yr-fixed
+  apr: null
+  apor: null
+  monthly_pmi: null            # LTV=0.75 (25% down); jumbo MI policy is 0.00 per _compute_monthly_mi
+  endorsement_date_override: "2026-05-01"
+  junior_liens: []
+  loan_amount: "900000.00"
+  property_value: "1200000.00"

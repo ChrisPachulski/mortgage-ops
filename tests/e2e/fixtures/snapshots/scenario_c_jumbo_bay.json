@@ -1,0 +1,25 @@
+{
+  "assumed_ltv_pct": null,
+  "assumed_monthly_mi": null,
+  "blocked": false,
+  "blocked_by": null,
+  "cltv": "0.750000",
+  "dti_back": "0.400377",
+  "dti_front": "0.365377",
+  "financed_loan_amount": "900000.00",
+  "implied_pi": null,
+  "loan_amount": "900000.00",
+  "loan_type": "jumbo",
+  "ltv": "0.750000",
+  "max_loan_amount": null,
+  "mode": "forward",
+  "monthly_mi": "0.00",
+  "monthly_pi": "5957.53",
+  "piti": "7307.53",
+  "property_value": "1200000.00",
+  "total_gross_monthly_income": "20000.00",
+  "total_monthly_debts": "700.00",
+  "warnings": [
+    "ATR-QM-NOT-EVALUATED-MISSING-APR-OR-APOR"
+  ]
+}
