@@ -100,141 +100,170 @@ def main() -> int:
     import urllib.request
     from datetime import UTC, datetime
 
+    from lib.observability import log_event, observe
+
     series_id: str = args.series_id
 
-    def _emit(envelope: dict[str, Any]) -> int:
-        """Emit the JSON envelope on stdout (single line) and return 0.
+    # observe() wraps the entire body; we exit the context BEFORE returning
+    # so the run_complete event fires. The CLI always returns 0 (Pitfall 1 +
+    # D-12-LIVE02-01) so the final event is always either run_complete with
+    # exit_status="success" or, on caller-set exit_status, "error_validation"
+    # for FRED-side failures the user should see.
+    with observe(cli="fred_cli", inputs={"args": vars(args)}) as ctx:
 
-        Pitfall 1 + D-12-LIVE02-01: ALWAYS exit 0 — SKILL.md prose-only injection
-        reads envelope.error as the recovery contract; non-zero exits would break
-        the SKILL.md routing that depends on stdout-only sourcing (D-12-SC3-01).
-        """
-        print(json.dumps(envelope))
-        return 0
+        def _emit(envelope: dict[str, Any]) -> int:
+            """Emit the JSON envelope on stdout (single line) and return 0.
 
-    # D-12-LIVE02-01 cache-first ordering: a valid fresh local cache MUST be
-    # readable without FRED_API_KEY. The API key is only required when a
-    # network fetch is actually needed (cache miss / stale entry). The prior
-    # ordering checked the key first and short-circuited the cache, which
-    # defeated the whole point of the 7-day TTL for users who hadn't exported
-    # FRED_API_KEY but had a fresh cache on disk.
-    from lib.fred_cache import _load_cache, get_cached_or_fetch, is_fresh
+            Pitfall 1 + D-12-LIVE02-01: ALWAYS exit 0 — SKILL.md prose-only injection
+            reads envelope.error as the recovery contract; non-zero exits would break
+            the SKILL.md routing that depends on stdout-only sourcing (D-12-SC3-01).
+            """
+            ctx.set_output(envelope)
+            if envelope.get("error"):
+                # Soft failure: still exit 0, but tag the run so the final
+                # event reflects the failure mode.
+                log_event(
+                    ctx,
+                    "ERROR",
+                    "fred fetch failed",
+                    event="fred_fetch_failed",
+                    exit_status="error_validation",
+                    fred_error=envelope.get("error"),
+                    series_id=envelope.get("series_id"),
+                )
+            else:
+                log_event(
+                    ctx,
+                    "INFO",
+                    "fred fetch succeeded",
+                    event="fred_fetch_succeeded",
+                    series_id=envelope.get("series_id"),
+                    observation_date=envelope.get("observation_date"),
+                )
+            print(json.dumps(envelope))
+            return 0
 
-    cached_entry = _load_cache(series_id)
-    if cached_entry is not None and is_fresh(cached_entry):
-        return _emit(cached_entry)
+        # D-12-LIVE02-01 cache-first ordering: a valid fresh local cache MUST be
+        # readable without FRED_API_KEY.
+        from lib.fred_cache import _load_cache, get_cached_or_fetch, is_fresh
 
-    api_key = os.environ.get("FRED_API_KEY")
-    if not api_key:
-        return _emit(
-            {
-                "series_id": series_id,
-                "value": None,
-                "observation_date": None,
-                "fetched_at": None,
-                "source_url": None,
-                "fred_realtime_start": None,
-                "fred_realtime_end": None,
-                "error": "FRED_API_KEY not set in environment; ask the user for the current rate.",
-            }
+        cached_entry = _load_cache(series_id)
+        if cached_entry is not None and is_fresh(cached_entry):
+            log_event(
+                ctx,
+                "INFO",
+                "fred cache hit",
+                event="fred_cache_hit",
+                series_id=series_id,
+            )
+            return _emit(cached_entry)
+
+        api_key = os.environ.get("FRED_API_KEY")
+        if not api_key:
+            return _emit(
+                {
+                    "series_id": series_id,
+                    "value": None,
+                    "observation_date": None,
+                    "fetched_at": None,
+                    "source_url": None,
+                    "fred_realtime_start": None,
+                    "fred_realtime_end": None,
+                    "error": (
+                        "FRED_API_KEY not set in environment; ask the user for the current rate."
+                    ),
+                }
+            )
+
+        # T-12-01-02 mitigation: redacted source_url ALWAYS uses the hand-built
+        # `api_key=***` form; the real key is never str-interpolated into any output
+        # channel. Constructed independently of `url` so a future refactor cannot
+        # accidentally leak the key.
+        redacted_url = (
+            f"https://api.stlouisfed.org/fred/series/observations?series_id={series_id}"
+            "&api_key=***&file_type=json&sort_order=desc&limit=1"
         )
 
-    # T-12-01-02 mitigation: redacted source_url ALWAYS uses the hand-built
-    # `api_key=***` form; the real key is never str-interpolated into any output
-    # channel. Constructed independently of `url` so a future refactor cannot
-    # accidentally leak the key.
-    redacted_url = (
-        f"https://api.stlouisfed.org/fred/series/observations?series_id={series_id}"
-        "&api_key=***&file_type=json&sort_order=desc&limit=1"
-    )
+        def _fetcher(sid: str) -> dict[str, Any]:
+            """urllib-based FRED fetcher. ALWAYS returns an envelope; NEVER raises.
 
-    def _fetcher(sid: str) -> dict[str, Any]:
-        """urllib-based FRED fetcher. ALWAYS returns an envelope; NEVER raises.
+            Closure captures ``api_key`` + ``redacted_url`` from the enclosing
+            ``main()`` scope so the lib.fred_cache module stays pure (no urllib
+            / no HTTP / no env-var coupling).
+            """
+            qs = urllib.parse.urlencode(
+                {
+                    "series_id": sid,
+                    "api_key": api_key,
+                    "file_type": "json",
+                    "sort_order": "desc",
+                    "limit": 1,
+                }
+            )
+            url = f"https://api.stlouisfed.org/fred/series/observations?{qs}"
+            try:
+                # T-12-01-04 mitigation: 10s timeout caps Slowloris-style worst-case.
+                with urllib.request.urlopen(url, timeout=10) as resp:
+                    data = json.loads(resp.read().decode("utf-8"))
+                obs = data["observations"][0]
+                now_iso = datetime.now(UTC).isoformat().replace("+00:00", "Z")
+                # FRED returns "value" as a string (e.g., "6.84"). Defensive coercion:
+                # if it ever returns a number, str() preserves the digits for D-19
+                # compliance (money/rate fields are JSON strings at the boundary).
+                return {
+                    "series_id": sid,
+                    "value": str(obs["value"]),
+                    "observation_date": obs["date"],
+                    "fetched_at": now_iso,
+                    "source_url": redacted_url,
+                    "fred_realtime_start": obs["realtime_start"],
+                    "fred_realtime_end": obs["realtime_end"],
+                    "error": None,
+                }
+            except (urllib.error.URLError, urllib.error.HTTPError, OSError, TimeoutError) as exc:
+                # T-12-01-03 mitigation: URLError doesn't carry the request URL;
+                # HTTPError carries the response, not request URL. FRED_API_KEY
+                # cannot leak via exception repr.
+                return {
+                    "series_id": sid,
+                    "value": None,
+                    "observation_date": None,
+                    "fetched_at": None,
+                    "source_url": redacted_url,
+                    "fred_realtime_start": None,
+                    "fred_realtime_end": None,
+                    "error": f"FRED fetch failed: {exc!r}",
+                }
+            except (KeyError, IndexError, json.JSONDecodeError) as exc:
+                # T-12-01-05 mitigation: malformed FRED response never propagates;
+                # envelope.error explains the shape mismatch.
+                return {
+                    "series_id": sid,
+                    "value": None,
+                    "observation_date": None,
+                    "fetched_at": None,
+                    "source_url": redacted_url,
+                    "fred_realtime_start": None,
+                    "fred_realtime_end": None,
+                    "error": f"FRED response shape unexpected: {exc!r}",
+                }
 
-        Closure captures ``api_key`` + ``redacted_url`` from the enclosing
-        ``main()`` scope so the lib.fred_cache module stays pure (no urllib
-        / no HTTP / no env-var coupling).
-        """
-        qs = urllib.parse.urlencode(
-            {
-                "series_id": sid,
-                "api_key": api_key,
-                "file_type": "json",
-                "sort_order": "desc",
-                "limit": 1,
-            }
-        )
-        url = f"https://api.stlouisfed.org/fred/series/observations?{qs}"
+        # CR-02: D-12-LIVE02-01 + Pitfall 1 always-exit-0 contract.
         try:
-            # T-12-01-04 mitigation: 10s timeout caps Slowloris-style worst-case.
-            with urllib.request.urlopen(url, timeout=10) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-            obs = data["observations"][0]
-            now_iso = datetime.now(UTC).isoformat().replace("+00:00", "Z")
-            # FRED returns "value" as a string (e.g., "6.84"). Defensive coercion:
-            # if it ever returns a number, str() preserves the digits for D-19
-            # compliance (money/rate fields are JSON strings at the boundary).
-            return {
-                "series_id": sid,
-                "value": str(obs["value"]),
-                "observation_date": obs["date"],
-                "fetched_at": now_iso,
-                "source_url": redacted_url,
-                "fred_realtime_start": obs["realtime_start"],
-                "fred_realtime_end": obs["realtime_end"],
-                "error": None,
-            }
-        except (urllib.error.URLError, urllib.error.HTTPError, OSError, TimeoutError) as exc:
-            # T-12-01-03 mitigation: URLError doesn't carry the request URL;
-            # HTTPError carries the response, not request URL. FRED_API_KEY
-            # cannot leak via exception repr.
-            return {
-                "series_id": sid,
-                "value": None,
-                "observation_date": None,
-                "fetched_at": None,
-                "source_url": redacted_url,
-                "fred_realtime_start": None,
-                "fred_realtime_end": None,
-                "error": f"FRED fetch failed: {exc!r}",
-            }
-        except (KeyError, IndexError, json.JSONDecodeError) as exc:
-            # T-12-01-05 mitigation: malformed FRED response never propagates;
-            # envelope.error explains the shape mismatch.
-            return {
-                "series_id": sid,
-                "value": None,
-                "observation_date": None,
-                "fetched_at": None,
-                "source_url": redacted_url,
-                "fred_realtime_start": None,
-                "fred_realtime_end": None,
-                "error": f"FRED response shape unexpected: {exc!r}",
-            }
-
-    # CR-02: D-12-LIVE02-01 + Pitfall 1 always-exit-0 contract. Three uncaught
-    # exception paths used to propagate from lib.fred_cache:
-    #   1. FredCacheLockError from _acquire_lock after 30s timeout
-    #   2. OSError / PermissionError from Path.write_text in _save_cache
-    #   3. OSError from cache_dir.mkdir in _acquire_lock
-    # Any of these would emit a Python traceback + non-zero exit, defeating
-    # the SKILL.md prose-only recovery path that reads envelope.error. The
-    # outermost catch-all here converts them to the standard error envelope.
-    try:
-        return _emit(get_cached_or_fetch(series_id, fetcher=_fetcher))
-    except Exception as exc:  # load-bearing always-exit-0 contract per D-12-LIVE02-01
-        return _emit(
-            {
-                "series_id": series_id,
-                "value": None,
-                "observation_date": None,
-                "fetched_at": None,
-                "source_url": redacted_url,
-                "fred_realtime_start": None,
-                "fred_realtime_end": None,
-                "error": f"FRED cache failure: {exc!r}",
-            }
-        )
+            return _emit(get_cached_or_fetch(series_id, fetcher=_fetcher))
+        except Exception as exc:  # load-bearing always-exit-0 contract per D-12-LIVE02-01
+            return _emit(
+                {
+                    "series_id": series_id,
+                    "value": None,
+                    "observation_date": None,
+                    "fetched_at": None,
+                    "source_url": redacted_url,
+                    "fred_realtime_start": None,
+                    "fred_realtime_end": None,
+                    "error": f"FRED cache failure: {exc!r}",
+                }
+            )
 
 
 if __name__ == "__main__":

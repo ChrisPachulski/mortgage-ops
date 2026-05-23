@@ -104,85 +104,122 @@ def main() -> int:
 
     # Lazy-import per D-18 / D-13: heavy deps NOT loaded on the --help fast path.
     from lib.apr import APRConvergenceError, APRRequest, solve_apr
+    from lib.observability import log_event, observe
     from pydantic import VERSION as _pydantic_version
     from pydantic import ValidationError
     from scripts._cli_helpers import find_json_float_loc, make_decimal_type_envelope
 
-    try:
-        raw = args.input.read_text()
-    except FileNotFoundError as e:
-        print(
-            json.dumps({"error": f"input file not found: {e.filename}"}),
-            file=sys.stderr,
+    with observe(cli="apr_reg_z", inputs={"args": vars(args)}) as ctx:
+        try:
+            raw = args.input.read_text()
+        except FileNotFoundError as e:
+            log_event(
+                ctx,
+                "ERROR",
+                "input file not found",
+                event="input_file_missing",
+                exit_status="error_validation",
+                input_path=str(args.input),
+                filename=e.filename,
+            )
+            print(
+                json.dumps({"error": f"input file not found: {e.filename}"}),
+                file=sys.stderr,
+            )
+            return 2
+        except OSError as e:
+            log_event(
+                ctx,
+                "ERROR",
+                "input file unreadable",
+                event="input_file_unreadable",
+                exit_status="error_validation",
+                input_path=str(args.input),
+                error=str(e),
+            )
+            print(
+                json.dumps({"error": f"could not read input file: {e}"}),
+                file=sys.stderr,
+            )
+            return 2
+
+        # JSON-float pre-validation gate (D-19 + WR-02 closure).
+        float_hit = find_json_float_loc(raw)
+        if float_hit is not None:
+            loc, input_str = float_hit
+            envelope = make_decimal_type_envelope(loc, input_str)
+            log_event(
+                ctx,
+                "ERROR",
+                "json float in money field",
+                event="validation_float_gate",
+                exit_status="error_validation",
+                loc=loc,
+                offending_input=input_str,
+            )
+            print(json.dumps(envelope), file=sys.stderr)
+            return 2
+
+        # Pydantic boundary validation.
+        try:
+            request = APRRequest.model_validate_json(raw)
+        except ValidationError as e:
+            log_event(
+                ctx,
+                "ERROR",
+                "pydantic validation failed",
+                event="validation_pydantic",
+                exit_status="error_validation",
+                error_count=e.error_count(),
+            )
+            print(e.json(), file=sys.stderr)
+            return 2
+
+        # APRConvergenceError catch (see module docstring for full rationale).
+        try:
+            response = solve_apr(request)
+        except APRConvergenceError as e:
+            _major_minor = ".".join(_pydantic_version.split(".")[:2])
+            convergence_envelope: list[dict[str, Any]] = [
+                {
+                    "type": "value_error",
+                    "loc": ["solver"],
+                    "msg": str(e),
+                    "input": request.model_dump(mode="json"),
+                    "url": f"https://errors.pydantic.dev/{_major_minor}/v/value_error",
+                    "ctx": {
+                        "class": "APRConvergenceError",
+                        "iterations": e.iterations,
+                        "last_residual": str(e.last_residual),
+                        "last_i": str(e.last_i),
+                    },
+                }
+            ]
+            log_event(
+                ctx,
+                "ERROR",
+                "apr solver did not converge",
+                event="apr_convergence_error",
+                exit_status="error_validation",
+                iterations=e.iterations,
+                last_residual=str(e.last_residual),
+                last_i=str(e.last_i),
+            )
+            print(json.dumps(convergence_envelope), file=sys.stderr)
+            return 2
+
+        # Happy path.
+        payload = response.model_dump_json(indent=2)
+        ctx.set_output(json.loads(payload))
+        log_event(
+            ctx,
+            "INFO",
+            "apr solved",
+            event="apr_solved",
+            iterations=response.iterations,
         )
-        return 2
-    except OSError as e:
-        print(
-            json.dumps({"error": f"could not read input file: {e}"}),
-            file=sys.stderr,
-        )
-        return 2
-
-    # JSON-float pre-validation gate (D-19 + WR-02 closure).
-    # Phase 7 D-19 explicitly extends this to APR money/rate fields:
-    # loan.principal, finance_charges, advance_schedule[].amount,
-    # payment_schedule[].amount, disclosed_apr, unit_period_fraction, ...
-    # The walker is generic — finds the FIRST JSON float anywhere in the tree.
-    float_hit = find_json_float_loc(raw)
-    if float_hit is not None:
-        loc, input_str = float_hit
-        envelope = make_decimal_type_envelope(loc, input_str)
-        print(json.dumps(envelope), file=sys.stderr)
-        return 2
-
-    # Pydantic boundary validation. Catches:
-    # - Missing required fields (e.g., advance_schedule)
-    # - Cross-field validator failures (e.g., t=0 advance missing per D-06)
-    # - Type errors (e.g., string where int expected)
-    try:
-        request = APRRequest.model_validate_json(raw)
-    except ValidationError as e:
-        print(e.json(), file=sys.stderr)
-        return 2
-
-    # APRConvergenceError catch — mirrors scripts/affordability.py
-    # MissingCountyDataError pattern (Phase 4 D-13 BLOCKER fix). The solver
-    # raises APRConvergenceError after MAX_ITER iterations; without explicit
-    # catch this would escape main() as a Python traceback. Surface as 6-key
-    # envelope per D-21 (type='value_error', loc=['solver'], ctx carries the
-    # APRConvergenceError attributes for caller debugging).
-    #
-    # Variable name `convergence_envelope` (vs the `envelope` used by the
-    # float-gate above) is intentional: it documents the disposition contrast
-    # (boundary-rejection vs. solver-divergence) and avoids mypy's
-    # name-redefinition error under --strict.
-    try:
-        response = solve_apr(request)
-    except APRConvergenceError as e:
-        _major_minor = ".".join(_pydantic_version.split(".")[:2])
-        convergence_envelope: list[dict[str, Any]] = [
-            {
-                "type": "value_error",
-                "loc": ["solver"],
-                "msg": str(e),
-                "input": request.model_dump(mode="json"),
-                "url": f"https://errors.pydantic.dev/{_major_minor}/v/value_error",
-                "ctx": {
-                    "class": "APRConvergenceError",
-                    "iterations": e.iterations,
-                    "last_residual": str(e.last_residual),
-                    "last_i": str(e.last_i),
-                },
-            }
-        ]
-        print(json.dumps(convergence_envelope), file=sys.stderr)
-        return 2
-
-    # Happy path: emit APRResponse JSON to stdout with the literal "estimated
-    # APR" phrase already enforced at the model boundary by
-    # APRResponse._summary_contains_literal_estimated_apr (D-22).
-    print(response.model_dump_json(indent=2))
-    return 0
+        print(payload)
+        return 0
 
 
 if __name__ == "__main__":

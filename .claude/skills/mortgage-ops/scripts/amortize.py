@@ -108,59 +108,110 @@ def main() -> int:
     # scripts._cli_helpers is the Phase 5 factor-extract: single source of truth
     # for the JSON-float pre-validation gate + 6-key WR-02 envelope shape.
     from lib.amortize import AmortizeRequest, build_schedule
+    from lib.observability import log_event, observe
     from pydantic import ValidationError
     from scripts._cli_helpers import find_json_float_loc, make_decimal_type_envelope
 
-    try:
-        raw = args.input.read_text()
-    except FileNotFoundError as e:
-        print(
-            json.dumps({"error": f"input file not found: {e.filename}"}),
-            file=sys.stderr,
+    # Observability wraps the entire body so a failure anywhere still emits a
+    # final run_complete / run_error event. The wrapped block returns the exit
+    # code; the outer ``with`` re-yields it via ``rc`` so SystemExit pulls the
+    # right value. ``inputs={"args": vars(args)}`` is the canonical input
+    # snapshot per the project standard.
+    with observe(cli="amortize", inputs={"args": vars(args)}) as ctx:
+        try:
+            raw = args.input.read_text()
+        except FileNotFoundError as e:
+            log_event(
+                ctx,
+                "ERROR",
+                "input file not found",
+                event="input_file_missing",
+                exit_status="error_validation",
+                input_path=str(args.input),
+                filename=e.filename,
+            )
+            print(
+                json.dumps({"error": f"input file not found: {e.filename}"}),
+                file=sys.stderr,
+            )
+            return 2
+        except OSError as e:
+            log_event(
+                ctx,
+                "ERROR",
+                "input file unreadable",
+                event="input_file_unreadable",
+                exit_status="error_validation",
+                input_path=str(args.input),
+                error=str(e),
+            )
+            print(
+                json.dumps({"error": f"could not read input file: {e}"}),
+                file=sys.stderr,
+            )
+            return 2
+
+        # D-19 + WR-02: pre-validation gate — reject JSON-numbers-with-decimal-points
+        # in money fields BEFORE handing to Pydantic. Pydantic v2 model_validate_json
+        # permissively coerces JSON floats into Decimal (documented behavior per
+        # Pydantic 2.13 JSON concepts); the project's CLAUDE.md FND-01 + CONTEXT.md
+        # D-19 require money/rate fields be JSON strings.
+        #
+        # Envelope shape: 6-key Pydantic v2 e.json() shape uniformly across ALL
+        # ValidationError-class boundary failure modes (WR-02 closure). Phase 9
+        # Node orchestration and Phase 10 SKILL.md narration parse stderr as a
+        # single uniform contract.
+        float_hit = find_json_float_loc(raw)
+        if float_hit is not None:
+            loc, input_str = float_hit
+            envelope = make_decimal_type_envelope(loc, input_str)
+            log_event(
+                ctx,
+                "ERROR",
+                "json float in money field",
+                event="validation_float_gate",
+                exit_status="error_validation",
+                loc=loc,
+                offending_input=input_str,
+            )
+            print(json.dumps(envelope), file=sys.stderr)
+            return 2
+
+        # D-19: Pydantic v2 model_validate_json at the boundary handles every other
+        # validation surface (shape, type, D-02 cross-field, extra=forbid, etc.) and
+        # emits structured JSON-readable errors via e.json().
+        try:
+            request = AmortizeRequest.model_validate_json(raw)
+        except ValidationError as e:
+            log_event(
+                ctx,
+                "ERROR",
+                "pydantic validation failed",
+                event="validation_pydantic",
+                exit_status="error_validation",
+                error_count=e.error_count(),
+            )
+            # Pydantic emits structured JSON-readable errors; pass through as JSON.
+            print(e.json(), file=sys.stderr)
+            return 2
+
+        schedule = build_schedule(
+            request.loan,
+            frequency=request.frequency,
+            biweekly_mode=request.biweekly_mode,
+            extra_principal=request.extra_principal,
         )
-        return 2
-    except OSError as e:
-        print(
-            json.dumps({"error": f"could not read input file: {e}"}),
-            file=sys.stderr,
+        payload = schedule.model_dump_json(indent=2)
+        ctx.set_output(json.loads(payload))
+        log_event(
+            ctx,
+            "INFO",
+            "schedule built",
+            event="schedule_built",
+            payments=len(schedule.payments),
         )
-        return 2
-
-    # D-19 + WR-02: pre-validation gate — reject JSON-numbers-with-decimal-points
-    # in money fields BEFORE handing to Pydantic. Pydantic v2 model_validate_json
-    # permissively coerces JSON floats into Decimal (documented behavior per
-    # Pydantic 2.13 JSON concepts); the project's CLAUDE.md FND-01 + CONTEXT.md
-    # D-19 require money/rate fields be JSON strings.
-    #
-    # Envelope shape: 6-key Pydantic v2 e.json() shape uniformly across ALL
-    # ValidationError-class boundary failure modes (WR-02 closure). Phase 9
-    # Node orchestration and Phase 10 SKILL.md narration parse stderr as a
-    # single uniform contract.
-    float_hit = find_json_float_loc(raw)
-    if float_hit is not None:
-        loc, input_str = float_hit
-        envelope = make_decimal_type_envelope(loc, input_str)
-        print(json.dumps(envelope), file=sys.stderr)
-        return 2
-
-    # D-19: Pydantic v2 model_validate_json at the boundary handles every other
-    # validation surface (shape, type, D-02 cross-field, extra=forbid, etc.) and
-    # emits structured JSON-readable errors via e.json().
-    try:
-        request = AmortizeRequest.model_validate_json(raw)
-    except ValidationError as e:
-        # Pydantic emits structured JSON-readable errors; pass through as JSON.
-        print(e.json(), file=sys.stderr)
-        return 2
-
-    schedule = build_schedule(
-        request.loan,
-        frequency=request.frequency,
-        biweekly_mode=request.biweekly_mode,
-        extra_principal=request.extra_principal,
-    )
-    print(schedule.model_dump_json(indent=2))
-    return 0
+        print(payload)
+        return 0
 
 
 if __name__ == "__main__":

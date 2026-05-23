@@ -188,74 +188,99 @@ def main() -> int:
     # truth for the JSON-float pre-validation gate + 6-key WR-02 envelope
     # shape. DO NOT duplicate find_json_float_loc / make_decimal_type_envelope
     # here — reuse the shipped helpers per Plan 06-04 deviation_rule Rule-1.
+    from lib.observability import log_event, observe
     from lib.refinance import RefiRequest, evaluate
     from pydantic import TypeAdapter, ValidationError
     from scripts._cli_helpers import find_json_float_loc, make_decimal_type_envelope
 
-    # File error → simple {"error": ...} envelope (Phase 3 contract; intentionally
-    # not the 6-key shape — file-not-found / OSError surfaces predate the envelope
-    # contract and are scoped out of WR-02 closure).
-    try:
-        raw = args.input.read_text()
-    except FileNotFoundError:
-        # WR-03: echo args.input (the user's actual argument; what they typed
-        # and what's broken from their POV). Previously dereferenced
-        # FileNotFoundError.filename, which is None on some pathlib code
-        # paths and produces "input file not found: None" as broken UX.
-        print(
-            json.dumps({"error": f"input file not found: {args.input}"}),
-            file=sys.stderr,
+    with observe(cli="refi_npv", inputs={"args": vars(args)}) as ctx:
+        # File error → simple {"error": ...} envelope (Phase 3 contract; intentionally
+        # not the 6-key shape — file-not-found / OSError surfaces predate the envelope
+        # contract and are scoped out of WR-02 closure).
+        try:
+            raw = args.input.read_text()
+        except FileNotFoundError:
+            log_event(
+                ctx,
+                "ERROR",
+                "input file not found",
+                event="input_file_missing",
+                exit_status="error_validation",
+                input_path=str(args.input),
+            )
+            # WR-03: echo args.input (the user's actual argument; what they typed
+            # and what's broken from their POV). Previously dereferenced
+            # FileNotFoundError.filename, which is None on some pathlib code
+            # paths and produces "input file not found: None" as broken UX.
+            print(
+                json.dumps({"error": f"input file not found: {args.input}"}),
+                file=sys.stderr,
+            )
+            return 2
+        except OSError as e:
+            log_event(
+                ctx,
+                "ERROR",
+                "input file unreadable",
+                event="input_file_unreadable",
+                exit_status="error_validation",
+                input_path=str(args.input),
+                error=str(e),
+            )
+            # Same WR-03 echo discipline: surface the user's path alongside the
+            # OS error string for diagnostics on EACCES, symlink-chain breaks, etc.
+            print(
+                json.dumps({"error": f"could not read input file {args.input}: {e}"}),
+                file=sys.stderr,
+            )
+            return 2
+
+        # D-19 + WR-02: pre-validation gate.
+        float_hit = find_json_float_loc(raw)
+        if float_hit is not None:
+            loc, input_str = float_hit
+            envelope = make_decimal_type_envelope(loc, input_str)
+            log_event(
+                ctx,
+                "ERROR",
+                "json float in money field",
+                event="validation_float_gate",
+                exit_status="error_validation",
+                loc=loc,
+                offending_input=input_str,
+            )
+            print(json.dumps(envelope), file=sys.stderr)
+            return 2
+
+        # Pydantic validation via TypeAdapter (discriminated union).
+        try:
+            adapter: TypeAdapter[Any] = TypeAdapter(RefiRequest)
+            request = adapter.validate_json(raw)
+        except ValidationError as e:
+            log_event(
+                ctx,
+                "ERROR",
+                "pydantic validation failed",
+                event="validation_pydantic",
+                exit_status="error_validation",
+                error_count=e.error_count(),
+            )
+            print(e.json(), file=sys.stderr)
+            return 2
+
+        # Happy path.
+        response = evaluate(request)
+        payload = response.model_dump_json(indent=2)
+        ctx.set_output(json.loads(payload))
+        log_event(
+            ctx,
+            "INFO",
+            "refi evaluated",
+            event="refi_evaluated",
+            refi_kind=request.refi_kind,
         )
-        return 2
-    except OSError as e:
-        # Same WR-03 echo discipline: surface the user's path alongside the
-        # OS error string for diagnostics on EACCES, symlink-chain breaks, etc.
-        print(
-            json.dumps({"error": f"could not read input file {args.input}: {e}"}),
-            file=sys.stderr,
-        )
-        return 2
-
-    # D-19 + WR-02: pre-validation gate — reject JSON-numbers-with-decimal-points
-    # in money fields BEFORE handing to Pydantic. Pydantic v2 model_validate_json
-    # permissively coerces JSON floats into Decimal (documented behavior per
-    # Pydantic 2.13 JSON concepts); the project's CLAUDE.md FND-01 + Phase 3
-    # D-19 require money/rate fields be JSON strings.
-    #
-    # Envelope shape: 6-key Pydantic v2 e.json() shape uniformly across ALL
-    # ValidationError-class boundary failure modes (WR-02 closure). Phase 9
-    # Node orchestration and Phase 10 SKILL.md narration parse stderr as a
-    # single uniform contract.
-    float_hit = find_json_float_loc(raw)
-    if float_hit is not None:
-        loc, input_str = float_hit
-        envelope = make_decimal_type_envelope(loc, input_str)
-        print(json.dumps(envelope), file=sys.stderr)
-        return 2
-
-    # Pydantic validation via TypeAdapter (RefiRequest is an Annotated
-    # discriminated union via Field(discriminator="refi_kind"), not a BaseModel
-    # subclass; TypeAdapter is the v2 idiom for validating non-class types).
-    # Pydantic emits structured JSON-readable errors via e.json(); pass through
-    # as JSON.
-    #
-    # Note on SC-4 (RefiCashflow sign-validator): the engine constructs
-    # RefiCashflow instances internally; if a downstream caller bypasses this
-    # CLI and passes malformed cashflows directly to lib.refinance, the
-    # @model_validator _direction_sign_consistency raises ValidationError —
-    # surfaced here as the same 6-key envelope shape via e.json().
-    try:
-        adapter: TypeAdapter[Any] = TypeAdapter(RefiRequest)
-        request = adapter.validate_json(raw)
-    except ValidationError as e:
-        print(e.json(), file=sys.stderr)
-        return 2
-
-    # Happy path: dispatch through public evaluate() (D-02 discriminated-union
-    # dispatcher; routes by refi_kind to evaluate_rate_and_term / evaluate_cash_out).
-    response = evaluate(request)
-    print(response.model_dump_json(indent=2))
-    return 0
+        print(payload)
+        return 0
 
 
 if __name__ == "__main__":

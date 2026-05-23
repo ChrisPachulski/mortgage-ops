@@ -219,13 +219,80 @@ def main() -> int:
     # loaded on the --help fast path.
     import os
 
+    from lib.observability import log_event, observe
     from lib.property_block_detector import detect_block, extract_zpid
     from lib.property_extractor import extract_listing
     from lib.property_listing import PropertyListing
 
     fetched_at = _now_iso_z()
 
+    # observe() wraps the entire body via a helper so all the inline returns
+    # below land while the context manager is still active. main() opens the
+    # context, delegates to _run, then exits the context after the helper
+    # returns.
+    with observe(cli="property_fetch", inputs={"args": vars(args)}) as ctx:
+        return _run_property_fetch(
+            ctx=ctx,
+            args=args,
+            project_root=project_root,
+            fetched_at=fetched_at,
+            os_mod=os,
+            detect_block=detect_block,
+            extract_zpid=extract_zpid,
+            extract_listing=extract_listing,
+            PropertyListing=PropertyListing,
+            log_event=log_event,
+        )
+
+
+def _run_property_fetch(
+    *,
+    ctx: Any,
+    args: argparse.Namespace,
+    project_root: Path,
+    fetched_at: str,
+    os_mod: Any,
+    detect_block: Any,
+    extract_zpid: Any,
+    extract_listing: Any,
+    PropertyListing: Any,
+    log_event: Any,
+) -> int:
+    """Property-fetch CLI body, extracted so the many inline returns can stay
+    while the ``observe()`` context manager lives in main().
+    """
+    os = os_mod  # local alias for readability
+
     def _emit(env: dict[str, Any]) -> int:
+        ctx.set_output(env)
+        if env.get("error"):
+            log_event(
+                ctx,
+                "ERROR",
+                "property fetch returned error envelope",
+                event="property_fetch_error",
+                exit_status="error_validation",
+                fetch_error=env.get("error"),
+                awaiting_user_input=env.get("awaiting_user_input"),
+                source_url=env.get("source_url"),
+            )
+        elif env.get("awaiting_user_input"):
+            log_event(
+                ctx,
+                "INFO",
+                "property fetch awaiting user input",
+                event="property_fetch_awaiting",
+                missing=env.get("missing"),
+                source_url=env.get("source_url"),
+            )
+        else:
+            log_event(
+                ctx,
+                "INFO",
+                "property fetch succeeded",
+                event="property_fetch_success",
+                source_url=env.get("source_url"),
+            )
         print(json.dumps(env))
         return 0
 

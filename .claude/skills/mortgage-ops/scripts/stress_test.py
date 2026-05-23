@@ -143,58 +143,87 @@ def main() -> int:
             sys.path.insert(0, _p)
 
     # Lazy-import per D-18 / D-13: heavy deps NOT loaded on the --help fast path.
+    from lib.observability import log_event, observe
     from lib.stress import StressRequest, evaluate
     from pydantic import TypeAdapter, ValidationError
     from scripts._cli_helpers import find_json_float_loc, make_decimal_type_envelope
 
-    raw = args.input.read_text()
+    with observe(cli="stress_test", inputs={"args": vars(args)}) as ctx:
+        raw = args.input.read_text()
 
-    # Apply CLI shortcuts BEFORE the float-gate so the float-gate sees the
-    # final JSON (D-04-02 verbatim). The parsed list values are strings (per
-    # _parse_decimal_list), so the overlay introduces no JSON floats — the
-    # float-gate semantics are unchanged. Last-write-wins per D-04-02.
-    if args.rates is not None or args.reductions is not None:
+        # Apply CLI shortcuts BEFORE the float-gate so the float-gate sees the
+        # final JSON (D-04-02 verbatim). The parsed list values are strings (per
+        # _parse_decimal_list), so the overlay introduces no JSON floats — the
+        # float-gate semantics are unchanged. Last-write-wins per D-04-02.
+        if args.rates is not None or args.reductions is not None:
+            try:
+                parsed = json.loads(raw)
+            except json.JSONDecodeError:
+                # Let downstream gates surface the JSON parse error with their
+                # canonical envelopes; do not swallow it here.
+                parsed = None
+            if isinstance(parsed, dict):
+                if args.rates is not None:
+                    parsed["rates"] = args.rates
+                if args.reductions is not None:
+                    parsed["reductions"] = args.reductions
+                raw = json.dumps(parsed)
+                log_event(
+                    ctx,
+                    "INFO",
+                    "cli overlay applied",
+                    event="cli_overlay_applied",
+                    rates_overlay=args.rates,
+                    reductions_overlay=args.reductions,
+                )
+
+        # JSON-float pre-validation gate (D-19 + WR-02 closure).
+        # The walker is generic — finds the FIRST JSON float anywhere in the tree.
+        float_hit = find_json_float_loc(raw)
+        if float_hit is not None:
+            loc, input_str = float_hit
+            envelope = make_decimal_type_envelope(loc, input_str)
+            log_event(
+                ctx,
+                "ERROR",
+                "json float in money field",
+                event="validation_float_gate",
+                exit_status="error_validation",
+                loc=loc,
+                offending_input=input_str,
+            )
+            print(json.dumps(envelope), file=sys.stderr)
+            return 2
+
+        # Pydantic boundary validation (discriminated union).
         try:
-            parsed = json.loads(raw)
-        except json.JSONDecodeError:
-            # Let downstream gates surface the JSON parse error with their
-            # canonical envelopes; do not swallow it here.
-            parsed = None
-        if isinstance(parsed, dict):
-            if args.rates is not None:
-                parsed["rates"] = args.rates
-            if args.reductions is not None:
-                parsed["reductions"] = args.reductions
-            raw = json.dumps(parsed)
+            adapter: TypeAdapter[Any] = TypeAdapter(StressRequest)
+            request = adapter.validate_json(raw)
+        except ValidationError as e:
+            log_event(
+                ctx,
+                "ERROR",
+                "pydantic validation failed",
+                event="validation_pydantic",
+                exit_status="error_validation",
+                error_count=e.error_count(),
+            )
+            print(e.json(), file=sys.stderr)
+            return 2
 
-    # JSON-float pre-validation gate (D-19 + WR-02 closure).
-    # The walker is generic — finds the FIRST JSON float anywhere in the tree.
-    float_hit = find_json_float_loc(raw)
-    if float_hit is not None:
-        loc, input_str = float_hit
-        envelope = make_decimal_type_envelope(loc, input_str)
-        print(json.dumps(envelope), file=sys.stderr)
-        return 2
-
-    # Pydantic boundary validation. Discriminated union: TypeAdapter validates
-    # JSON against StressRequest = Annotated[Rate|Income|Arm, Field(discriminator='mode')].
-    # Mirrors Phase 4 affordability CLI's TypeAdapter pattern (D-04-06).
-    # `adapter: TypeAdapter[Any]` mirrors scripts/affordability.py:206 — the
-    # discriminated union is an Annotated alias, not a BaseModel subclass.
-    try:
-        adapter: TypeAdapter[Any] = TypeAdapter(StressRequest)
-        request = adapter.validate_json(raw)
-    except ValidationError as e:
-        print(e.json(), file=sys.stderr)
-        return 2
-
-    # Happy path: dispatch + emit StressResponse JSON to stdout. Pydantic v2
-    # preserves field declaration order in model_dump_json so the serialized
-    # JSON always carries "summary": {...} before "rows": [...] per D-02 /
-    # ROADMAP SC-5.
-    response = evaluate(request)
-    print(response.model_dump_json(indent=2))
-    return 0
+        # Happy path: dispatch + emit StressResponse JSON to stdout.
+        response = evaluate(request)
+        payload = response.model_dump_json(indent=2)
+        ctx.set_output(json.loads(payload))
+        log_event(
+            ctx,
+            "INFO",
+            "stress evaluated",
+            event="stress_evaluated",
+            mode=request.mode,
+        )
+        print(payload)
+        return 0
 
 
 if __name__ == "__main__":

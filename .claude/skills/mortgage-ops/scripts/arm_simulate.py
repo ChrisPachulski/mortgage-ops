@@ -73,36 +73,64 @@ def main() -> int:
 
     # Lazy-import per D-18 / D-13: heavy deps NOT loaded on the --help fast path.
     from lib.arm import ARMRequest, build_arm_schedule
+    from lib.observability import log_event, observe
     from pydantic import ValidationError
     from scripts._cli_helpers import find_json_float_loc, make_decimal_type_envelope
 
-    raw = args.input.read_text()
+    with observe(cli="arm_simulate", inputs={"args": vars(args)}) as ctx:
+        raw = args.input.read_text()
 
-    # JSON-float pre-validation gate (D-19 + WR-02 closure).
-    # Phase 5 D-07 explicitly extends this to ARM money/rate fields:
-    # loan.principal, assumed_index_rate, index_path[].value, arm_terms.floor_rate.
-    # The walker is generic — finds the FIRST JSON float anywhere in the tree.
-    float_hit = find_json_float_loc(raw)
-    if float_hit is not None:
-        loc, input_str = float_hit
-        envelope = make_decimal_type_envelope(loc, input_str)
-        print(json.dumps(envelope), file=sys.stderr)
-        return 2
+        # JSON-float pre-validation gate (D-19 + WR-02 closure).
+        # Phase 5 D-07 explicitly extends this to ARM money/rate fields:
+        # loan.principal, assumed_index_rate, index_path[].value, arm_terms.floor_rate.
+        # The walker is generic — finds the FIRST JSON float anywhere in the tree.
+        float_hit = find_json_float_loc(raw)
+        if float_hit is not None:
+            loc, input_str = float_hit
+            envelope = make_decimal_type_envelope(loc, input_str)
+            log_event(
+                ctx,
+                "ERROR",
+                "json float in money field",
+                event="validation_float_gate",
+                exit_status="error_validation",
+                loc=loc,
+                offending_input=input_str,
+            )
+            print(json.dumps(envelope), file=sys.stderr)
+            return 2
 
-    # Pydantic boundary validation. Catches:
-    # - Missing required fields (e.g., floor_rate per D-02)
-    # - Misaligned index_path periods (model_validator from Plan 05-02)
-    # - Type errors (e.g., string where int expected)
-    try:
-        request = ARMRequest.model_validate_json(raw)
-    except ValidationError as e:
-        print(e.json(), file=sys.stderr)
-        return 2
+        # Pydantic boundary validation. Catches:
+        # - Missing required fields (e.g., floor_rate per D-02)
+        # - Misaligned index_path periods (model_validator from Plan 05-02)
+        # - Type errors (e.g., string where int expected)
+        try:
+            request = ARMRequest.model_validate_json(raw)
+        except ValidationError as e:
+            log_event(
+                ctx,
+                "ERROR",
+                "pydantic validation failed",
+                event="validation_pydantic",
+                exit_status="error_validation",
+                error_count=e.error_count(),
+            )
+            print(e.json(), file=sys.stderr)
+            return 2
 
-    # Happy path: build the ARM schedule and emit JSON to stdout.
-    schedule = build_arm_schedule(request)
-    print(schedule.model_dump_json(indent=2))
-    return 0
+        # Happy path: build the ARM schedule and emit JSON to stdout.
+        schedule = build_arm_schedule(request)
+        payload = schedule.model_dump_json(indent=2)
+        ctx.set_output(json.loads(payload))
+        log_event(
+            ctx,
+            "INFO",
+            "arm schedule built",
+            event="arm_schedule_built",
+            payments=len(schedule.payments),
+        )
+        print(payload)
+        return 0
 
 
 if __name__ == "__main__":

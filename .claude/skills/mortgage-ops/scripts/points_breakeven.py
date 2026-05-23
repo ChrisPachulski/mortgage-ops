@@ -97,42 +97,60 @@ def main() -> int:
             sys.path.insert(0, _p)
 
     # Lazy-import per D-18 / D-13: heavy deps NOT loaded on the --help fast path.
+    from lib.observability import log_event, observe
     from lib.points import PointsRequest, evaluate
     from pydantic import TypeAdapter, ValidationError
     from scripts._cli_helpers import find_json_float_loc, make_decimal_type_envelope
 
-    raw = args.input.read_text()
+    with observe(cli="points_breakeven", inputs={"args": vars(args)}) as ctx:
+        raw = args.input.read_text()
 
-    # JSON-float pre-validation gate (D-19 + WR-02 closure).
-    # The walker is generic — finds the FIRST JSON float anywhere in the tree
-    # (points_cost, monthly_savings, discount_rate_annual, loan.principal,
-    # loan.annual_rate, etc.).
-    float_hit = find_json_float_loc(raw)
-    if float_hit is not None:
-        loc, input_str = float_hit
-        envelope = make_decimal_type_envelope(loc, input_str)
-        print(json.dumps(envelope), file=sys.stderr)
-        return 2
+        # JSON-float pre-validation gate (D-19 + WR-02 closure).
+        float_hit = find_json_float_loc(raw)
+        if float_hit is not None:
+            loc, input_str = float_hit
+            envelope = make_decimal_type_envelope(loc, input_str)
+            log_event(
+                ctx,
+                "ERROR",
+                "json float in money field",
+                event="validation_float_gate",
+                exit_status="error_validation",
+                loc=loc,
+                offending_input=input_str,
+            )
+            print(json.dumps(envelope), file=sys.stderr)
+            return 2
 
-    # Pydantic boundary validation. Discriminated union: TypeAdapter validates
-    # JSON against PointsRequest = Annotated[FromSavings|FromLoans,
-    # Field(discriminator='mode')]. Mirrors Phase 4 affordability CLI's
-    # TypeAdapter pattern (D-04-06). `adapter: TypeAdapter[Any]` mirrors
-    # scripts/affordability.py:206 + scripts/stress_test.py — discriminated
-    # unions are Annotated aliases, not BaseModel subclasses.
-    try:
-        adapter: TypeAdapter[Any] = TypeAdapter(PointsRequest)
-        request = adapter.validate_json(raw)
-    except ValidationError as e:
-        print(e.json(), file=sys.stderr)
-        return 2
+        # Pydantic boundary validation (discriminated union).
+        try:
+            adapter: TypeAdapter[Any] = TypeAdapter(PointsRequest)
+            request = adapter.validate_json(raw)
+        except ValidationError as e:
+            log_event(
+                ctx,
+                "ERROR",
+                "pydantic validation failed",
+                event="validation_pydantic",
+                exit_status="error_validation",
+                error_count=e.error_count(),
+            )
+            print(e.json(), file=sys.stderr)
+            return 2
 
-    # Happy path: dispatch + emit PointsResponse JSON to stdout. evaluate()
-    # always reports BOTH simple_breakeven_months AND npv_breakeven_months
-    # side-by-side per ROADMAP SC-4 / D-04.
-    response = evaluate(request)
-    print(response.model_dump_json(indent=2))
-    return 0
+        # Happy path.
+        response = evaluate(request)
+        payload = response.model_dump_json(indent=2)
+        ctx.set_output(json.loads(payload))
+        log_event(
+            ctx,
+            "INFO",
+            "points evaluated",
+            event="points_evaluated",
+            mode=request.mode,
+        )
+        print(payload)
+        return 0
 
 
 if __name__ == "__main__":

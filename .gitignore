@@ -42,6 +42,10 @@ package-lock.json.bak
 # Phase 9: DuckDB writer lockfile (ephemeral; per PATTERNS Critical Issue 1)
 data/.lock
 
+# Operational observability — per-run JSONL logs from CLI invocations.
+# Logs are ephemeral artifacts; see docs/observability.md.
+data/logs/
+
 # Phase 9: Generated markdown views (regenerated from DuckDB; never hand-edited)
 data/loans.md
 data/scenarios.md

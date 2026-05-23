@@ -205,12 +205,53 @@ def main() -> int:
     from decimal import Decimal
 
     import yaml
+    from lib.observability import log_event, observe
     from lib.profile import Profile
     from lib.property_analysis import analyze
     from lib.property_listing import PropertyListing
     from lib.property_report import render
     from pydantic import ValidationError
 
+    # Wrap the entire body in observe(). All paths return 0; we log the
+    # outcome by tagging the final event's exit_status via log_event(...,
+    # exit_status="..."). Errors are surfaced on stdout as the documented
+    # error envelope (unchanged); observability is strictly side-channel.
+    with observe(cli="property_analyze", inputs={"args": vars(args)}) as ctx:
+        return _run_property_analyze(
+            ctx=ctx,
+            args=args,
+            project_root=project_root,
+            Decimal=Decimal,
+            yaml=yaml,
+            Profile=Profile,
+            analyze=analyze,
+            PropertyListing=PropertyListing,
+            render=render,
+            ValidationError=ValidationError,
+            log_event=log_event,
+        )
+
+
+def _run_property_analyze(
+    *,
+    ctx: Any,
+    args: argparse.Namespace,
+    project_root: Path,
+    Decimal: Any,
+    yaml: Any,
+    Profile: Any,
+    analyze: Any,
+    PropertyListing: Any,
+    render: Any,
+    ValidationError: Any,
+    log_event: Any,
+) -> int:
+    """Refactored body of ``main()`` to keep the ``with observe()`` block in main()
+    flat while preserving the existing many-returns control flow inside this
+    helper. Every documented error path returns 0 with a stdout envelope and a
+    structured ``log_event(..., exit_status="error_validation")`` so the
+    completion event reflects the failure mode.
+    """
     # Step A — --output-dir hardening (ASVS V5 / Pitfall PATTERNS L920-930).
     #
     # Reject:
@@ -226,6 +267,14 @@ def main() -> int:
     # writable directory anywhere on disk.
     raw_output_dir = args.output_dir
     if ".." in raw_output_dir.parts:
+        log_event(
+            ctx,
+            "ERROR",
+            "output dir traversal segment",
+            event="output_dir_unwritable",
+            exit_status="error_validation",
+            output_dir=str(raw_output_dir),
+        )
         _emit_error_envelope(
             "output_dir_unwritable",
             f"output-dir must not contain '..' segments; got {raw_output_dir}",
@@ -234,18 +283,44 @@ def main() -> int:
     try:
         output_dir = raw_output_dir.resolve()
     except OSError as exc:
+        log_event(
+            ctx,
+            "ERROR",
+            "output dir resolve failed",
+            event="output_dir_unwritable",
+            exit_status="error_validation",
+            output_dir=str(raw_output_dir),
+            error=repr(exc),
+        )
         _emit_error_envelope(
             "output_dir_unwritable",
             f"output-dir could not be resolved: {exc!r}",
         )
         return 0
     if not output_dir.is_dir():
+        log_event(
+            ctx,
+            "ERROR",
+            "output dir not a directory",
+            event="output_dir_unwritable",
+            exit_status="error_validation",
+            output_dir=str(output_dir),
+        )
         _emit_error_envelope(
             "output_dir_unwritable",
             f"output-dir does not exist or is not a directory: {output_dir}",
         )
         return 0
     if not output_dir.is_relative_to(project_root):
+        log_event(
+            ctx,
+            "ERROR",
+            "output dir outside project",
+            event="output_dir_unwritable",
+            exit_status="error_validation",
+            output_dir=str(output_dir),
+            project_root=str(project_root),
+        )
         _emit_error_envelope(
             "output_dir_unwritable",
             (f"output-dir must be inside the project root ({project_root}); got {output_dir}"),
@@ -263,12 +338,29 @@ def main() -> int:
     try:
         listing_raw_text = args.listing.read_text()
     except FileNotFoundError:
+        log_event(
+            ctx,
+            "ERROR",
+            "listing file not found",
+            event="listing_validation_failed",
+            exit_status="error_validation",
+            listing_path=str(args.listing),
+        )
         _emit_error_envelope(
             "listing_validation_failed",
             f"--listing file not found: {args.listing}",
         )
         return 0
     except OSError as exc:
+        log_event(
+            ctx,
+            "ERROR",
+            "listing file unreadable",
+            event="listing_validation_failed",
+            exit_status="error_validation",
+            listing_path=str(args.listing),
+            error=repr(exc),
+        )
         _emit_error_envelope(
             "listing_validation_failed",
             f"--listing file could not be read: {exc!r}",
@@ -278,6 +370,15 @@ def main() -> int:
     try:
         listing_root: Any = json.loads(listing_raw_text)
     except json.JSONDecodeError as exc:
+        log_event(
+            ctx,
+            "ERROR",
+            "listing not valid json",
+            event="listing_validation_failed",
+            exit_status="error_validation",
+            listing_path=str(args.listing),
+            error=repr(exc),
+        )
         _emit_error_envelope(
             "listing_validation_failed",
             f"--listing is not valid JSON: {exc!r}",
@@ -322,6 +423,14 @@ def main() -> int:
         # WR-02 closure: dual emission — 6-key Pydantic envelope on stderr,
         # orchestrator error envelope on stdout; return 0 (D-15-ORCH-03
         # supersedes amortize.py's exit-2 on ValidationError).
+        log_event(
+            ctx,
+            "ERROR",
+            "listing pydantic validation failed",
+            event="listing_validation_failed",
+            exit_status="error_validation",
+            error_count=e.error_count(),
+        )
         print(e.json(), file=sys.stderr)
         _emit_error_envelope(
             "listing_validation_failed",
@@ -333,12 +442,29 @@ def main() -> int:
     try:
         household = _load_phase14_household_from_yaml(args.household)
     except (yaml.YAMLError, KeyError, ValueError, ValidationError, TypeError) as exc:
+        log_event(
+            ctx,
+            "ERROR",
+            "household yaml invalid",
+            event="household_yaml_invalid",
+            exit_status="error_validation",
+            household_path=str(args.household),
+            error=repr(exc),
+        )
         _emit_error_envelope(
             "household_yaml_invalid",
             f"household.yml could not be loaded: {exc!r}",
         )
         return 0
     except FileNotFoundError:
+        log_event(
+            ctx,
+            "ERROR",
+            "household yaml not found",
+            event="household_yaml_invalid",
+            exit_status="error_validation",
+            household_path=str(args.household),
+        )
         _emit_error_envelope(
             "household_yaml_invalid",
             f"--household file not found: {args.household}",
@@ -353,12 +479,29 @@ def main() -> int:
         profile_raw = yaml.safe_load(args.profile.read_text())["profile"]
         profile = Profile.model_validate_json(json.dumps(profile_raw))
     except FileNotFoundError:
+        log_event(
+            ctx,
+            "ERROR",
+            "profile yaml not found",
+            event="profile_yaml_invalid",
+            exit_status="error_validation",
+            profile_path=str(args.profile),
+        )
         _emit_error_envelope(
             "profile_yaml_invalid",
             f"--profile file not found: {args.profile}",
         )
         return 0
     except (yaml.YAMLError, KeyError, ValueError, ValidationError, TypeError) as exc:
+        log_event(
+            ctx,
+            "ERROR",
+            "profile yaml invalid",
+            event="profile_yaml_invalid",
+            exit_status="error_validation",
+            profile_path=str(args.profile),
+            error=repr(exc),
+        )
         _emit_error_envelope(
             "profile_yaml_invalid",
             f"profile.yml could not be loaded: {exc!r}",
@@ -379,14 +522,40 @@ def main() -> int:
         )
     except ValueError as exc:
         if "FRED cache cold" in str(exc):
+            log_event(
+                ctx,
+                "ERROR",
+                "fred cache cold",
+                event="fred_cache_cold",
+                exit_status="error_validation",
+                error=str(exc),
+            )
             _emit_error_envelope("fred_cache_cold", str(exc))
             return 0
+        log_event(
+            ctx,
+            "ERROR",
+            "analyze value error",
+            event="analyze_internal_error",
+            exit_status="error_unexpected",
+            error_type="ValueError",
+            error=repr(exc),
+        )
         _emit_error_envelope(
             "analyze_internal_error",
             f"analyze() ValueError: {exc!r}",
         )
         return 0
     except Exception as exc:
+        log_event(
+            ctx,
+            "ERROR",
+            "analyze unexpected error",
+            event="analyze_internal_error",
+            exit_status="error_unexpected",
+            error_type=type(exc).__name__,
+            error=repr(exc),
+        )
         _emit_error_envelope(
             "analyze_internal_error",
             f"analyze() raised {type(exc).__name__}: {exc!r}",
@@ -402,6 +571,15 @@ def main() -> int:
         sidecar_path = sidecar_dir / f"{zpid}-{today}.json"
         sidecar_path.write_text(listing.model_dump_json(indent=2))
     except OSError as exc:
+        log_event(
+            ctx,
+            "ERROR",
+            "sidecar write failed",
+            event="analyze_internal_error",
+            exit_status="error_unexpected",
+            sidecar_dir=str(sidecar_dir),
+            error=repr(exc),
+        )
         _emit_error_envelope(
             "analyze_internal_error",
             f"sidecar listing write failed: {exc!r}",
@@ -433,6 +611,15 @@ def main() -> int:
     try:
         markdown_body = render(report, footer_argv)
     except Exception as exc:
+        log_event(
+            ctx,
+            "ERROR",
+            "render failed",
+            event="analyze_internal_error",
+            exit_status="error_unexpected",
+            error_type=type(exc).__name__,
+            error=repr(exc),
+        )
         _emit_error_envelope(
             "analyze_internal_error",
             f"render() raised {type(exc).__name__}: {exc!r}",
@@ -446,6 +633,15 @@ def main() -> int:
     try:
         report_path.write_text(markdown_body)
     except OSError as exc:
+        log_event(
+            ctx,
+            "ERROR",
+            "report write failed",
+            event="analyze_internal_error",
+            exit_status="error_unexpected",
+            report_path=str(report_path),
+            error=repr(exc),
+        )
         _emit_error_envelope(
             "analyze_internal_error",
             f"report write failed: {exc!r}",
@@ -460,15 +656,21 @@ def main() -> int:
         report_path_str = str(report_path.relative_to(project_root))
     except ValueError:
         report_path_str = str(report_path)
-    print(
-        json.dumps(
-            {
-                "report_path": report_path_str,
-                "verdict": report.verdict.level,
-                "error": None,
-            }
-        )
+    success_envelope = {
+        "report_path": report_path_str,
+        "verdict": report.verdict.level,
+        "error": None,
+    }
+    ctx.set_output(success_envelope)
+    log_event(
+        ctx,
+        "INFO",
+        "report written",
+        event="report_written",
+        report_path=report_path_str,
+        verdict=report.verdict.level,
     )
+    print(json.dumps(success_envelope))
     return 0
 
 

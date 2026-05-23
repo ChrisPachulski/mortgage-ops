@@ -162,86 +162,124 @@ def main() -> int:
         AffordabilityRequest,
         evaluate,
     )
+    from lib.observability import log_event, observe
     from lib.rules.loan_type import MissingCountyDataError
     from pydantic import TypeAdapter, ValidationError
     from scripts._cli_helpers import find_json_float_loc, make_decimal_type_envelope
 
-    # File error → simple {"error": ...} envelope (Phase 3 contract; intentionally
-    # not the 6-key shape — file-not-found / OSError surfaces predate the envelope
-    # contract and are scoped out of WR-02 closure).
-    try:
-        raw = args.input.read_text()
-    except FileNotFoundError as e:
-        print(
-            json.dumps({"error": f"input file not found: {e.filename}"}),
-            file=sys.stderr,
+    with observe(cli="affordability", inputs={"args": vars(args)}) as ctx:
+        # File error → simple {"error": ...} envelope (Phase 3 contract; intentionally
+        # not the 6-key shape — file-not-found / OSError surfaces predate the envelope
+        # contract and are scoped out of WR-02 closure).
+        try:
+            raw = args.input.read_text()
+        except FileNotFoundError as e:
+            log_event(
+                ctx,
+                "ERROR",
+                "input file not found",
+                event="input_file_missing",
+                exit_status="error_validation",
+                input_path=str(args.input),
+                filename=e.filename,
+            )
+            print(
+                json.dumps({"error": f"input file not found: {e.filename}"}),
+                file=sys.stderr,
+            )
+            return 2
+        except OSError as e:
+            log_event(
+                ctx,
+                "ERROR",
+                "input file unreadable",
+                event="input_file_unreadable",
+                exit_status="error_validation",
+                input_path=str(args.input),
+                error=str(e),
+            )
+            print(
+                json.dumps({"error": f"could not read input file: {e}"}),
+                file=sys.stderr,
+            )
+            return 2
+
+        # D-19 + WR-02: pre-validation gate (see amortize.py for full rationale).
+        float_hit = find_json_float_loc(raw)
+        if float_hit is not None:
+            loc, input_str = float_hit
+            envelope = make_decimal_type_envelope(loc, input_str)
+            log_event(
+                ctx,
+                "ERROR",
+                "json float in money field",
+                event="validation_float_gate",
+                exit_status="error_validation",
+                loc=loc,
+                offending_input=input_str,
+            )
+            print(json.dumps(envelope), file=sys.stderr)
+            return 2
+
+        # Pydantic validation via TypeAdapter (AffordabilityRequest is an
+        # Annotated discriminated union).
+        try:
+            adapter: TypeAdapter[Any] = TypeAdapter(AffordabilityRequest)
+            request = adapter.validate_json(raw)
+        except ValidationError as e:
+            log_event(
+                ctx,
+                "ERROR",
+                "pydantic validation failed",
+                event="validation_pydantic",
+                exit_status="error_validation",
+                error_count=e.error_count(),
+            )
+            print(e.json(), file=sys.stderr)
+            return 2
+
+        # Happy path: dispatch through public evaluate(). MissingCountyDataError
+        # catch (BLOCKER fix; AFFD-08; T-04-02-03 mitigation) — see module
+        # docstring for full rationale.
+        try:
+            response = evaluate(request)
+        except MissingCountyDataError as e:
+            from pydantic import VERSION as _pydantic_version
+
+            _major_minor = ".".join(_pydantic_version.split(".")[:2])
+            envelope = [
+                {
+                    "type": "value_error",
+                    "loc": ["household", "location"],
+                    "msg": str(e),
+                    "input": request.household.location.model_dump(mode="json"),
+                    "url": f"https://errors.pydantic.dev/{_major_minor}/v/value_error",
+                    "ctx": {"class": "MissingCountyDataError"},
+                }
+            ]
+            log_event(
+                ctx,
+                "ERROR",
+                "missing county data",
+                event="missing_county_data",
+                exit_status="error_validation",
+                state_fips=request.household.location.state_fips,
+                county_fips=request.household.location.county_fips,
+            )
+            print(json.dumps(envelope), file=sys.stderr)
+            return 2
+
+        payload = response.model_dump_json(indent=2)
+        ctx.set_output(json.loads(payload))
+        log_event(
+            ctx,
+            "INFO",
+            "affordability evaluated",
+            event="affordability_evaluated",
+            mode=request.mode,
         )
-        return 2
-    except OSError as e:
-        print(
-            json.dumps({"error": f"could not read input file: {e}"}),
-            file=sys.stderr,
-        )
-        return 2
-
-    # D-19 + WR-02: pre-validation gate — reject JSON-numbers-with-decimal-points
-    # in money fields BEFORE handing to Pydantic. Pydantic v2 model_validate_json
-    # permissively coerces JSON floats into Decimal (documented behavior per
-    # Pydantic 2.13 JSON concepts); the project's CLAUDE.md FND-01 + CONTEXT.md
-    # D-19 require money/rate fields be JSON strings.
-    #
-    # Envelope shape: 6-key Pydantic v2 e.json() shape uniformly across ALL
-    # ValidationError-class boundary failure modes (WR-02 closure). Phase 9
-    # Node orchestration and Phase 10 SKILL.md narration parse stderr as a
-    # single uniform contract.
-    float_hit = find_json_float_loc(raw)
-    if float_hit is not None:
-        loc, input_str = float_hit
-        envelope = make_decimal_type_envelope(loc, input_str)
-        print(json.dumps(envelope), file=sys.stderr)
-        return 2
-
-    # Pydantic validation via TypeAdapter (AffordabilityRequest is an
-    # Annotated discriminated union, not a BaseModel subclass; TypeAdapter
-    # is the v2 idiom for validating non-class types). Pydantic emits
-    # structured JSON-readable errors via e.json(); pass through as JSON.
-    try:
-        adapter: TypeAdapter[Any] = TypeAdapter(AffordabilityRequest)
-        request = adapter.validate_json(raw)
-    except ValidationError as e:
-        print(e.json(), file=sys.stderr)
-        return 2
-
-    # Happy path: dispatch through public evaluate().
-    #
-    # MissingCountyDataError catch (BLOCKER fix; AFFD-08; T-04-02-03 mitigation):
-    # lib.rules.loan_type.classify raises MissingCountyDataError (a ValueError
-    # subclass) when household.location.county_fips is not present in
-    # data/reference/conforming-limits-2026.yml AND loan_amount exceeds baseline.
-    # This is NOT a Pydantic ValidationError; without an explicit catch the
-    # exception escapes main() as a Python traceback on stderr — violating the
-    # Phase 3 D-19 6-key envelope contract. Emit the standard envelope instead.
-    try:
-        response = evaluate(request)
-    except MissingCountyDataError as e:
-        from pydantic import VERSION as _pydantic_version
-
-        _major_minor = ".".join(_pydantic_version.split(".")[:2])
-        envelope = [
-            {
-                "type": "value_error",
-                "loc": ["household", "location"],
-                "msg": str(e),
-                "input": request.household.location.model_dump(mode="json"),
-                "url": f"https://errors.pydantic.dev/{_major_minor}/v/value_error",
-                "ctx": {"class": "MissingCountyDataError"},
-            }
-        ]
-        print(json.dumps(envelope), file=sys.stderr)
-        return 2
-
-    print(response.model_dump_json(indent=2))
-    return 0
+        print(payload)
+        return 0
 
 
 if __name__ == "__main__":
