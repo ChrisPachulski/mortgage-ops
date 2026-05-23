@@ -1,0 +1,8 @@
+{
+  "citation": "III (TX base 2641.00) + flood_zone_multipliers[unknown=1.15] + NO earthquake row (TX silent zero per D-16-INS-03)",
+  "source_url": "https://www.iii.org/fact-statistic/facts-statistics-homeowners-and-renters-insurance",
+  "comment": "Hand-calc: state=TX, flood_zone=None -> 'unknown' multiplier (1.15) * TX base (2641.00 from III, NAIC excludes TX) + Decimal('0.00') (TX not in {CA, OR, WA}, no earthquake_state_addons row, silent zero) = 3037.15. Proves D-16-INS-03 silent-zero behavior (no reason tag fires for non-quake states).",
+  "state": "TX",
+  "flood_zone": null,
+  "expected_annual": "3037.15"
+}

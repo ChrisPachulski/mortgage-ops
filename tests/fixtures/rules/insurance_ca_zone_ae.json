@@ -1,0 +1,8 @@
+{
+  "citation": "III (CA base 1480.00) + flood_zone_multipliers[AE=1.30] + earthquake_state_addons[CA=850.00]",
+  "source_url": "https://www.iii.org/fact-statistic/facts-statistics-homeowners-and-renters-insurance",
+  "comment": "Hand-calc: state=CA, flood_zone='AE' -> AE multiplier (1.30) * CA base (1480.00 from III, NAIC excludes CA) + CA earthquake addon (850.00 CEA + private-market avg) = 1924.00 + 850.00 = 2774.00. Tests forward-compat flood path (v1.1 callers ALWAYS pass flood_zone=None per RESEARCH correction #1; this fixture exercises the X/A/AE/V multiplier rows that are scaffolding for v1.2).",
+  "state": "CA",
+  "flood_zone": "AE",
+  "expected_annual": "2774.00"
+}

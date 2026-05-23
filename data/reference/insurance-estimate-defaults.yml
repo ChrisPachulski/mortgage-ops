@@ -1,0 +1,117 @@
+# data/reference/insurance-estimate-defaults.yml
+source: "https://content.naic.org/article/naic-releases-homeowners-insurance-report-2022"
+effective: 2025-05-21
+notes: |
+  Composite reference data for the homeowners-insurance fallback (REF-10).
+  Three independent lookup surfaces in one file, mirroring `va-funding-fees.yml`
+  multi-section precedent:
+
+    1. state_base_annual_premium: 51 rows (50 states + DC).
+       - 49 states + DC sourced from NAIC Homeowners Insurance Report
+         "Data for 2022, published 2025-05-21".
+       - CA + TX sourced from III (Insurance Information Institute) state
+         averages because NAIC's 2022-data report EXCLUDES these two states
+         (separate submission channel — RESEARCH Pitfall 5). Per-row `notes:`
+         field documents the per-state source mix.
+    2. flood_zone_multipliers: 5 rows (X, A, AE, V, unknown) — MULTIPLICATIVE.
+       Private-market homeowners-policy flood-uplift heuristic, NOT a citable
+       FEMA NFIP rate. FEMA Risk Rating 2.0 (effective 2021-04-01) decoupled
+       NFIP premium from FIRM zone (RESEARCH Pitfall 6), so a single
+       FIRM-zone-keyed FEMA rate no longer exists. These multipliers
+       approximate the cost uplift on homeowners policies in flood-prone
+       zones based on representative private-market carrier filings.
+       v1.1 caller (lib/property_analysis.py) ALWAYS passes flood_zone=None
+       because PropertyListing has NO flood_zone field (RESEARCH correction
+       #1), so only the `unknown` row (multiplier 1.15) ever fires from
+       Phase 14 in v1.1. The X/A/AE/V rows are forward-compatible scaffolding
+       for v1.2 when listing extraction may include flood-zone data.
+    3. earthquake_state_addons: 3 rows (CA, OR, WA) — ADDITIVE flat $.
+       CA sourced from California Earthquake Authority published averages;
+       OR + WA sourced from PNW private-market carrier surveys (CEA does
+       not cover non-CA states). CEA publishes earthquake premium per $1000
+       coverage, not as a flat $ (RESEARCH Pitfall 7); the flat values below
+       approximate a ~$500-700k home coverage baseline. High-value or
+       low-value homes will be systematically mispriced — v1.1 design
+       tradeoff per CONTEXT D-16-INS-03. Other states get NO row → silent
+       Decimal("0.00") in the predicate (D-16-INS-03 Claude's-Discretion).
+
+  Composition formula (applied in `lib/rules/insurance.py:lookup_default`):
+      annual = state_base * flood_zone_multiplier + earthquake_state_addon
+  Quantization happens ONCE at the predicate boundary via
+  `lib.money.quantize_cents` (RESEARCH Pitfall 6). The Phase 14 wire-in
+  (deferred to Plan 16-03) divides by 12 + re-quantizes for monthly display,
+  mirroring the FHA MIP wire-in convention at lib/property_analysis.py:672.
+
+  Staleness expectation: `_check_staleness` warns if effective > 12 months
+  old. As of 2026-05-22 this YAML's effective=2025-05-21 IS older than
+  12 months — StaleReferenceWarning WILL fire on first import (CORRECT
+  behavior per Phase 2 D-02 precedent). Re-verify annually against the
+  latest NAIC report republication.
+
+  Money discipline (CLAUDE.md non-negotiable + Phase 2 D-02): every numeric
+  scalar below is a QUOTED STRING. Consumers wrap in `Decimal(str)` at the
+  boundary (`lib/rules/insurance.py:lookup_default`). Only the `effective:`
+  scalar at the top of this file is an unquoted YAML date (required by
+  `_loader.py:80-85` type-check for `_check_staleness`).
+state_base_annual_premium:
+  - {state: "AL", base_annual: "1715.00", notes: "NAIC 2022 data"}
+  - {state: "AK", base_annual: "1212.00", notes: "NAIC 2022 data"}
+  - {state: "AZ", base_annual: "1297.00", notes: "NAIC 2022 data"}
+  - {state: "AR", base_annual: "1969.00", notes: "NAIC 2022 data"}
+  - {state: "CA", base_annual: "1480.00", notes: "III state-DOI table — NAIC 2022 excludes CA"}
+  - {state: "CO", base_annual: "2367.00", notes: "NAIC 2022 data"}
+  - {state: "CT", base_annual: "1545.00", notes: "NAIC 2022 data"}
+  - {state: "DE", base_annual: "905.00",  notes: "NAIC 2022 data"}
+  - {state: "DC", base_annual: "1325.00", notes: "NAIC 2022 data"}
+  - {state: "FL", base_annual: "2625.00", notes: "NAIC 2022 data"}
+  - {state: "GA", base_annual: "1722.00", notes: "NAIC 2022 data"}
+  - {state: "HI", base_annual: "1207.00", notes: "NAIC 2022 data"}
+  - {state: "ID", base_annual: "988.00",  notes: "NAIC 2022 data"}
+  - {state: "IL", base_annual: "1497.00", notes: "NAIC 2022 data"}
+  - {state: "IN", base_annual: "1196.00", notes: "NAIC 2022 data"}
+  - {state: "IA", base_annual: "1499.00", notes: "NAIC 2022 data"}
+  - {state: "KS", base_annual: "2826.00", notes: "NAIC 2022 data"}
+  - {state: "KY", base_annual: "1707.00", notes: "NAIC 2022 data"}
+  - {state: "LA", base_annual: "2536.00", notes: "NAIC 2022 data"}
+  - {state: "ME", base_annual: "1099.00", notes: "NAIC 2022 data"}
+  - {state: "MD", base_annual: "1318.00", notes: "NAIC 2022 data"}
+  - {state: "MA", base_annual: "1809.00", notes: "NAIC 2022 data"}
+  - {state: "MI", base_annual: "1424.00", notes: "NAIC 2022 data"}
+  - {state: "MN", base_annual: "2024.00", notes: "NAIC 2022 data"}
+  - {state: "MS", base_annual: "2103.00", notes: "NAIC 2022 data"}
+  - {state: "MO", base_annual: "1992.00", notes: "NAIC 2022 data"}
+  - {state: "MT", base_annual: "1664.00", notes: "NAIC 2022 data"}
+  - {state: "NE", base_annual: "3060.00", notes: "NAIC 2022 data"}
+  - {state: "NV", base_annual: "1142.00", notes: "NAIC 2022 data"}
+  - {state: "NH", base_annual: "1166.00", notes: "NAIC 2022 data"}
+  - {state: "NJ", base_annual: "1376.00", notes: "NAIC 2022 data"}
+  - {state: "NM", base_annual: "1474.00", notes: "NAIC 2022 data"}
+  - {state: "NY", base_annual: "1626.00", notes: "NAIC 2022 data"}
+  - {state: "NC", base_annual: "1450.00", notes: "NAIC 2022 data"}
+  - {state: "ND", base_annual: "1992.00", notes: "NAIC 2022 data"}
+  - {state: "OH", base_annual: "1264.00", notes: "NAIC 2022 data"}
+  - {state: "OK", base_annual: "4031.00", notes: "NAIC 2022 data"}
+  - {state: "OR", base_annual: "1031.00", notes: "NAIC 2022 data"}
+  - {state: "PA", base_annual: "1289.00", notes: "NAIC 2022 data"}
+  - {state: "RI", base_annual: "1900.00", notes: "NAIC 2022 data"}
+  - {state: "SC", base_annual: "1762.00", notes: "NAIC 2022 data"}
+  - {state: "SD", base_annual: "2179.00", notes: "NAIC 2022 data"}
+  - {state: "TN", base_annual: "1875.00", notes: "NAIC 2022 data"}
+  - {state: "TX", base_annual: "2641.00", notes: "III state-DOI table — NAIC 2022 excludes TX"}
+  - {state: "UT", base_annual: "942.00",  notes: "NAIC 2022 data"}
+  - {state: "VT", base_annual: "1054.00", notes: "NAIC 2022 data"}
+  - {state: "VA", base_annual: "1372.00", notes: "NAIC 2022 data"}
+  - {state: "WA", base_annual: "1191.00", notes: "NAIC 2022 data"}
+  - {state: "WV", base_annual: "1199.00", notes: "NAIC 2022 data"}
+  - {state: "WI", base_annual: "1133.00", notes: "NAIC 2022 data"}
+  - {state: "WY", base_annual: "1525.00", notes: "NAIC 2022 data"}
+flood_zone_multipliers:
+  - {zone: "X",       multiplier: "1.00", notes: "Minimal risk; no homeowners-policy uplift"}
+  - {zone: "A",       multiplier: "1.30", notes: "100-year floodplain — private-market estimate"}
+  - {zone: "AE",      multiplier: "1.30", notes: "100-year floodplain w/ BFE — private-market estimate"}
+  - {zone: "V",       multiplier: "1.80", notes: "Coastal high-velocity zone — private-market estimate"}
+  - {zone: "unknown", multiplier: "1.15", notes: "Missing-data default — ALWAYS fires in v1.1 (PropertyListing has no flood_zone field per RESEARCH correction #1)"}
+earthquake_state_addons:
+  - {state: "CA", flat_addon_annual: "850.00", notes: "CEA + private-market avg @ ~$500-700k coverage baseline"}
+  - {state: "OR", flat_addon_annual: "200.00", notes: "Cascadia subduction zone; non-CEA PNW private-market survey"}
+  - {state: "WA", flat_addon_annual: "250.00", notes: "Cascadia subduction zone; non-CEA PNW private-market survey"}

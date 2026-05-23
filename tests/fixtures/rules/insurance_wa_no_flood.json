@@ -1,0 +1,8 @@
+{
+  "citation": "NAIC 2022 (WA base 1191.00) + flood_zone_multipliers[unknown=1.15] + earthquake_state_addons[WA=250.00]",
+  "source_url": "https://content.naic.org/article/naic-releases-homeowners-insurance-report-2022",
+  "comment": "Hand-calc: state=WA, flood_zone=None -> 'unknown' multiplier (1.15) * WA base (1191.00) + WA earthquake addon (250.00) = 1369.65 + 250.00 = 1619.65, quantized once at the predicate boundary. Pachulski-household baseline.",
+  "state": "WA",
+  "flood_zone": null,
+  "expected_annual": "1619.65"
+}
