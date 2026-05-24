@@ -94,6 +94,16 @@ These are the steady-state quality bars.
 
 ## Roadmap
 
+Cross-phase YAML deserialization policy: every user-supplied YAML input that the
+workbench reads uses `yaml.safe_load` only, rejects custom tags and Python object
+constructors, and has a regression fixture proving `!!python/object` payloads
+fail before any value is trusted. The named inputs covered by this policy are
+User Layer `config/household.yml`, `config/profile.yml`, and
+`config/narrative_preferences.yml`; onboarding-staged copies of those files;
+User Layer migration patch templates; snapshot-embedded `user_layer_state`; and
+Phase 24 `--whitelist-file` inputs. Code review and lint rules forbid
+`yaml.load`, `yaml.full_load`, and custom loaders for those paths.
+
 ### Phase 18.5: Maintenance Scaffold
 
 **Goal:** Put the agent-maintenance guardrails in place before the high-risk
@@ -115,21 +125,22 @@ Build:
   `Reference-data impact` asks which reference files are read, which
   `effective_from` dates are crossed, and whether a waiver is added. CI
   verifies that each required sub-prompt is present and has a non-blocklisted
-  answer line beneath it. The checker normalizes candidate answers by trimming
-  whitespace, case-folding, and stripping punctuation before comparing against a
-  closed filler blocklist that includes `tbd`, `na`, `notapplicable`,
-  `seeabove`, `asabove`, `pending`, `none`, `todo`, `unknown`, and
-  dash/period-only answers. After removing whitespace and any repeated
-  sub-prompt text, each answer must contain at least 30 characters and at least
-  one high-specificity concrete identifier matching a file path, fixture id,
-  citation id, issue id, or command token. Empty answers,
+  answer line beneath it. The checker normalizes candidate answers once for
+  filler detection by removing any repeated sub-prompt text, trimming
+  whitespace, case-folding, stripping punctuation, and then removing all
+  remaining whitespace before comparing against a closed filler blocklist that
+  includes `tbd`, `na`, `notapplicable`, `seeabove`, `asabove`, `pending`,
+  `none`, `todo`, `unknown`, and dash/period-only answers. After the same
+  repeated-prompt removal, each answer must contain at least 30 characters and
+  at least one high-specificity concrete identifier matching a file path,
+  fixture id, citation id, issue id, or command token. Empty answers,
   placeholder-only answers, and normalized filler fail the check. The template
   and checker publish the exact identifier grammar as named patterns:
-  `FILE_PATH = (?<![\w./-])(?:\.?[A-Za-z0-9_-]+/)*\.?[A-Za-z0-9_-]+\.(py|yml|yaml|md|mjs|js|json|toml|csv|parquet|sql|txt|lock)(?![\w./-])`,
+  `FILE_PATH = (?<![\w./-])(?:\.?[A-Za-z0-9_-]+/)*\.?[A-Za-z0-9_.-]+\.(py|yml|yaml|md|mjs|js|json|toml|csv|parquet|sql|txt|lock)(?![\w./-])`,
   `FIXTURE_ID = (?<![\w-])(fixture|scenario|case):[A-Za-z0-9_.-]+(?![\w-])`,
-  `CITATION = (?<![\w])(?:12|24|26)[ \t]*CFR[ \t]*(?:\xA7|Sec\.)?[ \t]*[0-9.]+[A-Za-z0-9().-]*`,
+  `CITATION = (?<![\w])(?:12|24|26)[ \t]*CFR[ \t]*(?:§|Sec\.)?[ \t]*[0-9.]+[A-Za-z0-9().-]*`,
   `HUD_CITATION = (?<![\w-])HUD[ \t]+ML[ \t]*\d{4}-\d{2}(?![\w-])`,
-  `IRC_CITATION = (?<![\w])IRC[ \t]*(?:\xA7|Sec\.)?[ \t]*[0-9A-Za-z().-]+(?![\w.-])`,
+  `IRC_CITATION = (?<![\w])IRC[ \t]*(?:§|Sec\.)?[ \t]*[0-9A-Za-z().-]+(?![\w.-])`,
   `FUNCTION = (?<![\w.])(?:lib|scripts|tests|orchestration)(?:\.[A-Za-z_][A-Za-z0-9_]*)+(?:\()?(?![\w])`,
   `ISSUE_ID = (?<![\w-])(?:#[0-9]+|[A-Z][A-Z0-9]+-[0-9]+)(?![\w-])`, and
   `COMMAND = (?<![\w-])(?:pytest|ruff|mypy|uv|node|npm|python|python3)\s+[-\w./:=]+`.
@@ -138,9 +149,9 @@ Build:
   prose plus bare words or function-like names still fails unless it also
   contains one of `FILE_PATH`, `FIXTURE_ID`, `CITATION`, `HUD_CITATION`,
   `IRC_CITATION`, `ISSUE_ID`, or `COMMAND`.
-  The canonical checker compiles these patterns with Python `re.compile(...)`
-  from ordinary Python string values, so `\xA7` resolves to `§`; CI checklist
-  enforcement is Python-only. Node tooling that needs the same grammar consumes
+  The canonical checker compiles these UTF-8 pattern sources with Python
+  `re.compile(...)`; CI checklist enforcement is Python-only. Node tooling that
+  needs the same grammar consumes
   a JSON fixture of pre-tested accepted/rejected literals exported by
   `scripts/dump_checklist_grammar.py` rather than recompiling the markdown
   regexes. `FILE_PATH` matches identifier text only and is exposed only through
@@ -188,7 +199,12 @@ Success criteria:
   though it exceeds the character floor and contains tokens that look like
   function names. A citation fixture places `12`, `CFR`, and `1026.43` in
   separate paragraphs and must fail the concrete-identifier check, proving the
-  grammar accepts only horizontal whitespace inside citation tokens.
+  grammar accepts only horizontal whitespace inside citation tokens. Additional
+  adversarial fixtures include `not applicable`, `n/a`, and repeated placeholder
+  prompt text followed by a valid-looking file path; each must fail unless it
+  uses the allowlisted `NOT_APPLICABLE: ` path with a real reason. File path
+  fixtures include `schema.v1.yml`, `tests/test.amortize.py`, and
+  `data/known-loans.v2.yml`.
 - A runbook-coverage CI check fails when a Phase 19+ code or reference-data
   change omits the runbook file named by `.planning/runbook-coverage-map.yml`.
 - Phase 26 can focus on end-state release polish, stale-link tests, and
@@ -237,8 +253,14 @@ Build:
   operation name, operands, result, and a monotonic operation counter using a
   process-local secret generated at import time; callers cannot satisfy
   provenance validation by copying a constant project-context hash. The HMAC is
-  validation-only and is not part of the deterministic `args_hash` preimage;
-  after validation, canonicalization serializes the Decimal value and public
+  validation-only and is not part of the deterministic `args_hash` preimage.
+  `lib/decimal_context.py` keeps a non-serializable process-local minted-token
+  registry keyed by `context_fingerprint` and containing the normalized context,
+  operation name, operands, result, counter, and HMAC. `TraceEntry` validation
+  recomputes the HMAC from that registry entry and rejects any
+  `provenance="project_context_arithmetic"` token that was not minted in the
+  current process, including deserialized or hand-constructed tokens. After
+  validation, canonicalization serializes the Decimal value and public
   project-context descriptor so hashes stay reproducible across processes.
   Plain `Decimal` values are accepted only for parsed source/reference literals
   whose provenance is declared as non-arithmetic by the caller. `TraceEntry`
@@ -275,7 +297,9 @@ Build:
   boolean tags with literal `true`/`false`, integers serialize as integer tags,
   Decimals serialize as Decimal tags, strings serialize as string tags,
   `None` serializes as the null tag `["null", null]`, and dates/datetimes
-  serialize as temporal tags. Therefore `True`, `1`,
+  serialize as temporal tags. Type dispatch must check `type(x) is bool` or
+  `isinstance(x, bool)` before any integer check because Python `bool`
+  subclasses `int`. Therefore `True`, `1`,
   `Decimal("1.0")`, `"1"`, a raw string `"2025-01-01"`, and a date for
   2025-01-01 all hash differently. A fixture proves `None`, `"null"`,
   `"None"`, and `""` have distinct hash preimages. `args_hash` is computed only
@@ -400,7 +424,7 @@ Build:
   and approved test fixtures must still exercise the shared staleness and
   applicability checks. The reference index utility owns an explicit
   `control_plane_files = {"waivers.yml"}` set. Files in that set never appear
-  in `rows()` and are never subject to reference-row sensitivity enforcement;
+  in `rows()` and are never subject to reference-row share-visibility enforcement;
   they are exposed through a separate `control_metadata()` API used by the
   Phase 20 refresh audit to validate waiver approvers, reasons, and expiry dates.
 - A shared pre-emit trace coverage gate, for example `lib/trace_emit.py`, used by
@@ -472,12 +496,15 @@ Build:
   run with `secrets.token_bytes(32)`, stored outside the repo, and never
   committed. Key resolution uses exactly one path: if `$XDG_CONFIG_HOME` is set,
   non-empty, and absolute, use
-  `$XDG_CONFIG_HOME/mortgage-ops/fingerprint.key`; if it is unset or empty, use
-  `~/.config/mortgage-ops/fingerprint.key`; if it is set to a relative path,
-  fail with a clear configuration error. The resolved key path and resolved repo
-  root must not be equal, and the key path must not resolve under the repo root,
-  including through symlinked `$XDG_CONFIG_HOME` components. The loader never
-  searches both locations or falls back silently after choosing a path. On POSIX,
+  `$XDG_CONFIG_HOME/mortgage-ops/fingerprint.key`; if it is unset or empty, require
+  `$HOME` to be set, non-empty, and absolute, then use
+  `$HOME/.config/mortgage-ops/fingerprint.key` without relying on
+  `os.path.expanduser("~")`; if either environment value is relative or `$HOME`
+  is missing/empty for the fallback, fail with a clear configuration error. The
+  resolved key path and resolved repo root must not be equal, and the key path
+  must not resolve under the repo root, including through symlinked
+  `$XDG_CONFIG_HOME` or `$HOME` components. The loader never searches both
+  locations or falls back silently after choosing a path. On POSIX,
   after creating any missing owned directories, the loader opens the resolved
   config path component-by-component from a trusted anchor directory using
   `openat` with `O_DIRECTORY | O_NOFOLLOW` on every component rather than only
@@ -552,10 +579,15 @@ Build:
   owner, mode, symlink, regular-file, `O_NOFOLLOW`, and repo-containment checks
   as the active key parent. Manifest comparison reads the current key and all
   retained keys whose metadata fingerprint can match the manifest key id.
-  `prune-old-keys` deletes only retained `keys/*.key` files older than the
-  user-specified retention window and never deletes `fingerprint.key` without a
-  separate rotate command; multi-machine consistency is out of scope unless the
-  user manually installs the same key set on each machine.
+  `prune-old-keys` deletes only retained `keys/*.key` files older than a
+  user-specified retention window of at least 90 days and never deletes
+  `fingerprint.key` without a separate rotate command. A shorter window is
+  refused unless the invocation includes
+  `--i-understand-this-orphans-snapshots` plus a per-run acknowledgement after
+  printing the retained-key count that would be deleted, the newest snapshot key
+  id that would become unresolved, and the oldest snapshot timestamp that would
+  remain comparable afterward. Multi-machine consistency is out of scope unless
+  the user manually installs the same key set on each machine.
 - A hash-stability test for `lib/trace_canonical.py` with explicit buckets:
   equivalent cases include nested inputs, `Decimal("0.065")` and
   `Decimal("0.0650")`, Unicode canonical equivalents after NFC normalization,
@@ -566,9 +598,9 @@ Build:
   keys, bool keys, tuples, high-precision Decimal values longer than the
   canonical context, adjusted exponents outside the canonical bounds, and
   non-finite Decimal boundary cases. Distinct buckets also prove `True`, `1`,
-  `Decimal("1.0")`, and `"1"` all produce different hashes, and arithmetic
-  Decimal buckets prove caller context precision cannot silently change accepted
-  trace hashes. The fingerprint-key tests pre-create the
+  `False`, `0`, `Decimal("1.0")`, and `"1"` all produce different hashes, and
+  arithmetic Decimal buckets prove caller context precision cannot silently
+  change accepted trace hashes. The fingerprint-key tests pre-create the
   POSIX key path and parent path as symlinks and require both creation and read
   attempts to fail loudly without following the link. They also simulate two
   first-run processes racing key creation, an orphaned temporary key file, and a
@@ -578,9 +610,10 @@ Build:
   the remediation message. A race regression delays the winning publisher by two
   seconds before final visibility and proves the losing process remains within
   the 10-second retry budget and never consumes a partial key. Key-path fixtures
-  require `XDG_CONFIG_HOME=""` to resolve to the home
-  fallback, reject `XDG_CONFIG_HOME="relative/path"`, and reject an absolute or
-  symlinked XDG config path that resolves inside the repo.
+  require `XDG_CONFIG_HOME=""` with absolute `$HOME` to resolve to the home
+  fallback, reject unset/empty/relative `$HOME` when the fallback is needed,
+  reject `XDG_CONFIG_HOME="relative/path"`, and reject an absolute or symlinked
+  XDG config path that resolves inside the repo.
 - `oracle_coverage` tests verify constructor-time sorting and deduplication
   rejection, prove two traces differing only in coverage order produce the same
   normalized coverage list, prove two traces with identical function args but
@@ -678,9 +711,14 @@ Build:
   only to commands that consult decision/dev mode, such as analysis, report
   generation, `scripts/audit_reports.py`, and snapshot replay. The accepted
   true/false sets are implemented once in
-  `lib/env_flags.py:is_truthy(name)` and reused by every privacy- or
-  safety-relevant environment flag, including
-  `MORTGAGE_OPS_AUDIT_ACK_REPO_STAGING`.
+  `lib/env_flags.py:is_truthy(name)`. `lib/env_flags.py` owns the closed
+  registry `SAFETY_FLAGS: frozenset[str]`, initially limited to
+  `MORTGAGE_OPS_DEV_MODE` and `MORTGAGE_OPS_AUDIT_ACK_REPO_STAGING`; adding any
+  privacy- or safety-relevant `MORTGAGE_OPS_*` flag requires adding it to that
+  registry and routing reads through `is_truthy`. An AST lint fails
+  `os.environ.get(...)`, `os.getenv(...)`, and `os.environ[...]` reads of any
+  `MORTGAGE_OPS_*` key outside `lib/env_flags.py`, so strict parsing cannot be
+  bypassed by ad hoc environment checks.
   Fuzz fixtures cover unset, `""`, `" "`, `"\t"`, embedded NUL bytes, non-ASCII
   fullwidth digits, Unicode case lookalikes, and whitespace variants, with
   expected blocker-command exit codes for each.
@@ -705,21 +743,27 @@ Build:
   `lib/rules/*.py`; do not create parallel citation-coverage mechanisms.
   The existing rules catalog gains a `sensitivity: public | private` column for
   each predicate row it already indexes. Reference YAML row schemas separately
-  require an explicit `sensitivity: public | private` field with no default, and
-  CI fails when any decision reference row in `data/reference/*.yml` omits it.
-  `data/reference/waivers.yml` is excluded from reference-row sensitivity
-  enforcement and reference-row catalog generation because it is control-plane
-  metadata, not decision reference data. The reference index's
+  require an explicit `share_visibility: public | redact` field with no default,
+  and CI fails when any decision reference row in `data/reference/*.yml` omits it.
+  `redact` means the committed row remains visible to the engine but its value
+  must not appear in share/redact output; it does not mean the row belongs in
+  gitignored User Layer data. `data/reference/waivers.yml` is excluded from
+  reference-row share-visibility enforcement and reference-row catalog generation
+  because it is control-plane metadata, not decision reference data. The reference
+  index's
   `control_plane_files = {"waivers.yml"}` exclusion is the only allowed waiver
   bypass: `waivers.yml` entries are visible through `control_metadata()` for
-  expiry auditing, but never through `rows()` or `row.sensitivity` loading. A new
-  `references/reference-row-catalog.md` maps each reference row identifier to
-  its sensitivity when row-level YAML metadata is not sufficient. The Phase 19
-  reference index utility exposes `row.sensitivity` from the reference-row
+  expiry auditing, but never through `rows()` or `row.share_visibility` loading.
+  A new `references/reference-row-catalog.md` maps each reference row identifier
+  to its share visibility when row-level YAML metadata is not sufficient. The
+  Phase 19 reference index utility exposes `row.share_visibility` from the reference-row
   YAML/catalog source, not from `references/rules-catalog.md`, so trace defaults
   and share redaction do not infer privacy from free-form notes. Share-mode
-  regression tests prove an omitted reference-row sensitivity fails loading
-  before report generation rather than being emitted as public, and that
+  regression tests prove an omitted reference-row share visibility fails loading
+  before report generation rather than being emitted as public, prove committed
+  `redact` rows are visible to the engine, and prove those row values are absent
+  from `--share` output while their redaction reason remains traceable. They also
+  prove that
   `data/reference/waivers.yml` does not trip that gate while still being audited
   for waiver expiry through `control_metadata()`.
 
@@ -774,19 +818,25 @@ Build:
   Each step is idempotent: re-running after failure between nullable add,
   backfill, validation, rebuild, rename, and completion either observes the
   completed step or completes it without data loss. Recovery rules are explicit
-  for every journal/catalog pair: no journal means start from the nullable-add
-  path; `phase21_rebuild_ready` with only the old table present discards and
-  rebuilds the temp table; `phase21_rebuild_ready` with both old and new tables
-  revalidates both and retries the rename transaction; `phase21_catalog_renamed`
-  with `analyzed_listings` already on the constrained schema advances to final
-  validation; `phase21_catalog_renamed` with only the temp table present renames it
-  to `analyzed_listings` after validation; `phase21_complete` is accepted only
+  for every journal/catalog pair: no journal first inspects the catalog; if
+  `analyzed_listings__phase21_new` is absent, it starts from the nullable-add path
+  with idempotent column-add guards; if old and temp tables both exist with no
+  journal, it validates row-count parity, drops the temp table, and restarts the
+  rebuild; if only the temp table exists with no journal, it aborts as catalog
+  corruption with manual-recovery instructions. `phase21_rebuild_ready` with only
+  the old table present discards and rebuilds the temp table;
+  `phase21_rebuild_ready` with both old and new tables revalidates both and
+  retries the rename transaction; `phase21_catalog_renamed` with
+  `analyzed_listings` already on the constrained schema advances to final
+  validation; `phase21_catalog_renamed` with only the temp table present renames
+  it to `analyzed_listings` after validation; `phase21_complete` is accepted only
   when the final constrained table and row count are present, otherwise it is
   treated as corruption and aborts with manual-recovery instructions. The
   migration-version table records only the post-rename catalog state after final
   validation, not "step n complete" before the catalog is known. Regression tests
-  inject a failure between each pair of steps and prove the next invocation
-  finishes with the final NOT NULL/CHECK-constrained table.
+  inject a failure before the first journal write and between each later pair of
+  steps, including the old-plus-temp/no-journal state, and prove the next
+  invocation finishes with the final NOT NULL/CHECK-constrained table.
   `db-write.mjs` asserts before INSERT/UPDATE that `verdict_reasons` is a JSON
   array literal and that
   `reason_taxonomy_version` is never explicitly `NULL`. Unit tests prove direct
@@ -905,17 +955,29 @@ Build:
   listing state.
   Snapshot files are private Data/User Layer artifacts stored by default in a
   repo-external XDG state path: if `$XDG_STATE_HOME` is set, non-empty, and
-  absolute, use `$XDG_STATE_HOME/mortgage-ops/snapshots/private/`; if it is
-  unset or empty, use `~/.local/state/mortgage-ops/snapshots/private/`; if it is
-  relative, fail with a clear configuration error. Repo-local snapshot output is
+  absolute, use `$XDG_STATE_HOME/mortgage-ops/snapshots/private/`; if it is unset
+  or empty, require `$HOME` to be set, non-empty, and absolute, then use
+  `$HOME/.local/state/mortgage-ops/snapshots/private/` without relying on
+  `os.path.expanduser("~")`; if either environment value is relative or `$HOME`
+  is missing/empty for the fallback, fail with a clear configuration error.
+  Repo-local snapshot output is
   allowed only when the caller passes an explicit output path plus
   `--allow-in-repo-snapshot` and a per-run acknowledgement after the tool prints
   the resolved repo root and snapshot path. Any repo-local private snapshot path
-  is added to `DATA_CONTRACT.md`, `.gitignore`, `.pre-commit-config.yaml`,
-  `scripts/hooks/block-user-layer.py`, and the Phase 24 privacy audit as
-  defense in depth, not as the privacy boundary. Any committed snapshot fixture
-  must be synthetic or redacted and must not contain real household income,
-  debts, cash, preferences, or listing notes.
+  must fall under one committed wildcard-protected private prefix such as
+  `snapshots/private/**`; `.gitignore`, `.pre-commit-config.yaml`,
+  `scripts/hooks/block-user-layer.py`, `DATA_CONTRACT.md`, and the Phase 24
+  privacy audit record only the generic prefix rule, never per-snapshot path
+  strings. If local per-path enumeration is needed for defense in depth, it
+  lives in a gitignored local registry consumed by the privacy audit. Any
+  committed snapshot fixture must be synthetic or redacted and must not contain
+  real household income, debts, cash, preferences, or listing notes.
+  Snapshot-private, onboarding-staging, and replay-state private roots are
+  created with owner-only directory mode `0o700`; files inside them are written
+  with mode `0o600`. Creation and reopening use the same owner, symlink,
+  regular-file, `O_NOFOLLOW`, and `fstat` defenses as the fingerprint key, and
+  the privacy audit fails when any configured private root or parent directory
+  is not owned by the current user or is group/other-writable.
   `scripts/replay_snapshot.py <snapshot.json>` is inspect-only by default for
   every snapshot: it validates the snapshot schema, pinned revision, reference
   data, and embedded input hashes but does not check out or run code. Execution
@@ -1007,21 +1069,31 @@ Build:
   and directories even after replay exceptions. Because `SIGKILL`, process
   crashes, OOM kills, and hard power loss can bypass in-process cleanup, replay
   subcommands perform bounded startup cleanup of
-  `$XDG_STATE_HOME/mortgage-ops/replay-state/` or the fallback
-  `~/.local/state/mortgage-ops/replay-state/`; non-replay subcommands and
+  `$XDG_STATE_HOME/mortgage-ops/replay-state/` or the same validated `$HOME`
+  fallback under `$HOME/.local/state/mortgage-ops/replay-state/`; non-replay
+  subcommands and
   discovery paths such as `--help`, `--version`, and `doctor` skip this scan.
   Cleanup reads a single sidecar manifest that lists replay worktrees and
   temporary state directories with PID, process creation time, host identifier,
   wall-clock UTC creation timestamp, optional monotonic timestamp, and snapshot
-  hash, so the normal path does not stat every directory. Each replay startup
-  uses a 100ms foreground cleanup budget, prunes entries immediately when the
-  recorded PID is absent or the live process creation time/host identifier does
-  not match the sidecar, prunes stale replay worktrees older than 24 hours under
-  the same PID/host/process-creation-time check, and exits the foreground pass
-  once the budget is exhausted. Remaining entries are left for the next replay
-  startup or an explicit `replay-prune` maintenance command; replay still checks
-  and refuses to reuse any stale path it is about to create. PID reuse cannot
-  keep a dead checkout or materialized private-state directory indefinitely. If
+  hash, so the normal path does not stat every directory. Every manifest update
+  is a lockfile-mediated read-modify-write using the same
+  `orchestration/lockfile.mjs` semantics as other shared state, writes through a
+  tempfile in the same directory, `fsync`s where supported, and publishes with
+  atomic rename. Unparseable, truncated, or schema-invalid manifests are hard
+  replay failures that surface the manifest path and remediation instead of
+  being treated as absent or deferred cleanup. Each replay startup uses a 100ms
+  foreground cleanup budget, prunes entries immediately when the recorded PID is
+  absent or the live process creation time/host identifier does not match the
+  sidecar, prunes stale replay worktrees older than 24 hours under the same
+  PID/host/process-creation-time check, writes surviving entries back under the
+  same lock-and-rename protocol, and exits the foreground pass once the budget is
+  exhausted. Remaining entries are left for the next replay startup or an
+  explicit `replay-prune` maintenance command; replay still checks and refuses
+  to reuse any stale path it is about to create. A regression simulates two
+  concurrent replay startups racing on manifest update and proves neither entry
+  is lost. PID reuse cannot keep a dead checkout or materialized private-state
+  directory indefinitely. If
   the recorded process
   still matches, or if `git worktree add` or state-directory creation fails
   because a stale path still exists, replay reports the path, recorded host and
@@ -1062,9 +1134,11 @@ Build:
   repo-external staging path resolved by the same XDG rule as other private local
   state: if `$XDG_STATE_HOME` is set, non-empty, and absolute, use
   `$XDG_STATE_HOME/mortgage-ops/onboarding-staging/`; if it is unset or empty,
-  use `~/.local/state/mortgage-ops/onboarding-staging/`; if it is set to a
-  relative path, fail with a clear configuration error. The user copies staged
-  files into place manually. System code must not create, overwrite, or migrate
+  require `$HOME` to be set, non-empty, and absolute, then use
+  `$HOME/.local/state/mortgage-ops/onboarding-staging/` without relying on
+  `os.path.expanduser("~")`; if either environment value is relative or `$HOME`
+  is missing/empty for the fallback, fail with a clear configuration error. The
+  user copies staged files into place manually. System code must not create, overwrite, or migrate
   User Layer paths, and onboarding staging artifacts are classified as private
   anywhere they may contain household values. If tests or local development
   override the staging path into the repo, `.gitignore` and
@@ -1090,9 +1164,10 @@ Build:
   audit compares `os.path.realpath`/`Path.resolve()` for both the expanded
   staging path and repo root, rejects equality or any resolved staging subpath
   below the resolved repo root, and includes fixtures where
-  `$XDG_STATE_HOME=""` falls back to `~/.local/state`,
-  `$XDG_STATE_HOME="relative/dir"` fails before path expansion, and
-  `$XDG_STATE_HOME` is a symlink to a directory inside the repo. A regression
+  `$XDG_STATE_HOME=""` with absolute `$HOME` falls back to
+  `$HOME/.local/state`, unset/empty/relative `$HOME` fails before expansion when
+  the fallback is needed, `$XDG_STATE_HOME="relative/dir"` fails before path
+  expansion, and `$XDG_STATE_HOME` is a symlink to a directory inside the repo. A regression
   invokes the audit from `/tmp` or another non-git directory and asserts this
   explicit failure mode. The audit also
   verifies default snapshot output resolves outside the repo and covers any
@@ -1106,40 +1181,56 @@ Build:
   environment-variable, and config-file acknowledgements are not accepted. It
   prints a structured warning block that names `$XDG_STATE_HOME` as
   shell-controlled and that pre-commit treats as a hard failure. Without a valid
-  per-invocation acknowledgement, the audit exits non-zero. CI refuses
+  per-invocation acknowledgement, the audit exits non-zero. The audit also
+  verifies owner-only mode for default and overridden snapshot-private,
+  onboarding-staging, and replay-state roots, fails when any parent of those
+  private paths is group/other-writable, and applies the same symlink and
+  `O_NOFOLLOW`/`fstat` checks used for the fingerprint key. CI refuses
   `--allow-in-repo-staging`. The
   shareable-report mode depends on Phase 19 trace data: every `TraceEntry` with
   `source_kind=user_provided`,
   `derived_from_user_input=true`, or private `sensitivity` is treated as
   redactable, and `--share` succeeds only when each redactable entry is redacted
   or explicitly whitelisted by the user. Whitelists are per share invocation:
-  users pass one or more `--whitelist <field_path>` arguments, or
+  users pass one or more `--whitelist <report_id>:<display_path>` arguments, or
   `--whitelist-file <path>` pointing at a YAML file used only for that run.
-  `<field_path>` must be an exact `TraceEntry.display_path` value present in the
-  trace index; globs, regexes, wildcards, empty strings, `*`, `?`, `..`, leading
-  slash, and trailing slash are rejected before rendering. Whitelisting is
-  audited per snapshot/report hash through a repo-external private append-only
-  ledger in the same XDG state location as other local private state. Ledger
-  entries are HMAC-signed with the local fingerprint key, and ledger loss or
-  tamper never expands the current whitelist because the ledger is audit-only:
-  share mode never unions prior entries into the current whitelist, and no
-  persistent whitelist exists in committed files, household config, or user
-  config. Every share invocation must explicitly name every field revealed in
-  that output. Interactive runs require a line-by-line confirmation that lists
-  every requested display path, source kind, and any prior ledger disclosures
-  for comparison only; non-interactive runs require an explicit
+  `--whitelist-file` is parsed only with `yaml.safe_load`, rejects custom tags,
+  and must fail a `!!python/object` regression fixture before any
+  `display_path` lookup occurs. Each whitelist entry must be a fully-qualified
+  trace field id whose `report_id` is present in the trace index and whose
+  `display_path` is an exact value for that report; bare display paths and share
+  invocations spanning multiple reports without per-report whitelist entries are
+  rejected. Globs, regexes, wildcards, empty strings, `*`, `?`, `..`, leading
+  slash, and trailing slash are rejected before rendering. A privacy fixture
+  creates two reports with the same `display_path` and proves a whitelist entry
+  reveals only the intended report's field. Whitelisting is audited per
+  snapshot/report hash through a repo-external private append-only ledger in the
+  same XDG state location as other local private state. Ledger entries are
+  HMAC-signed with the local fingerprint key, and ledger loss or tamper never
+  expands the current whitelist because the ledger is audit-only: share mode
+  never unions prior entries into the current whitelist, and no persistent
+  whitelist exists in committed files, household config, or user config. Every
+  share invocation must explicitly name every field revealed in that output.
+  Interactive runs require a line-by-line confirmation that lists every
+  requested fully-qualified field id, source kind, sensitivity, report hash,
+  redaction-manifest hash, audience label, expiry, and any prior ledger
+  disclosures for comparison only; non-interactive runs require an explicit
   `--confirm-whitelist-file`. That file contains the SHA-256 digest of a
-  deterministic canonical whitelist form for the current invocation:
-  UTF-8 without BOM, no trailing newline, and a recursive canonical JSON array
-  of sorted unique `TraceEntry.display_path` strings using the same
-  `sort_keys=True` and compact separators as `lib/trace_canonical.py`; newline
-  and control-character display paths are rejected at `TraceEntry` construction
-  before whitelist digesting. Privacy regressions cover repeated shares
-  of the same snapshot to different audiences and prove a field disclosed in one
-  share is redacted again unless it is explicitly whitelisted in the later run.
-  The same SHA-256 digest and canonicalized whitelisted field paths are recorded
-  in the share manifest so recipients can verify which redactions were skipped
-  and detect post-hoc expansion.
+  deterministic canonical share-confirmation payload for the current invocation:
+  UTF-8 without BOM, no trailing newline, and recursive canonical JSON using the
+  same `sort_keys=True` and compact separators as `lib/trace_canonical.py`.
+  The payload includes command mode, snapshot hash or report hash, canonical
+  redaction manifest hash, audience label, expiry timestamp, and a sorted unique
+  array of entries containing `report_id`, `display_path`, `source_kind`, and
+  `sensitivity`. Confirmations are rejected when the payload does not match the
+  exact artifact being rendered, the audience label differs, or the expiry has
+  passed; newline and control-character display paths are rejected at
+  `TraceEntry` construction before whitelist digesting. Privacy regressions
+  cover repeated shares of the same snapshot to different audiences and prove a
+  field disclosed in one share is redacted again unless it is explicitly
+  whitelisted in the later run. The same SHA-256 digest and canonicalized share
+  confirmation payload are recorded in the share manifest so recipients can
+  verify which redactions were skipped and detect post-hoc expansion.
 - A "household assumptions" report section that lets users see exactly which
   personal assumptions affected a verdict.
 
