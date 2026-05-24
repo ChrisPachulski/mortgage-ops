@@ -791,7 +791,7 @@ def test_ltv_ceiling_table_values() -> None:
     assert LTV_CEILING_BY_TARGET["fha"] == Decimal("0.965")
     assert LTV_CEILING_BY_TARGET["va"] == Decimal("1.00")
     assert LTV_CEILING_BY_TARGET["usda"] == Decimal("1.00")
-    assert LTV_CEILING_BY_TARGET["jumbo"] == Decimal("1.00")
+    assert LTV_CEILING_BY_TARGET["jumbo"] == Decimal("0.90")
 
 
 def test_cltv_ceiling_table_values() -> None:
@@ -802,7 +802,7 @@ def test_cltv_ceiling_table_values() -> None:
     assert CLTV_CEILING_BY_TARGET["fha"] == Decimal("0.965")
     assert CLTV_CEILING_BY_TARGET["va"] == Decimal("1.00")
     assert CLTV_CEILING_BY_TARGET["usda"] == Decimal("1.00")
-    assert CLTV_CEILING_BY_TARGET["jumbo"] == Decimal("1.00")
+    assert CLTV_CEILING_BY_TARGET["jumbo"] == Decimal("0.90")
 
 
 def test_blocked_by_citation_template_constants() -> None:
@@ -1553,7 +1553,7 @@ def test_fha_mip_compute_per_table_row(
         ("fha", Decimal("0.965")),
         ("va", Decimal("1.00")),
         ("usda", Decimal("1.00")),
-        ("jumbo", Decimal("1.00")),
+        ("jumbo", Decimal("0.90")),
     ],
 )
 @pytest.mark.parametrize(
@@ -1572,12 +1572,11 @@ def test_ltv_ceiling_boundary(
     """BLOCKER 4 — LTV ceiling boundary per loan_type.
 
     Per RESEARCH §LTV/CLTV Ceiling Authority + Plan 04-04 LTV_CEILING_BY_TARGET.
-    For target=jumbo, ceiling=1.00 has no v1 enforcement — skip the over-ceiling case.
     For target=usda, the income-cap blocker fires before LTV (high income to pass DTI
-    requires income that exceeds USDA limits) — also skip.
+    requires income that exceeds USDA limits) — skip. Phase 17 polish (2026-05-23):
+    jumbo ceiling tightened from 1.00 (sentinel; no enforcement) to 0.90 (common
+    jumbo lender norm); jumbo over-ceiling case now exercises the blocker.
     """
-    if target_loan_type == "jumbo" and offset > Decimal("0"):
-        pytest.skip("jumbo ceiling 1.00 has no v1 enforcement (RESEARCH A1)")
     if target_loan_type == "usda" and offset > Decimal("0"):
         pytest.skip(
             "USDA target with high income (needed to clear DTI for at-ceiling LTV) "
@@ -1600,7 +1599,10 @@ def test_ltv_ceiling_boundary(
         )
 
     ltv_target = ceiling + offset
-    loan_amount = Decimal("400000.00")
+    # Jumbo classification requires loan_amount > FHFA conforming limit (King WA
+    # one-unit 2026 = $1,027,000). Bump above that floor so target=jumbo isn't
+    # short-circuited by FHFA-LIMIT-JUMBO before LTV-CEILING-JUMBO can fire.
+    loan_amount = Decimal("1200000.00") if target_loan_type == "jumbo" else Decimal("400000.00")
     property_value = (loan_amount / ltv_target).quantize(Decimal("0.01"))
 
     location = LocationFIPS(

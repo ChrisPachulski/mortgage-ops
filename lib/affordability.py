@@ -271,8 +271,14 @@ _LOAN_TYPE_BLOCKER_PREFIX: dict[str, str] = {
 #   conventional 0.97  — Fannie 97% LTV (HomeReady or first-time-buyer; v1
 #                        unconditional per Assumption A1 — FTHB modeling out
 #                        of v1 scope; T-04-04-03 accepted)
-#   jumbo        1.00  — No v1 enforcement; non-agency LTV varies 80-90% in
-#                        practice (sentinel ceiling)
+#   jumbo        0.90  — Common jumbo lender norm for owner-occupied SFH.
+#                        Phase 17 polish (2026-05-23): tightened from the
+#                        v1 sentinel ceiling of 1.00 (which provided no
+#                        enforcement) to 0.90 (the conservative end of the
+#                        80-90% range major lenders post for primary-residence
+#                        jumbos). Above 0.90 LTV jumbo is a niche product
+#                        with materially different pricing and underwriting
+#                        and out of scope for personal-use modeling.
 #   fha          0.965 — HUD Handbook 4000.1; credit_score >= 580
 #   va           1.00  — Full-entitlement vets per VA Pamphlet 26-7 Chapter 3
 #   usda         1.00  — USDA SFH GLP per 7 CFR Part 3555
@@ -280,7 +286,7 @@ _LOAN_TYPE_BLOCKER_PREFIX: dict[str, str] = {
 # LTV ceiling per target_loan_type (RESEARCH §"LTV / CLTV Ceiling Authority").
 LTV_CEILING_BY_TARGET: Final[dict[str, Decimal]] = {
     "conventional": Decimal("0.97"),
-    "jumbo": Decimal("1.00"),
+    "jumbo": Decimal("0.90"),
     "fha": Decimal("0.965"),
     "va": Decimal("1.00"),
     "usda": Decimal("1.00"),
@@ -291,7 +297,7 @@ LTV_CEILING_BY_TARGET: Final[dict[str, Decimal]] = {
 # program's ceiling for v1 personal-use scope).
 CLTV_CEILING_BY_TARGET: Final[dict[str, Decimal]] = {
     "conventional": Decimal("0.97"),
-    "jumbo": Decimal("1.00"),
+    "jumbo": Decimal("0.90"),
     "fha": Decimal("0.965"),
     "va": Decimal("1.00"),
     "usda": Decimal("1.00"),
