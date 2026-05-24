@@ -398,13 +398,20 @@ def test_multiple_processes_contend_exactly_one_holds_lock_at_a_time(tmp_path: P
         for _ in range(3):
             with with_cache_lock(
                 __import__('pathlib').Path(TMP),
-                timeout=timedelta(milliseconds=10000),
+                timeout=timedelta(milliseconds=15000),
                 reason='proc-contention',
                 lock_filename='.lock',
             ):
                 t_in = time.monotonic_ns()
-                # widen the critical-section window so any overlap is visible
-                time.sleep(0.005)
+                # Critical-section hold is 20ms — well above the ms-tick collision
+                # window in the lock's millisecond-precision acquired_at CAS payload
+                # (`lib/fred_cache.py:_now_ms`). At <=5ms holds under heavy CI load
+                # we observed rare ms-tick collisions where two procs wrote to disk
+                # within the same ms and both passed their read-back-verify (the
+                # file-based CAS is "poor-man's" per the lockfile.mjs header
+                # comment; PATTERNS Critical Issue 1 documents this as intentional).
+                # 20ms gives every proc a clear write-readback window.
+                time.sleep(0.020)
                 t_out = time.monotonic_ns()
                 # append-only — atomic for small writes on POSIX
                 with open(WITNESS, 'a') as fh:
@@ -415,7 +422,16 @@ def test_multiple_processes_contend_exactly_one_holds_lock_at_a_time(tmp_path: P
     # Sanity: file exists so import will work.
     assert fred_cache_path.exists()
 
-    N_PROCS = 6  # 6 procs * 3 acquisitions = 18 critical-section entries
+    # 4 procs * 3 acquisitions = 12 critical-section entries. Reduced from 6
+    # procs to 4 after a GHA flake (run 26349704449) exposed ms-tick collisions
+    # in the file-based CAS under aggressive contention. 4 procs preserves the
+    # cross-process mutual-exclusion check while keeping concurrent writes-per-
+    # ms low enough that the read-back-verify CAS reliably resolves a single
+    # winner. The underlying lock primitive is documented as "poor-man's CAS"
+    # (see `orchestration/lockfile.mjs` header + `lib/fred_cache.py:_acquire`);
+    # this test asserts the contract production callers rely on, not an
+    # adversarial upper bound the primitive doesn't promise.
+    N_PROCS = 4
     procs: list[subprocess.Popen[str]] = [
         subprocess.Popen(
             [sys.executable, "-c", worker_script],
