@@ -171,6 +171,10 @@ Build:
   identifier, or appears on a sub-prompt not allowlisted by the template. CI
   records `NOT_APPLICABLE` use by template heading and sub-prompt across PRs and
   flags repeated use of the same bypass on consecutive PRs for human review.
+  Changes to the template's `not_applicable_allowed` allowlist or required
+  heading/sub-prompt list require two-maintainer CODEOWNERS review, and CI fails
+  any PR that edits `.planning/templates/CHANGE-CHECKLIST.md` without a
+  `CHANGELOG.md` entry explaining the template-governance rationale.
 - A committed runbook coverage map at `.planning/runbook-coverage-map.yml` and a
   CI script that maps workflow code paths to required runbook files. For
   example, changes under `lib/rules/` require
@@ -242,7 +246,9 @@ Build:
   whose normalized coefficient length after zero-collapse and insignificant
   trailing-zero stripping exceeds the canonical context precision, or whose
   adjusted exponent is outside the `Emin`/`Emax` bounds, are rejected instead
-  of rounded.
+  of rounded. The canonical preimage is hashed as `SHA-256(preimage_bytes)`,
+  rendered as 64-character lowercase hexadecimal, with no truncation, salt, HMAC
+  key, or algorithm agility.
   Decimal provenance is explicit because Python `Decimal` values cannot carry
   metadata. All Decimal arithmetic that can feed trace args must be performed
   through `lib/decimal_context.py:project_decimal_arg`, which executes the
@@ -251,17 +257,25 @@ Build:
   `context_fingerprint` is an opaque HMAC minted inside
   `lib/decimal_context.py` over the normalized project decimal context, the
   operation name, operands, result, and a monotonic operation counter using a
-  process-local secret generated at import time; callers cannot satisfy
-  provenance validation by copying a constant project-context hash. The HMAC is
-  validation-only and is not part of the deterministic `args_hash` preimage.
-  `lib/decimal_context.py` keeps a non-serializable process-local minted-token
-  registry keyed by `context_fingerprint` and containing the normalized context,
-  operation name, operands, result, counter, and HMAC. `TraceEntry` validation
-  recomputes the HMAC from that registry entry and rejects any
-  `provenance="project_context_arithmetic"` token that was not minted in the
-  current process, including deserialized or hand-constructed tokens. After
-  validation, canonicalization serializes the Decimal value and public
-  project-context descriptor so hashes stay reproducible across processes.
+  process-local secret generated at import time; the monotonic counter
+  increment, HMAC mint, and registry insert happen inside one `threading.Lock`,
+  so concurrent callers cannot reuse a counter or clobber a registry entry.
+  Callers cannot satisfy provenance validation by copying a constant
+  project-context hash. The HMAC is validation-only and is not part of the
+  deterministic `args_hash` preimage. `lib/decimal_context.py` keeps a
+  non-serializable minted-token registry keyed by `context_fingerprint` and
+  containing the normalized context, operation name, operands, result, counter,
+  and HMAC. The registry is scoped to a single report, share, replay, or CLI
+  invocation and is cleared in a `finally` block when that scope exits; long
+  running batch commands open a fresh scope per report/listing, and validation of
+  a token after its scope has ended fails explicitly. Each scope has a documented
+  maximum entry count, and exceeding it raises a structured error instead of
+  silently evicting live tokens. `TraceEntry` validation recomputes the HMAC from
+  that registry entry and rejects any `provenance="project_context_arithmetic"`
+  token that was not minted in the current registry scope, including deserialized
+  or hand-constructed tokens. After validation, canonicalization serializes the
+  Decimal value and public project-context descriptor so hashes stay reproducible
+  across processes.
   Plain `Decimal` values are accepted only for parsed source/reference literals
   whose provenance is declared as non-arithmetic by the caller. `TraceEntry`
   construction rejects computed trace args containing a plain `Decimal` unless
@@ -271,7 +285,10 @@ Build:
   produced while caller contexts are 9, 28, and 50, prove caller precision cannot
   silently change accepted hashes, and reject a forged
   `TraceDecimalArg(value, provenance="project_context_arithmetic",
-  context_fingerprint="<known-context-hash>")`.
+  context_fingerprint="<known-context-hash>")`. A concurrency regression spawns N
+  threads that all perform project-context arithmetic inside one registry scope
+  and asserts every minted token remains unique and validates successfully before
+  scope cleanup.
   Zero-like Decimals are values where `d.is_zero()` is true, regardless of sign
   or exponent, and they are serialized as `"0"` so legitimate arithmetic
   residuals such as `Decimal("-0E-2")` do not destabilize trace hashing. All
@@ -306,9 +323,12 @@ Build:
   over
   function/script args; `oracle_coverage` is trace metadata and is never part of
   the hash preimage. `oracle_coverage` is stored on `TraceEntry` as an immutable
-  `tuple[str, ...]` containing canonical sorted unique named oracle or fixture
-  identifiers, validated at construction and normalized for storage/reporting so
-  order-only differences cannot change coverage reporting. Computed values backed
+  `tuple[str, ...]` containing unique named oracle or fixture identifiers sorted
+  exactly as `sorted(set(coverage), key=lambda s: s)`, i.e. Python's default
+  Unicode codepoint order with no locale collation or case folding. Identifiers
+  are validated at construction and normalized for storage/reporting so
+  order-only differences cannot change coverage reporting; a mixed-case
+  regression fixture proves the ordering is deterministic. Computed values backed
   by committed golden fixtures start with
   `hand_calc:<fixture>`, Phase 22 appends third-party oracle identifiers, and
   the list may be empty only for
@@ -331,13 +351,18 @@ Build:
   walks the constructor-created parent chain, rejects cycles, and raises if any
   child with private ancestry or `derived_from_user_input=true` is not
   `sensitivity=private`. Downgrading such a value to `public` is allowed only
-  through a dedicated audited declassification API that records an explicit
-  reason and has regression tests covering the redaction impact. The committed
+  through `lib/trace_declassify.py:declassify(entry: TraceEntry,
+  justification_slug: str, reviewer: str) -> TraceEntry`, which accepts only a
+  closed enum of non-sensitive justification slugs, requires a reviewer identity,
+  and has regression tests covering the redaction impact. Committed-log writes
+  require a two-maintainer review trace, and an AST lint forbids importing the
+  API outside allowlisted report/share orchestration modules. The committed
   audit artifact is `references/declassification-log.md` and may contain only
-  trace `display_path`, a non-sensitive justification slug, reviewer, and date;
-  full household-specific reasons stay in a gitignored User Layer audit file
-  referenced by local manifest fingerprint. A privacy fixture proves private
-  values and free-form household context cannot appear in the committed log.
+  trace `display_path`, the justification slug, reviewer, review trace, and
+  date; full household-specific reasons stay in a gitignored User Layer audit
+  file referenced by local manifest fingerprint. A privacy fixture proves
+  private values and free-form household context cannot appear in the committed
+  log.
   `derived_from_user_input` is true when a value directly or transitively
   depends on User Layer inputs rather than only when its own `source_kind` is
   `user_provided`; computed trace entries must be created through
@@ -379,24 +404,34 @@ Build:
   reference YAML access must go through `lib/reference_index.py`. Decision-mode
   startup for every report generator and analysis CLI imports
   `lib/reference_index.py` before loading rules or reports; that module installs
-  one process-wide narrow runtime trap based on Python `sys.addaudithook` `open`
-  events. For every candidate path from the audit event, the hook first inspects
-  the caller frame and returns immediately for exact authorized caller paths, so
-  `lib/reference_index.py` can create first-run or test fixture files such as
-  `data/reference/test_*.yml` before those paths exist. For all other callers,
+  one process-wide narrow runtime trap based on Python `sys.addaudithook` events
+  for both `open` and `os.open`. The hook's caller inspection checks only the
+  nearest Python frame outside the audit-hook function itself; an authorized
+  caller is present only when that frame's resolved `f_code.co_filename` equals
+  the realpath of `lib/reference_index.py` or an exact realpath in
+  `.planning/reference-index-allowlist.yml` for approved tests/tools. Module
+  names, package prefixes, symlink aliases, full-stack "called from" matches,
+  and helper functions outside those resolved files are not authorization;
+  helper modules must receive already opened handles or parsed rows rather than
+  reopening reference paths themselves. For every candidate path from either
+  audit event, the hook first performs that exact caller check and returns
+  immediately for authorized callers, so `lib/reference_index.py` can create
+  first-run or test fixture files such as `data/reference/test_*.yml` before
+  those paths exist. For all other callers,
   the hook converts with `os.fspath`, decodes bytes with `os.fsdecode`, resolves
   with `Path(path).resolve(strict=False)`, and treats conversion or resolution
   exceptions as "not a confirmed reference path" so unrelated file opens keep
   their normal behavior. The hook raises only after the resolved path is
   confirmed to be under `data/reference/*.yml`. Startup asserts the trap is
   installed and aborts
-  decision-mode execution if the assertion fails. It fails unauthorized reference
-  YAML opens without
-  monkey-patching `open`, `io.open`, `Path.open`, `Path.read_text`, `os.open`,
-  or stdlib internals, catching common variable indirection and helper-module
-  bypasses that static analysis misses. Fixtures cover `..` components,
-  symlinks targeting `data/reference/`, case-variant paths on case-insensitive
-  filesystems, and bytes-vs-str path arguments. Test fixtures also install the
+  decision-mode execution if the assertion fails. The trap catches Python-level
+  `open`/`os.open` audit events without monkey-patching `open`, `io.open`,
+  `Path.open`, `Path.read_text`, `os.open`, or stdlib internals, catching common
+  variable indirection and helper-module bypasses that static analysis misses.
+  Fixtures cover `..` components, symlinks targeting `data/reference/`,
+  case-variant paths on case-insensitive filesystems, bytes-vs-str path
+  arguments, and an unauthorized `os.open(path, os.O_RDONLY)` call against a
+  reference YAML file. Test fixtures also install the
   same trap during unit and integration runs, and an end-to-end regression
   invokes the production CLI with `python -m ... --decision-mode` under
   `strace -e openat,open` on Linux or `dtruss -t open` on macOS and asserts
@@ -407,9 +442,14 @@ Build:
   blocks legitimate reference fixture creation nor masks ordinary
   `FileNotFoundError` behavior. The trap
   is defense-in-depth, not exhaustive: file descriptors opened before trap
-  installation, native extensions that bypass Python audit events, and
-  out-of-process reads through `subprocess.Popen` remain outside its guarantee
-  and are covered by static lint, the syscall-level regression, and code review.
+  installation, native extensions that bypass Python audit events,
+  implementation paths that issue raw syscalls without Python audit events,
+  concurrent symlink swaps between audit-time `Path.resolve(strict=False)` and
+  the later open syscall, and out-of-process reads through `subprocess.Popen`
+  remain outside its guarantee and are covered by static lint, the syscall-level
+  regression, and code review. Authorized reference-index opens that must defend
+  against symlink TOCTOU use `os.open(..., O_NOFOLLOW)` where available and
+  revalidate `fstat()` after open before parsing bytes.
   Any out-of-process reference-data tooling must be exposed through an
   authorized `lib/reference_index.py` CLI/API wrapper. A negative fixture proves
   `tempfile`, a deliberately nonexistent unrelated path opened during trap
@@ -545,12 +585,12 @@ Build:
   window, the loader unlinks it before retrying creation, but it never deletes or
   overwrites a corrupt final `fingerprint.key` without an explicit user command.
   The error message for a corrupt final key names the path, reports
-  `expected 32 bytes, found N`, and includes both recovery choices: run
-  `truncate -s 32 <quoted-path>` only when the extra bytes are confirmed
-  trailing whitespace, or run `rm <quoted-path>` to delete and regenerate the key
-  after confirming no other process is creating it. The rendered commands use
-  `shlex.quote(path)` for POSIX shell display, and a unit test covers a resolved
-  path containing a single quote, a space, and `$`.
+  `expected 32 bytes, found N`, and offers only `rm <quoted-path>` to delete and
+  regenerate the key after confirming no other process is creating it. The tool
+  never suggests truncating a corrupt final key because that can preserve the
+  wrong first 32 bytes. The rendered command uses `shlex.quote(path)` for POSIX
+  shell display, and a unit test covers a resolved path containing a single
+  quote, a space, and `$`.
   Any broader permission, parent-swap mismatch, pre-existing symlink,
   non-regular file, or insecure key-owned parent directory fails loudly before
   fingerprints are computed. On
@@ -581,8 +621,12 @@ Build:
   retained keys whose metadata fingerprint can match the manifest key id.
   `prune-old-keys` deletes only retained `keys/*.key` files older than a
   user-specified retention window of at least 90 days and never deletes
-  `fingerprint.key` without a separate rotate command. A shorter window is
-  refused unless the invocation includes
+  `fingerprint.key` without a separate rotate command. Age is computed from the
+  filename-embedded UTC timestamp in
+  `keys/<UTC-basic-timestamp>-<old-key-sha256-prefix>.key`, not filesystem
+  mtime; the command validates that grammar before deletion and refuses to prune
+  any retained key whose timestamp cannot be parsed. A shorter window is refused
+  unless the invocation includes
   `--i-understand-this-orphans-snapshots` plus a per-run acknowledgement after
   printing the retained-key count that would be deleted, the newest snapshot key
   id that would become unresolved, and the oldest snapshot timestamp that would
@@ -713,9 +757,12 @@ Build:
   true/false sets are implemented once in
   `lib/env_flags.py:is_truthy(name)`. `lib/env_flags.py` owns the closed
   registry `SAFETY_FLAGS: frozenset[str]`, initially limited to
-  `MORTGAGE_OPS_DEV_MODE` and `MORTGAGE_OPS_AUDIT_ACK_REPO_STAGING`; adding any
-  privacy- or safety-relevant `MORTGAGE_OPS_*` flag requires adding it to that
-  registry and routing reads through `is_truthy`. An AST lint fails
+  `MORTGAGE_OPS_DEV_MODE`; adding any privacy- or safety-relevant
+  `MORTGAGE_OPS_*` flag requires adding it to that registry and routing reads
+  through `is_truthy`. `MORTGAGE_OPS_AUDIT_ACK_REPO_STAGING` is a rejected
+  legacy/input-diagnostic token, not an authorization flag: tests prove setting
+  it never satisfies the repo-local private-staging acknowledgement. An AST lint
+  fails
   `os.environ.get(...)`, `os.getenv(...)`, and `os.environ[...]` reads of any
   `MORTGAGE_OPS_*` key outside `lib/env_flags.py`, so strict parsing cannot be
   bypassed by ad hoc environment checks.
@@ -801,13 +848,21 @@ Build:
   non-array JSON value remains, then rebuilds `analyzed_listings__phase21_new`
   with a table that declares `verdict_reasons JSON NOT NULL DEFAULT '[]' CHECK
   (json_valid(verdict_reasons) AND json_type(verdict_reasons) = 'ARRAY')` and
-  `reason_taxonomy_version INTEGER NOT NULL DEFAULT 0`. The old table is replaced
+  `reason_taxonomy_version INTEGER NOT NULL DEFAULT 0 CHECK
+  (reason_taxonomy_version >= 0)`, plus a table-level CHECK enforcing
+  `(reason_taxonomy_version = 0 AND CAST(verdict_reasons AS VARCHAR) = '[]') OR
+  reason_taxonomy_version >= 1`. The old table is replaced
   through a two-phase migration journal, not an assumed table-swap primitive:
   before rename, the migration writes `phase21_rebuild_ready(old_table,
   new_table)`; the transaction that drops or renames the old table and renames the
   rebuilt table to `analyzed_listings` also writes `phase21_catalog_renamed`;
   after validating the final schema and row counts, it writes `phase21_complete`.
   Existing rows remain version `0`, and new structured rows write version `1`.
+  Any INSERT, UPDATE, or reanalysis write to `verdict_reasons` must atomically
+  write the matching `reason_taxonomy_version`: legacy/no-reason rows write
+  `[]` with version `0`, and any structured reason payload, including a
+  re-evaluated pre-migration row, writes version `1` or higher in the same
+  statement/transaction.
   Migration tests prove the nullable-add/backfill/rebuild path succeeds against
   existing rows and that the post-migration table contains zero `NULL`
   verdict-reason or taxonomy values; they do not accept a branch where
@@ -839,10 +894,14 @@ Build:
   invocation finishes with the final NOT NULL/CHECK-constrained table.
   `db-write.mjs` asserts before INSERT/UPDATE that `verdict_reasons` is a JSON
   array literal and that
-  `reason_taxonomy_version` is never explicitly `NULL`. Unit tests prove direct
-  DB-layer inserts of `NULL`, invalid JSON, non-array JSON, and
-  `reason_taxonomy_version=NULL` fail, including a non-array valid JSON literal
-  that confirms the JSON extension-backed `json_type` check is active.
+  `reason_taxonomy_version` is never explicitly `NULL` or inconsistent with the
+  payload shape. Unit tests prove direct DB-layer inserts of `NULL`, invalid
+  JSON, non-array JSON, `reason_taxonomy_version=NULL`, and
+  `reason_taxonomy_version=0` with a non-empty structured reason array fail,
+  including a non-array valid JSON literal that confirms the JSON
+  extension-backed `json_type` check is active. A reanalysis regression starts
+  with a migrated version-0 row, writes structured reasons, and proves the row
+  advances to taxonomy version `1` in the same write.
   `verdict_reasons` is always a JSON array, never `NULL`; absence of structured
   reasons is represented as `[]`.
 - Reason severity and precedence rules so the top three reasons explain the
@@ -951,8 +1010,9 @@ Build:
   report without reading mutable local private files. Snapshots also embed the
   relevant `analyzed_listings` row or rows used by the report, including
   `verdict_reasons` and listing notes when present, with per-row hashes and a
-  schema-versioned serialization so replay never depends on mutable local DuckDB
-  listing state.
+  schema-versioned canonical JSON serialization so replay never depends on
+  mutable local DuckDB listing state. Embedded listing rows are never pickle,
+  executable object formats, raw DuckDB COPY byte streams, or string-built SQL.
   Snapshot files are private Data/User Layer artifacts stored by default in a
   repo-external XDG state path: if `$XDG_STATE_HOME` is set, non-empty, and
   absolute, use `$XDG_STATE_HOME/mortgage-ops/snapshots/private/`; if it is unset
@@ -983,8 +1043,12 @@ Build:
   data, and embedded input hashes but does not check out or run code. Execution
   requires explicit `--trusted --execute` for every snapshot and then refuses to
   run unless the pinned revision is reachable from a signed release tag already
-  present locally or the snapshot carries a detached signature from a key
-  registered in local user config. Reachability from mutable branches such as
+  present locally or the snapshot carries a detached signature from a trusted
+  replay key registered in the repo-external local state trust store.
+  `mortgage-ops trust-key add <pubkey-file> --purpose snapshot-replay` writes
+  that store with owner-only permissions, records key id, purpose, reviewer, and
+  timestamp in an audit entry, and never mutates User Layer YAML. Reachability
+  from mutable branches such as
   `origin/main` is inspect-only unless the reachable commit or ref is signed by a
   configured trusted key; no replay command fetches remote revisions
   automatically. Trust means signed provenance from a configured key, not branch
@@ -1048,10 +1112,14 @@ Build:
   `!!python/object` payload must fail before any materialized file write, hash
   check, checkout, or execution. Replay refuses to execute snapshots without
   `user_layer_state`, verifies the hash of each materialized input against the
-  snapshot before running code, materializes embedded listing rows into a
-  temporary DuckDB database with the snapshot schema version, verifies each row
-  hash before report generation, and never reads current User Layer files or
-  current `data/analyzed_listings.duckdb` from disk. Before reading
+  snapshot before running code, materializes embedded listing rows from
+  canonical JSON into a temporary DuckDB database with the snapshot schema
+  version using parameterized INSERT statements only, verifies each row hash
+  before report generation, and never reads current User Layer files or current
+  `data/analyzed_listings.duckdb` from disk. Replay rejects pickle payloads, raw
+  DuckDB COPY payloads, and any implementation path that concatenates embedded
+  row text into SQL; an injection fixture puts quotes and `DROP TABLE` text in
+  listing notes and proves the notes round-trip as data. Before reading
   `verdict_reasons`, replay verifies that the pinned code declares snapshot
   schema compatibility for the snapshot's embedded listing-row serialization and
   `min_supported_reason_taxonomy_version` and
@@ -1077,21 +1145,29 @@ Build:
   temporary state directories with PID, process creation time, host identifier,
   wall-clock UTC creation timestamp, optional monotonic timestamp, and snapshot
   hash, so the normal path does not stat every directory. Every manifest update
-  is a lockfile-mediated read-modify-write using the same
-  `orchestration/lockfile.mjs` semantics as other shared state, writes through a
-  tempfile in the same directory, `fsync`s where supported, and publishes with
-  atomic rename. Unparseable, truncated, or schema-invalid manifests are hard
-  replay failures that surface the manifest path and remediation instead of
-  being treated as absent or deferred cleanup. Each replay startup uses a 100ms
+  is a lockfile-mediated read-modify-write against
+  `$STATE_ROOT/replay-state/replay-manifest.lock`; the Python
+  `scripts/replay_snapshot.py` tool shells out to the repo's Node lockfile CLI so
+  it uses the exact `orchestration/lockfile.mjs` protocol instead of a separate
+  Python-only `flock`/`fcntl` scheme. The locked writer writes through a tempfile
+  in the same directory, `fsync`s where supported, and publishes with atomic
+  rename. Unparseable, truncated, or schema-invalid manifests are hard replay
+  failures that surface the manifest path and remediation instead of being
+  treated as absent or deferred cleanup. Each replay startup uses a 100ms
   foreground cleanup budget, prunes entries immediately when the recorded PID is
   absent or the live process creation time/host identifier does not match the
   sidecar, prunes stale replay worktrees older than 24 hours under the same
   PID/host/process-creation-time check, writes surviving entries back under the
   same lock-and-rename protocol, and exits the foreground pass once the budget is
-  exhausted. Remaining entries are left for the next replay startup or an
+  exhausted. Process identity uses `psutil.Process(pid).create_time()` plus the
+  recorded host identifier; on platforms where `psutil` is unavailable or cannot
+  return creation time, cleanup treats entries older than 24 hours as stale
+  regardless of PID reuse and leaves younger matching-PID entries for explicit
+  `replay-prune`. Remaining entries are left for the next replay startup or an
   explicit `replay-prune` maintenance command; replay still checks and refuses
-  to reuse any stale path it is about to create. A regression simulates two
-  concurrent replay startups racing on manifest update and proves neither entry
+  to reuse any stale path it is about to create. Regressions simulate two
+  concurrent replay startups racing on manifest update through the Python replay
+  command and a Node process holding the same lockfile, and prove neither entry
   is lost. PID reuse cannot keep a dead checkout or materialized private-state
   directory indefinitely. If
   the recorded process
@@ -1189,21 +1265,31 @@ Build:
   `--allow-in-repo-staging`. The
   shareable-report mode depends on Phase 19 trace data: every `TraceEntry` with
   `source_kind=user_provided`,
-  `derived_from_user_input=true`, or private `sensitivity` is treated as
-  redactable, and `--share` succeeds only when each redactable entry is redacted
-  or explicitly whitelisted by the user. Whitelists are per share invocation:
-  users pass one or more `--whitelist <report_id>:<display_path>` arguments, or
-  `--whitelist-file <path>` pointing at a YAML file used only for that run.
-  `--whitelist-file` is parsed only with `yaml.safe_load`, rejects custom tags,
-  and must fail a `!!python/object` regression fixture before any
-  `display_path` lookup occurs. Each whitelist entry must be a fully-qualified
-  trace field id whose `report_id` is present in the trace index and whose
-  `display_path` is an exact value for that report; bare display paths and share
-  invocations spanning multiple reports without per-report whitelist entries are
-  rejected. Globs, regexes, wildcards, empty strings, `*`, `?`, `..`, leading
-  slash, and trailing slash are rejected before rendering. A privacy fixture
-  creates two reports with the same `display_path` and proves a whitelist entry
-  reveals only the intended report's field. Whitelisting is audited per
+  `derived_from_user_input=true`, private `sensitivity`, or
+  `source_kind=reference_row` whose reference-index row has
+  `share_visibility=redact` is treated as redactable, and `--share` succeeds
+  only when each redactable entry is redacted or explicitly whitelisted by the
+  user. Whitelists are per share invocation: users pass one or more
+  `--whitelist-field <json>` arguments, each a JSON object with exactly
+  `report_id` and `display_path` string fields, or `--whitelist-file <path>`
+  pointing at a YAML file used only for that run whose top-level value is a
+  non-empty list of mappings with exactly those two keys. `--whitelist-file` is
+  parsed only with `yaml.safe_load`; `None` from an empty file, an empty list,
+  an empty mapping, or any other top-level shape fails loudly with a message
+  telling the operator to remove the flag or populate the file. It rejects
+  custom tags and must fail a
+  `!!python/object` regression fixture before any `display_path` lookup occurs.
+  Each whitelist entry must be a structured fully-qualified trace field id whose
+  `report_id` is present in the trace index and whose `display_path` is an exact
+  value for that report; bare display paths, legacy
+  `<report_id>:<display_path>` strings, and share invocations spanning multiple
+  reports without per-report whitelist entries are rejected. Globs, regexes,
+  wildcards, empty strings, `*`, `?`, `..`, leading slash, and trailing slash
+  are rejected before rendering. Parser fixtures include a valid `display_path`
+  containing `:` and rejected legacy colon-delimited strings, proving delimiter
+  splitting cannot authorize the wrong field. A privacy fixture creates two
+  reports with the same `display_path` and proves a whitelist entry reveals only
+  the intended report's field. Whitelisting is audited per
   snapshot/report hash through a repo-external private append-only ledger in the
   same XDG state location as other local private state. Ledger entries are
   HMAC-signed with the local fingerprint key, and ledger loss or tamper never
@@ -1215,22 +1301,30 @@ Build:
   requested fully-qualified field id, source kind, sensitivity, report hash,
   redaction-manifest hash, audience label, expiry, and any prior ledger
   disclosures for comparison only; non-interactive runs require an explicit
-  `--confirm-whitelist-file`. That file contains the SHA-256 digest of a
-  deterministic canonical share-confirmation payload for the current invocation:
-  UTF-8 without BOM, no trailing newline, and recursive canonical JSON using the
-  same `sort_keys=True` and compact separators as `lib/trace_canonical.py`.
+  `--confirm-whitelist-file`. That file contains a detached signature envelope
+  from a configured trusted approval key, mirroring the snapshot-replay
+  pre-approval verifier. The signed material is the SHA-256 digest of a
+  deterministic canonical share-confirmation payload for the current invocation,
+  rendered as 64-character lowercase hexadecimal with no truncation and computed
+  over UTF-8 without BOM, no trailing newline, and recursive canonical JSON
+  using the same `sort_keys=True` and compact separators as
+  `lib/trace_canonical.py`.
   The payload includes command mode, snapshot hash or report hash, canonical
   redaction manifest hash, audience label, expiry timestamp, and a sorted unique
   array of entries containing `report_id`, `display_path`, `source_kind`, and
-  `sensitivity`. Confirmations are rejected when the payload does not match the
-  exact artifact being rendered, the audience label differs, or the expiry has
-  passed; newline and control-character display paths are rejected at
-  `TraceEntry` construction before whitelist digesting. Privacy regressions
+  `sensitivity`. Confirmations are rejected when the signature is absent, the
+  signing key is not trusted for share approval, the payload digest does not
+  match the exact artifact being rendered, the audience label differs, or the
+  expiry has passed. A bare SHA-256 digest file is treated as a checksum only
+  and is never accepted as non-interactive approval; newline and
+  control-character display paths are rejected at `TraceEntry` construction
+  before whitelist digesting. Privacy regressions
   cover repeated shares of the same snapshot to different audiences and prove a
   field disclosed in one share is redacted again unless it is explicitly
-  whitelisted in the later run. The same SHA-256 digest and canonicalized share
-  confirmation payload are recorded in the share manifest so recipients can
-  verify which redactions were skipped and detect post-hoc expansion.
+  whitelisted in the later run. The same SHA-256 digest, signature metadata, and
+  canonicalized share confirmation payload are recorded in the share manifest so
+  recipients can verify which redactions were skipped and detect post-hoc
+  expansion.
 - A "household assumptions" report section that lets users see exactly which
   personal assumptions affected a verdict.
 
