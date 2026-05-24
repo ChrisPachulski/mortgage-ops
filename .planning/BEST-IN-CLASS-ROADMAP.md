@@ -110,9 +110,13 @@ Build:
   commands. The template is shipped as
   `.planning/templates/CHANGE-CHECKLIST.md`, GSD plan generation copies it into
   each Phase 19+ `PLAN.md`, and CI compares plans against the exact template
-  heading strings. Each required heading must contain at least 40 non-whitespace
-  characters of meaningful prose before the next heading; empty sections and
-  placeholders such as `TBD` or `N/A` fail the check.
+  heading strings. Each required heading contains two to four required
+  sub-prompts that appear verbatim in every copied plan. For example,
+  `Reference-data impact` asks which reference files are read, which
+  `effective_from` dates are crossed, and whether a waiver is added. CI
+  verifies that each required sub-prompt is present and has a non-blocklisted
+  answer line beneath it; empty answers, placeholder-only answers, and filler
+  such as `TBD`, `N/A`, or "see above" fail the check.
 - A committed runbook coverage map at `.planning/runbook-coverage-map.yml` and a
   CI script that maps workflow code paths to required runbook files. For
   example, changes under `lib/rules/` require
@@ -130,8 +134,8 @@ Success criteria:
   that alters a covered workflow updates the runbook in the same PR, so Phase 26
   is a copyedit and audit pass rather than a backfill.
 - A checklist-enforcement test fails when a Phase 19+ plan is missing any of
-  the six required headings or leaves a required section empty, placeholder-only,
-  or below the meaningful-content threshold.
+  the six required headings, omits a required sub-prompt, or leaves a required
+  sub-prompt answer empty, placeholder-only, or blocklisted as filler.
 - A runbook-coverage CI check fails when a Phase 19+ code or reference-data
   change omits the runbook file named by `.planning/runbook-coverage-map.yml`.
 - Phase 26 can focus on end-state release polish, stale-link tests, and
@@ -155,15 +159,25 @@ Build:
   produced only through `lib/trace_canonical.py` using recursive canonical JSON:
   UTF-8 bytes, codepoint `sort_keys=True`, `separators=(",", ":")`, no trailing
   newline, explicit `null` handling, type-tagged dates/datetimes, NFC-normalized
-  strings, and `Decimal` values converted in a fresh canonicalization context
-  with traps for invalid operation, overflow, and division by zero. Unsigned
-  zero-like Decimals are values where `d.is_zero()` is true and `d.is_signed()`
-  is false, and they are serialized as `"0"`; signed zero values such as
-  `Decimal("-0")` are rejected as ambiguous. All other finite Decimals are
-  serialized with `format(value.normalize(context), "f")` so equivalent values
-  such as `0.065` and `0.0650` hash identically. Canonicalization rejects
-  non-finite Decimal values, rejects boolean dictionary keys, and rejects tuples
-  unless a caller explicitly converts them to lists before hashing.
+  strings, and `Decimal` values converted losslessly in
+  `decimal.Context(prec=50, Emax=999, Emin=-999)` with traps for invalid
+  operation, overflow, division by zero, and invalid context. Decimals whose
+  coefficient length exceeds the canonical context precision, or whose adjusted
+  exponent is outside the `Emin`/`Emax` bounds, are rejected instead of rounded.
+  Unsigned zero-like Decimals are values where `d.is_zero()` is true and
+  `d.is_signed()` is false, and they are serialized as `"0"`; signed zero values
+  such as `Decimal("-0")` are rejected as ambiguous. All other finite Decimals
+  are serialized from their sign, digit tuple, and exponent after stripping only
+  insignificant trailing zeros, so equivalent values such as `0.065` and
+  `0.0650` hash identically without context-driven rounding. Canonicalization
+  rejects non-finite Decimal values. `args_hash` input values may only be `str`,
+  `int`, `Decimal`, `bool`, `date`, `datetime`, `None`, `list`, or recursively
+  nested `dict[str, allowed_value]`; dictionary keys must be strings, so boolean,
+  integer, float, Decimal, date, and other non-string keys are rejected instead
+  of coerced. Unsupported input types, including `float`, `set`, `frozenset`,
+  `tuple` unless the caller explicitly converts it to a list, `bytes`,
+  Pydantic models, dataclasses, and enums, fail with a structured error naming
+  the offending path within the args tree.
   Heterogeneous primitive
   values that would otherwise collapse in JSON, such as a raw string
   `"2025-01-01"` and a date for 2025-01-01, must have distinct canonical
@@ -182,8 +196,11 @@ Build:
   sensitivity when `source_kind` is `source_input`, `user_provided`, or
   `heuristic_estimate`; when `derived_from_user_input=true`; or when any parent
   entry in the `TraceEntry.derive` chain has `sensitivity=private`. The gate
-  walks the constructor-created parent chain, rejects cycles, and raises if a
-  child with a private ancestor lacks an explicit sensitivity value.
+  walks the constructor-created parent chain, rejects cycles, and raises if any
+  child with private ancestry or `derived_from_user_input=true` is not
+  `sensitivity=private`. Downgrading such a value to `public` is allowed only
+  through a dedicated audited declassification API that records an explicit
+  reason and has regression tests covering the redaction impact.
   `derived_from_user_input` is true when a value directly or transitively
   depends on User Layer inputs rather than only when its own `source_kind` is
   `user_provided`; computed trace entries must be created through
@@ -198,10 +215,17 @@ Build:
   enumerates loaded `data/reference/*.yml` files, effective dates, source URLs,
   and contributing rows. The report manifest writer and Phase 20 refresh audit
   must both consume this utility instead of scraping reference YAML
-  independently. CI includes a lint/test that scans `lib/` and `scripts/` for
-  direct `data/reference/` path strings outside `lib/reference_index.py` and
-  approved test fixtures, failing on inline YAML access that bypasses the shared
-  staleness and applicability checks.
+  independently. CI includes an AST/import-graph lint that scans every `.py`
+  file under `lib/`, `scripts/`, and `tests/`, excluding
+  `lib/reference_index.py` and exact paths listed in
+  `.planning/reference-index-allowlist.yml`. The lint fails when a call site
+  such as `open`, `Path.read_text`, `yaml.safe_load`, `glob`, or
+  `os.path.join` contains constants or f-strings that can resolve to both
+  `data` and `reference`; when a module imports or re-exports a reference-data
+  path constant for use outside the shared index; or when any module other than
+  `lib/reference_index.py` imports `yaml` and reads from `data/reference`.
+  Allowlist entries are exact file paths, never globs, and approved test
+  fixtures must still exercise the shared staleness and applicability checks.
 - A shared pre-emit trace coverage gate, for example `lib/trace_emit.py`, used by
   every markdown/report producer including `lib/property_report.py`, refi NPV,
   amortization, ARM simulation, and stress-test output. It fails generation when
@@ -222,10 +246,16 @@ Build:
 - `scripts/audit_reports.py` is a local audit tool for reports generated before
   the pre-emit gate existed or for explicitly non-decision/dev-mode output; it
   is not a substitute for the shared gate and cannot bless decision-ready
-  reports that failed pre-emit validation. A report blessing requires a manifest
-  with both `pre_emit_gate_passed: true` and `decision_mode: true`; when either
-  field is missing or false, `scripts/audit_reports.py` exits with code `2` to
-  signal legacy/dev-mode inspection without decision-use blessing, distinct from
+  reports that failed pre-emit validation. Every Phase 19+ report producer sets
+  `manifest_schema_version: 1` in its manifest. A report blessing requires a
+  version-1-or-newer manifest with both `pre_emit_gate_passed: true` and
+  `decision_mode: true`. When no manifest is present, or when a manifest is
+  present with `manifest_schema_version < 1`, `scripts/audit_reports.py` exits
+  with code `2` to signal genuine legacy or explicitly non-decision/dev-mode
+  inspection without decision-use blessing. When
+  `manifest_schema_version >= 1` but `pre_emit_gate_passed` or `decision_mode`
+  is missing or false, the tool exits with code `3` to signal a broken Phase
+  19+ producer that must be investigated. Both outcomes are distinct from
   ordinary audit failures.
 - A deterministic local report manifest containing code revision, listing hash,
   reference-data effective dates, and private-input fingerprints. Fingerprints
@@ -236,12 +266,26 @@ Build:
   committed. Key resolution uses exactly one path: if `$XDG_CONFIG_HOME` is set,
   `$XDG_CONFIG_HOME/mortgage-ops/fingerprint.key`; otherwise
   `~/.config/mortgage-ops/fingerprint.key`. The loader never searches both
-  locations or falls back silently. On POSIX, the key file is created with mode
-  `0600` and that mode is verified on every read; any broader permission fails
-  loudly before fingerprints are computed. On Windows, the key resolves to
+  locations or falls back silently. On POSIX, the parent directory is created
+  and verified as a non-symlink directory with mode `0700` before the key is
+  touched. The key file is created atomically with
+  `os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600)`;
+  reads use `os.open(path, os.O_RDONLY | os.O_NOFOLLOW)` followed by `os.fstat`
+  to verify the inode is a regular file owned by the current user with mode
+  `0600` before any bytes are read. Any broader permission, pre-existing
+  symlink, non-regular file, or insecure parent directory fails loudly before
+  fingerprints are computed. On Windows, the key resolves to
   `%LOCALAPPDATA%\mortgage-ops\fingerprint.key` only if the implementation sets
   an explicit current-user-only ACL, for example via `pywin32`; otherwise the
   fingerprint feature refuses to run with a clear unsupported-platform message.
+  Production decision-mode reports are POSIX-only until that ACL-backed Windows
+  path exists. On Windows without explicit ACL support, manifest generation
+  disables fingerprints and omits `private_input_fingerprints` entirely, rather
+  than writing `null` or an empty object, only for non-decision/dev-mode output.
+  Snapshot replay treats any snapshot manifest that contains private-input
+  fingerprints as requiring fingerprint capability; replay on an unsupported
+  Windows host fails with the same unsupported-platform message instead of
+  reproducing a fingerprintless manifest.
   Losing the key makes historical private fingerprints incomparable. Rotation is
   an explicit user action that retains old and new keys for manifest comparison
   until the user runs an explicit `prune-old-keys` command; multi-machine
@@ -250,10 +294,14 @@ Build:
 - A hash-stability test for `lib/trace_canonical.py` proving that equivalent
   nested inputs, including `Decimal("0.065")` and `Decimal("0.0650")`, dates,
   datetimes, and `None`, produce identical canonical preimages and hashes, while
-  string-vs-date, bool-key, tuple, Unicode normalization, signed zero
-  `Decimal("-0")`, exponent-zero `Decimal("0E+10")`, scale-zero
-  `Decimal("0.00")`, and non-finite Decimal boundary cases are either distinct
-  or rejected as specified.
+  string-vs-date, string-vs-numeric dictionary keys, bool-key, tuple, Unicode
+  normalization, signed zero `Decimal("-0")`, exponent-zero `Decimal("0E+10")`,
+  scale-zero `Decimal("0.00")`, high-precision Decimal values longer than the
+  canonical context, caller process contexts with `getcontext().prec` set to 9,
+  28, and 50, and non-finite Decimal boundary cases are either distinct or
+  rejected as specified. The fingerprint-key tests pre-create the POSIX key path
+  as a symlink and require both creation and read attempts to fail loudly without
+  following the link.
 
 Success criteria:
 
@@ -307,23 +355,31 @@ Build:
   and includes boundary fixtures around annual rule-change dates. Permissive
   CLI-only bypasses that still claim decision-ready output are out of scope. A
   documented non-decision development mode, exposed as
-  `--no-decision-mode` or `MORTGAGE_OPS_DEV_MODE=1`, may downgrade
+  `--no-decision-mode` or `MORTGAGE_OPS_DEV_MODE`, may downgrade
   stale-reference failures to warnings only when generated manifests are tagged
-  `decision_mode: false`; every markdown report generated in that mode must
-  start with the visible blockquote banner
+  `decision_mode: false`. The environment variable enables dev mode only when
+  set to exactly `1`, `true`, `yes`, or `on`, case-insensitive and with no
+  leading or trailing whitespace; an empty value is treated as unset, and every
+  other non-empty value, including `0`, `false`, `no`, and `off`, is rejected at
+  startup with an error naming `MORTGAGE_OPS_DEV_MODE`. Every markdown report
+  generated in that mode must start with the visible blockquote banner
   `> DEV MODE - REFERENCE DATA IS STALE - NOT FOR DECISION USE`, and CI verifies
   the banner is present in dev-mode fixtures, absent in decision-mode fixtures,
   and that
-  `MORTGAGE_OPS_DEV_MODE` is unset in decision-mode test jobs.
+  `MORTGAGE_OPS_DEV_MODE` is unset in decision-mode test jobs. Dev-mode parser
+  tests cover every accepted value and a representative set of rejected values.
 - Extend the existing rules-catalog floor in
   `references/rules-catalog.md` and
   `tests/test_rules/test_citation_coverage.py` so the catalog cannot drift from
   `lib/rules/*.py`; do not create parallel citation-coverage mechanisms.
-  Reference YAML row schemas gain `sensitivity: public | private` with default
-  `public`, the rules catalog gains the parallel sensitivity column for rows it
-  indexes, and the Phase 19 reference index utility exposes sensitivity on each
-  row so trace defaults and share redaction do not infer privacy from free-form
-  notes.
+  The existing rules catalog gains a `sensitivity: public | private` column for
+  each predicate row it already indexes. Reference YAML row schemas separately
+  gain `sensitivity: public | private` with default `public`, and a new
+  `references/reference-row-catalog.md` maps each reference row identifier to
+  its sensitivity when row-level YAML metadata is not sufficient. The Phase 19
+  reference index utility exposes `row.sensitivity` from the reference-row
+  YAML/catalog source, not from `references/rules-catalog.md`, so trace defaults
+  and share redaction do not infer privacy from free-form notes.
 
 Success criteria:
 
@@ -347,9 +403,12 @@ Build:
   `precedence: int`. Structured reasons are stored in the
   `analyzed_listings.verdict_reasons` JSON field. The forward-only migration is
   executed through `orchestration/db-write.mjs` under the existing lockfile and
-  adds `verdict_reasons JSON` and `reason_taxonomy_version INTEGER DEFAULT 0`
-  to `analyzed_listings`; existing rows remain version `0`, and new structured
-  rows write version `1`.
+  adds `verdict_reasons JSON DEFAULT '[]'` and
+  `reason_taxonomy_version INTEGER DEFAULT 0` to `analyzed_listings`. The same
+  migration transaction backfills `UPDATE analyzed_listings SET verdict_reasons
+  = '[]' WHERE verdict_reasons IS NULL`; existing rows remain version `0`, and
+  new structured rows write version `1`. `verdict_reasons` is always a JSON
+  array, never `NULL`; absence of structured reasons is represented as `[]`.
 - Reason severity and precedence rules so the top three reasons explain the
   verdict without burying the user in raw matrix output.
 - Gap-fill prompts that ask only for decision-critical missing fields, with
@@ -360,11 +419,17 @@ Build:
   location counterfactuals are deferred until a later phase defines bounded
   search and monotonicity checks. The explanatory "because" clause may reference
   fixed, read-only constraints such as the current DTI cap or program limit, but
-  it must not search or vary any deferred axis.
+  it must not search or vary any deferred axis. When `decision_mode: false`, any
+  reference-derived number in that clause must carry an inline stale-reference
+  marker naming the source file and effective date, for example
+  `[stale: atr-qm-thresholds.yml effective 2024-01-01]`; if the cited row cannot
+  be identified precisely, counterfactual generation is suppressed with
+  `counterfactual analysis suppressed: reference data is stale`.
   Example report language:
   "This becomes GO if down payment rises to X" or
   "This remains NO-GO even at 25% down because the fixed DTI cap is still
-  exceeded."
+  exceeded." In non-decision/dev-mode output, the second sentence must inline
+  the stale marker immediately after the reference-derived cap value.
 - Golden verdict fixtures for ambiguous cases, not just happy paths.
 - A backward-compatibility policy for pre-Phase-21 free-text reasons:
   preserve them outside `TraceEntry.source_kind` as `reason_kind=legacy_free_text`
@@ -380,6 +445,9 @@ Success criteria:
   eligibility, stress path, or data uncertainty.
 - Claude narrates reasons from structured fields; it does not invent or reorder
   the decision logic.
+- A freshly migrated database with version-0 rows and empty `verdict_reasons`
+  still produces a valid report through the existing reader path without
+  iterating over `NULL`.
 
 ### Phase 22: Oracle Mesh
 
@@ -434,16 +502,26 @@ Build:
   future reference-data refreshes. Snapshots include the pinned code revision,
   reference-data versions, a hash of User Layer state, and all User Layer inputs
   needed to reproduce the report without reading mutable local private files.
+  Snapshot files are private Data/User Layer artifacts stored only under
+  `reports/snapshots/private/` by default; that path is added to
+  `DATA_CONTRACT.md`, `.gitignore`, `.pre-commit-config.yaml`,
+  `scripts/hooks/block-user-layer.py`, and the Phase 24 privacy audit. Any
+  committed snapshot fixture must be synthetic or redacted and must not contain
+  real household income, debts, cash, preferences, or listing notes.
   `scripts/replay_snapshot.py <snapshot.json>` is inspect-only by default for
   every snapshot: it validates the snapshot schema, pinned revision, reference
   data, and embedded input hashes but does not check out or run code. Execution
   requires explicit `--trusted --execute` for every snapshot, uses an isolated
   temporary `git worktree add` checkout of the pinned revision, never fetches
   remote revisions automatically, refuses to proceed if `git status --porcelain
-  --untracked-files=all` reports any changes in the source worktree, and verifies
-  the embedded User Layer input state instead of reading current User Layer files
-  from disk. If the revision or inputs are unavailable, replay fails loudly
-  instead of silently downgrading to inspection.
+  --untracked-files=all` reports any changes in the source worktree, and
+  materializes the embedded `user_layer_state` block into the temporary worktree
+  at the standard User Layer paths before invoking the pinned code. Replay
+  refuses to execute snapshots without `user_layer_state`, verifies the hash of
+  each materialized input against the snapshot before running code, never reads
+  current User Layer files from disk, and removes the temporary checkout with
+  `git worktree remove --force` on exit. If the revision or inputs are
+  unavailable, replay fails loudly instead of silently downgrading to inspection.
 
 Success criteria:
 
@@ -453,6 +531,9 @@ Success criteria:
 - Snapshots are replayable: `scripts/replay_snapshot.py <snapshot.json>`
   verifies pinned code, inputs, and reference data reproduce bit-identical
   results or exits non-zero with the missing prerequisite.
+- Snapshot privacy tests prove real snapshot output lands only in ignored
+  private paths, synthetic/redacted fixtures are the only committed snapshots,
+  and the pre-commit hook plus privacy audit block repo-local private snapshots.
 - Ergonomics stay report/CLI/skill based; no complex UI unless repeated real
   use proves it would reduce decision risk.
 
@@ -488,15 +569,27 @@ Build:
   overrides. It proves no private paths are staged or committed and verifies the
   resolved onboarding staging path after environment-variable expansion is
   outside `git rev-parse --show-toplevel`, not merely that the default template
-  path is external. Onboarding refuses to write staging artifacts below the repo
+  path is external. The audit also covers `reports/snapshots/private/` and any
+  configured snapshot output override, treating snapshots as private whenever
+  they contain embedded User Layer state. Onboarding refuses to write staging
+  artifacts below the repo
   root even when `$XDG_STATE_HOME` points there unless the caller passes an
-  explicit `--allow-in-repo-staging` flag; the audit flags that opt-in and names
-  `$XDG_STATE_HOME` as shell-controlled in its failure message. The
+  explicit `--allow-in-repo-staging` flag. When that flag is used, the audit
+  exits `0` only if the current shell also sets
+  `MORTGAGE_OPS_AUDIT_ACK_REPO_STAGING=1`; it prints a structured warning block
+  that names `$XDG_STATE_HOME` as shell-controlled and that pre-commit treats as
+  a hard failure. Without the acknowledgement variable, the audit exits
+  non-zero. CI never sets `MORTGAGE_OPS_AUDIT_ACK_REPO_STAGING`. The
   shareable-report mode depends on Phase 19 trace data: every `TraceEntry` with
   `source_kind=user_provided`,
   `derived_from_user_input=true`, or private `sensitivity` is treated as
   redactable, and `--share` succeeds only when each redactable entry is redacted
-  or explicitly whitelisted by the user.
+  or explicitly whitelisted by the user. Whitelists are per share invocation:
+  users pass one or more `--whitelist <field_path>` arguments, or
+  `--whitelist-file <path>` pointing at a YAML file used only for that run. No
+  persistent whitelist exists in committed files, household config, or user
+  config. The redacted output records the whitelisted field paths in the share
+  manifest so recipients can see which redactions were skipped.
 - A "household assumptions" report section that lets users see exactly which
   personal assumptions affected a verdict.
 
@@ -558,7 +651,9 @@ Build:
 - A lightweight release checklist for milestone closure:
   full test suite, mypy, ruff, reference staleness audit, oracle coverage audit,
   report traceability audit, and confirmation that no decision-mode report was
-  blessed through `scripts/audit_reports.py` instead of the pre-emit gate.
+  blessed through `scripts/audit_reports.py` instead of the pre-emit gate, and
+  that no `scripts/audit_reports.py` exit-code-3 output exists for Phase 19+
+  manifests.
 - Extend the existing references split documented in `CLAUDE.md`: top-level
   `references/` for repo maintainers and
   `.claude/skills/mortgage-ops/references/` for skill progressive disclosure.
