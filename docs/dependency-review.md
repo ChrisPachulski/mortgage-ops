@@ -124,10 +124,11 @@ entry above should clear in a single bump. Revisit quarterly.
 
 ### Python (`IGNORE_PIP_VULNS`)
 
-None currently. The most recent finding (`CVE-2026-45409` in `idna 3.13`,
-Moderate severity) is below the High/Critical fail threshold and is
-expected to clear when `idna` is bumped to `>=3.15` during the next
-quarterly review.
+None currently. The previously-flagged Moderate finding (`CVE-2026-45409`
+in `idna 3.13`) was cleared on 2026-05-23 by `uv lock --upgrade-package
+idna`, which bumped the transitive dep to `3.16` (past the `3.15` fix).
+`bash scripts/audit-deps.sh` now reports zero Python vulnerabilities at
+any severity.
 
 ## License compatibility policy
 
