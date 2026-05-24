@@ -113,6 +113,14 @@ Build:
   heading strings. Each required heading must contain at least 40 non-whitespace
   characters of meaningful prose before the next heading; empty sections and
   placeholders such as `TBD` or `N/A` fail the check.
+- A committed runbook coverage map at `.planning/runbook-coverage-map.yml` and a
+  CI script that maps workflow code paths to required runbook files. For
+  example, changes under `lib/rules/` require
+  `docs/runbook/adding-predicate.md`, changes under `data/reference/*.yml`
+  require `docs/runbook/reference-refresh.md`, and report generator changes
+  require the report-regeneration runbook. If a PR touches a mapped path without
+  touching the corresponding runbook file, CI fails with the missing runbook
+  target listed explicitly.
 
 Success criteria:
 
@@ -124,6 +132,8 @@ Success criteria:
 - A checklist-enforcement test fails when a Phase 19+ plan is missing any of
   the six required headings or leaves a required section empty, placeholder-only,
   or below the meaningful-content threshold.
+- A runbook-coverage CI check fails when a Phase 19+ code or reference-data
+  change omits the runbook file named by `.planning/runbook-coverage-map.yml`.
 - Phase 26 can focus on end-state release polish, stale-link tests, and
   hardening rather than inventing the maintenance process late.
 
@@ -145,11 +155,16 @@ Build:
   produced only through `lib/trace_canonical.py` using recursive canonical JSON:
   UTF-8 bytes, codepoint `sort_keys=True`, `separators=(",", ":")`, no trailing
   newline, explicit `null` handling, type-tagged dates/datetimes, NFC-normalized
-  strings, and `Decimal` values converted with `format(value.normalize(), "f")`
-  after mapping zero-like values to `"0"` so equivalent values such as `0.065`
-  and `0.0650` hash identically. Canonicalization rejects non-finite Decimal
-  values, rejects boolean dictionary keys, and rejects tuples unless a caller
-  explicitly converts them to lists before hashing. Heterogeneous primitive
+  strings, and `Decimal` values converted in a fresh canonicalization context
+  with traps for invalid operation, overflow, and division by zero. Unsigned
+  zero-like Decimals are values where `d.is_zero()` is true and `d.is_signed()`
+  is false, and they are serialized as `"0"`; signed zero values such as
+  `Decimal("-0")` are rejected as ambiguous. All other finite Decimals are
+  serialized with `format(value.normalize(context), "f")` so equivalent values
+  such as `0.065` and `0.0650` hash identically. Canonicalization rejects
+  non-finite Decimal values, rejects boolean dictionary keys, and rejects tuples
+  unless a caller explicitly converts them to lists before hashing.
+  Heterogeneous primitive
   values that would otherwise collapse in JSON, such as a raw string
   `"2025-01-01"` and a date for 2025-01-01, must have distinct canonical
   preimages. `oracle_coverage` is a list of named oracle or fixture
@@ -162,15 +177,21 @@ Build:
   explicitly for `source_input`, `user_provided`, and `heuristic_estimate`
   entries; reference rows default to public unless their catalog entry marks
   them private, and computed entries derived from user input default to private.
-  The trace emission gate fails on unset sensitivity for any entry whose source
-  kind or dependencies could expose private data. `derived_from_user_input` is
-  true when a value directly or transitively depends on User Layer inputs rather
-  than only when its own `source_kind` is `user_provided`; computed trace entries
-  must be created through `TraceEntry.derive(parent_entries, ...)` in
-  `lib/trace_canonical.py`, which OR-folds the flag across parents, and the gate
-  rejects computed entries constructed without that derivation metadata. Trace
-  indexes include a report-scoped identifier so `display_path` collisions across
-  reports cannot alias entries.
+  The trace emission gate uses one shared function,
+  `lib/trace_emit.py:check_sensitivity_propagation`, and fails on unset
+  sensitivity when `source_kind` is `source_input`, `user_provided`, or
+  `heuristic_estimate`; when `derived_from_user_input=true`; or when any parent
+  entry in the `TraceEntry.derive` chain has `sensitivity=private`. The gate
+  walks the constructor-created parent chain, rejects cycles, and raises if a
+  child with a private ancestor lacks an explicit sensitivity value.
+  `derived_from_user_input` is true when a value directly or transitively
+  depends on User Layer inputs rather than only when its own `source_kind` is
+  `user_provided`; computed trace entries must be created through
+  `TraceEntry.derive(parent_entries, ...)` in `lib/trace_canonical.py`, which
+  OR-folds the flag across parents, and the gate rejects computed entries
+  constructed without that derivation metadata. Trace indexes include a
+  report-scoped identifier so `display_path` collisions across reports cannot
+  alias entries.
 - Report-side citation footers generated from trace data, not manually composed
   strings.
 - A shared reference index utility, for example `lib/reference_index.py`, that
@@ -201,25 +222,38 @@ Build:
 - `scripts/audit_reports.py` is a local audit tool for reports generated before
   the pre-emit gate existed or for explicitly non-decision/dev-mode output; it
   is not a substitute for the shared gate and cannot bless decision-ready
-  reports that failed pre-emit validation.
+  reports that failed pre-emit validation. A report blessing requires a manifest
+  with both `pre_emit_gate_passed: true` and `decision_mode: true`; when either
+  field is missing or false, `scripts/audit_reports.py` exits with code `2` to
+  signal legacy/dev-mode inspection without decision-use blessing, distinct from
+  ordinary audit failures.
 - A deterministic local report manifest containing code revision, listing hash,
   reference-data effective dates, and private-input fingerprints. Fingerprints
   for household/profile inputs are stored only in local private manifests or are
   computed as keyed HMACs with a local uncommitted secret; shareable reports and
   redacted manifests must omit these fields. The HMAC key is generated on first
-  run with `secrets.token_bytes(32)`, stored outside the repo at
-  `$XDG_CONFIG_HOME/mortgage-ops/fingerprint.key` or
-  `~/.config/mortgage-ops/fingerprint.key` with owner-only permissions, and
-  never committed. Losing the key makes historical private fingerprints
-  incomparable. Rotation is an explicit user action that writes a new key and
-  emits old-key and new-key fingerprints for one retained manifest cycle;
-  multi-machine consistency is out of scope unless the user manually installs
-  the same key on each machine.
+  run with `secrets.token_bytes(32)`, stored outside the repo, and never
+  committed. Key resolution uses exactly one path: if `$XDG_CONFIG_HOME` is set,
+  `$XDG_CONFIG_HOME/mortgage-ops/fingerprint.key`; otherwise
+  `~/.config/mortgage-ops/fingerprint.key`. The loader never searches both
+  locations or falls back silently. On POSIX, the key file is created with mode
+  `0600` and that mode is verified on every read; any broader permission fails
+  loudly before fingerprints are computed. On Windows, the key resolves to
+  `%LOCALAPPDATA%\mortgage-ops\fingerprint.key` only if the implementation sets
+  an explicit current-user-only ACL, for example via `pywin32`; otherwise the
+  fingerprint feature refuses to run with a clear unsupported-platform message.
+  Losing the key makes historical private fingerprints incomparable. Rotation is
+  an explicit user action that retains old and new keys for manifest comparison
+  until the user runs an explicit `prune-old-keys` command; multi-machine
+  consistency is out of scope unless the user manually installs the same key on
+  each machine.
 - A hash-stability test for `lib/trace_canonical.py` proving that equivalent
   nested inputs, including `Decimal("0.065")` and `Decimal("0.0650")`, dates,
   datetimes, and `None`, produce identical canonical preimages and hashes, while
-  string-vs-date, bool-key, tuple, Unicode normalization, and non-finite Decimal
-  boundary cases are either distinct or rejected as specified.
+  string-vs-date, bool-key, tuple, Unicode normalization, signed zero
+  `Decimal("-0")`, exponent-zero `Decimal("0E+10")`, scale-zero
+  `Decimal("0.00")`, and non-finite Decimal boundary cases are either distinct
+  or rejected as specified.
 
 Success criteria:
 
@@ -262,6 +296,11 @@ Build:
   check requires a waiver only when a reference file is stale, defined as more
   than 12 months after its `effective` date. For stale files, absent, malformed,
   or expired waivers cause failure; non-stale files do not require waivers.
+  Waiver paths are exact relative file paths under `data/reference/`; globs are
+  rejected. The waiver loader rejects entries where `granted_on > expires_on`,
+  where `granted_on` is in the future, or where two entries share the same
+  `path`, and it reports the offending waiver line instead of surfacing a
+  generic staleness failure.
   Freshness and decision-date applicability are separate checks: the reference
   index records `effective_from`/`effective_to` or superseded metadata for rows,
   rejects future-effective rows unless an explicit simulation mode is selected,
@@ -270,11 +309,21 @@ Build:
   documented non-decision development mode, exposed as
   `--no-decision-mode` or `MORTGAGE_OPS_DEV_MODE=1`, may downgrade
   stale-reference failures to warnings only when generated manifests are tagged
-  `decision_mode: false`.
+  `decision_mode: false`; every markdown report generated in that mode must
+  start with the visible blockquote banner
+  `> DEV MODE - REFERENCE DATA IS STALE - NOT FOR DECISION USE`, and CI verifies
+  the banner is present in dev-mode fixtures, absent in decision-mode fixtures,
+  and that
+  `MORTGAGE_OPS_DEV_MODE` is unset in decision-mode test jobs.
 - Extend the existing rules-catalog floor in
   `references/rules-catalog.md` and
   `tests/test_rules/test_citation_coverage.py` so the catalog cannot drift from
   `lib/rules/*.py`; do not create parallel citation-coverage mechanisms.
+  Reference YAML row schemas gain `sensitivity: public | private` with default
+  `public`, the rules catalog gains the parallel sensitivity column for rows it
+  indexes, and the Phase 19 reference index utility exposes sensitivity on each
+  row so trace defaults and share redaction do not infer privacy from free-form
+  notes.
 
 Success criteria:
 
@@ -295,10 +344,12 @@ Build:
   `heuristic_estimate`, `tax_caveat`, `market_context`, `preference_mismatch`.
 - A `VerdictReason` Pydantic model whose `reason_kind` is one of the taxonomy
   values or `legacy_free_text`, with `reason_text: str`, `severity: int`, and
-  `precedence: int`. Structured reasons are stored in a documented
-  `analyzed_listings` JSON field, and the migration sets
-  `reason_taxonomy_version=0` for existing rows and version `1` for new
-  structured rows.
+  `precedence: int`. Structured reasons are stored in the
+  `analyzed_listings.verdict_reasons` JSON field. The forward-only migration is
+  executed through `orchestration/db-write.mjs` under the existing lockfile and
+  adds `verdict_reasons JSON` and `reason_taxonomy_version INTEGER DEFAULT 0`
+  to `analyzed_listings`; existing rows remain version `0`, and new structured
+  rows write version `1`.
 - Reason severity and precedence rules so the top three reasons explain the
   verdict without burying the user in raw matrix output.
 - Gap-fill prompts that ask only for decision-critical missing fields, with
@@ -319,7 +370,8 @@ Build:
   preserve them outside `TraceEntry.source_kind` as `reason_kind=legacy_free_text`
   with `reason_taxonomy_version=0`, exclude them from precedence ranking, add
   `reason_taxonomy_version` to `analyzed_listings`, and require Phase 23 snapshot
-  queries to gate on that version before using structured reason fields.
+  queries to verify the snapshot-pinned `reason_taxonomy_version` before reading
+  `verdict_reasons`.
 
 Success criteria:
 
@@ -380,14 +432,18 @@ Build:
   GO candidates, WATCH requiring gap-fill, NO-GO with blocker reason.
 - Report snapshots that preserve assumptions used at decision time, even after
   future reference-data refreshes. Snapshots include the pinned code revision,
-  reference-data versions, and inputs needed for
-  `scripts/replay_snapshot.py <snapshot.json>` to check out the pinned revision
-  when available, rerun the analysis, and assert bit-identical output; if the
-  revision or inputs are unavailable, replay fails loudly instead of silently
-  downgrading to inspection. Replay treats snapshots as trusted local artifacts
-  by default, refuses to run with a dirty worktree, never fetches remote revisions
-  automatically, and requires an explicit `--trusted --execute` opt-in before it
-  checks out and runs code from a pinned revision supplied by an external source.
+  reference-data versions, a hash of User Layer state, and all User Layer inputs
+  needed to reproduce the report without reading mutable local private files.
+  `scripts/replay_snapshot.py <snapshot.json>` is inspect-only by default for
+  every snapshot: it validates the snapshot schema, pinned revision, reference
+  data, and embedded input hashes but does not check out or run code. Execution
+  requires explicit `--trusted --execute` for every snapshot, uses an isolated
+  temporary `git worktree add` checkout of the pinned revision, never fetches
+  remote revisions automatically, refuses to proceed if `git status --porcelain
+  --untracked-files=all` reports any changes in the source worktree, and verifies
+  the embedded User Layer input state instead of reading current User Layer files
+  from disk. If the revision or inputs are unavailable, replay fails loudly
+  instead of silently downgrading to inspection.
 
 Success criteria:
 
@@ -429,9 +485,14 @@ Build:
 - A privacy audit command that extends `DATA_CONTRACT.md`, `.gitignore`,
   `.pre-commit-config.yaml`, and `scripts/hooks/block-user-layer.py`
   protections to User Layer paths and any repo-local onboarding staging
-  overrides. It proves no private paths are staged or committed, verifies the
-  default onboarding staging path is outside the repo, and its shareable-report
-  mode depends on Phase 19 trace data: every `TraceEntry` with
+  overrides. It proves no private paths are staged or committed and verifies the
+  resolved onboarding staging path after environment-variable expansion is
+  outside `git rev-parse --show-toplevel`, not merely that the default template
+  path is external. Onboarding refuses to write staging artifacts below the repo
+  root even when `$XDG_STATE_HOME` points there unless the caller passes an
+  explicit `--allow-in-repo-staging` flag; the audit flags that opt-in and names
+  `$XDG_STATE_HOME` as shell-controlled in its failure message. The
+  shareable-report mode depends on Phase 19 trace data: every `TraceEntry` with
   `source_kind=user_provided`,
   `derived_from_user_input=true`, or private `sensitivity` is treated as
   redactable, and `--share` succeeds only when each redactable entry is redacted
@@ -465,7 +526,8 @@ Build:
 - A "local-first" setup guide for Codex/Claude maintainers: what agents may
   edit, what they may read, and what they must never commit.
 - Redaction support for sharing a report externally without household/private
-  fields.
+  fields. Redaction must not remove the `decision_mode: false` dev-mode banner
+  from markdown reports.
 - Release artifacts that separate reusable System/Reference layers from
   private User/Data layers.
 
@@ -495,7 +557,8 @@ Build:
   and `scripts/hooks/block-user-layer.py` enforcement instead of replacing it.
 - A lightweight release checklist for milestone closure:
   full test suite, mypy, ruff, reference staleness audit, oracle coverage audit,
-  and report traceability audit.
+  report traceability audit, and confirmation that no decision-mode report was
+  blessed through `scripts/audit_reports.py` instead of the pre-emit gate.
 - Extend the existing references split documented in `CLAUDE.md`: top-level
   `references/` for repo maintainers and
   `.claude/skills/mortgage-ops/references/` for skill progressive disclosure.
@@ -538,8 +601,8 @@ property documentation. Then proceed in this order:
 
 1. Phase 18.5 Maintenance Scaffold.
 2. Phase 19 Traceability Spine.
-3. Phase 22 Oracle Mesh.
-4. Phase 20 Reference Refresh Discipline.
+3. Phase 20 Reference Refresh Discipline.
+4. Phase 22 Oracle Mesh.
 5. Phase 21 Verdict Quality and Ambiguity Control.
 6. Phase 23 Decision Ergonomics.
 7. Phase 24 Personalization Substrate.
@@ -547,6 +610,8 @@ property documentation. Then proceed in this order:
 9. Phase 26 Agent Maintenance Hardening.
 
 This order intentionally puts auditability before usability improvements. The
-oracle mesh is auditability, so parity checks land before verdict-quality
+reference refresh discipline is the first auditability dependency after the
+trace spine, so stale or inapplicable reference rows are visible before oracle
+parity grids are assembled. The oracle mesh then lands before verdict-quality
 calibration pins ambiguous fixtures and reason precedence. A slicker report is
 not valuable until its numbers and rules are easy to defend.
