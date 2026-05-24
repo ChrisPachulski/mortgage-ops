@@ -73,14 +73,15 @@ This means the best investments are boring, explicit, and checkable.
 These are the steady-state quality bars.
 
 - 100% of report-visible numbers emitted by any report or analysis markdown
-  producer are traceable or explicitly labeled as source input,
-  user-provided value, or heuristic estimate.
+  producer have a `TraceEntry` when they are computed, source input,
+  user-provided, reference-backed, heuristic, or derived from private input;
+  non-trace tags are reserved for pure display formatting only.
 - 0 orphan numeric values in generated reports: report generation itself fails
   before emitting markdown when trace coverage is incomplete.
 - 100% of `lib/rules/` predicates have citation, source URL, effective date,
   fixture coverage, and catalog entry.
-- Reference data used for active decisions is less than 12 months stale or has a
-  documented waiver.
+- Reference data used for active decisions is applicable to the report decision
+  date and is less than 12 months stale or has a documented waiver.
 - Every calc family has either a hand-calc oracle and an independent external
   oracle, or a documented reason external parity is impossible.
 - Property reports are reproducible from persisted listing, household/profile
@@ -108,14 +109,21 @@ Build:
   User Layer impact, reference-data impact, oracle impact, and verification
   commands. The template is shipped as
   `.planning/templates/CHANGE-CHECKLIST.md`, GSD plan generation copies it into
-  each Phase 19+ `PLAN.md`, and CI fails plans that omit any required heading.
+  each Phase 19+ `PLAN.md`, and CI compares plans against the exact template
+  heading strings. Each required heading must contain at least 40 non-whitespace
+  characters of meaningful prose before the next heading; empty sections and
+  placeholders such as `TBD` or `N/A` fail the check.
 
 Success criteria:
 
 - Phase 19 and later plans are written against the checklist instead of
   retrofitting the checklist after implementation.
+- The maintainer runbook is treated as a living contract: each Phase 19+ change
+  that alters a covered workflow updates the runbook in the same PR, so Phase 26
+  is a copyedit and audit pass rather than a backfill.
 - A checklist-enforcement test fails when a Phase 19+ plan is missing any of
-  the six required headings.
+  the six required headings or leaves a required section empty, placeholder-only,
+  or below the meaningful-content threshold.
 - Phase 26 can focus on end-state release polish, stale-link tests, and
   hardening rather than inventing the maintenance process late.
 
@@ -136,33 +144,60 @@ Build:
   `user_provided`, `heuristic_estimate`, and `reference_row`; `args_hash` is
   produced only through `lib/trace_canonical.py` using recursive canonical JSON:
   UTF-8 bytes, codepoint `sort_keys=True`, `separators=(",", ":")`, no trailing
-  newline, explicit `null` handling, ISO-8601 date/datetime strings, and
-  `Decimal` values converted with `format(value.normalize(), "f")` after mapping
-  zero-like values to `"0"` so equivalent values such as `0.065` and `0.0650`
-  hash identically. `oracle_coverage` is a list of named oracle or fixture
+  newline, explicit `null` handling, type-tagged dates/datetimes, NFC-normalized
+  strings, and `Decimal` values converted with `format(value.normalize(), "f")`
+  after mapping zero-like values to `"0"` so equivalent values such as `0.065`
+  and `0.0650` hash identically. Canonicalization rejects non-finite Decimal
+  values, rejects boolean dictionary keys, and rejects tuples unless a caller
+  explicitly converts them to lists before hashing. Heterogeneous primitive
+  values that would otherwise collapse in JSON, such as a raw string
+  `"2025-01-01"` and a date for 2025-01-01, must have distinct canonical
+  preimages. `oracle_coverage` is a list of named oracle or fixture
   identifiers; computed values backed by committed golden fixtures start with
   `hand_calc:<fixture>`, Phase 22 appends third-party oracle identifiers, and
   the list may be empty only for
   `source_input`/`user_provided`/`heuristic_estimate`/`reference_row` values
   whose source kind documents why coverage is not applicable. `sensitivity`
-  classifies trace values as public or private, and `derived_from_user_input` is
+  classifies trace values as public or private. Trace writers must set it
+  explicitly for `source_input`, `user_provided`, and `heuristic_estimate`
+  entries; reference rows default to public unless their catalog entry marks
+  them private, and computed entries derived from user input default to private.
+  The trace emission gate fails on unset sensitivity for any entry whose source
+  kind or dependencies could expose private data. `derived_from_user_input` is
   true when a value directly or transitively depends on User Layer inputs rather
-  than only when its own `source_kind` is `user_provided`. Trace indexes include
-  a report-scoped identifier so `display_path` collisions across reports cannot
-  alias entries.
+  than only when its own `source_kind` is `user_provided`; computed trace entries
+  must be created through `TraceEntry.derive(parent_entries, ...)` in
+  `lib/trace_canonical.py`, which OR-folds the flag across parents, and the gate
+  rejects computed entries constructed without that derivation metadata. Trace
+  indexes include a report-scoped identifier so `display_path` collisions across
+  reports cannot alias entries.
 - Report-side citation footers generated from trace data, not manually composed
   strings.
 - A shared reference index utility, for example `lib/reference_index.py`, that
   enumerates loaded `data/reference/*.yml` files, effective dates, source URLs,
   and contributing rows. The report manifest writer and Phase 20 refresh audit
   must both consume this utility instead of scraping reference YAML
-  independently.
+  independently. CI includes a lint/test that scans `lib/` and `scripts/` for
+  direct `data/reference/` path strings outside `lib/reference_index.py` and
+  approved test fixtures, failing on inline YAML access that bypasses the shared
+  staleness and applicability checks.
 - A shared pre-emit trace coverage gate, for example `lib/trace_emit.py`, used by
   every markdown/report producer including `lib/property_report.py`, refi NPV,
   amortization, ARM simulation, and stress-test output. It fails generation when
   orphan numbers are present. CI tests the gate with committed fixtures for each
   producing script and reports generated under a temporary test directory; live
   `reports/*.md` remain User/Data Layer and stay out of CI.
+- Refactor `scripts/refi_npv.py`, `scripts/amortize.py`,
+  `scripts/arm_simulate.py`, and `scripts/stress_test.py` so every
+  report-visible number is represented by a `TraceEntry` and emitted through
+  `lib/trace_emit.py`. Each script gets a committed fixture test proving the
+  pre-emit gate fails on an orphan-number regression.
+- Report renderers are pure functions of trace data and code: no wall-clock
+  timestamps, current-working-directory-dependent formatting,
+  locale-dependent number formatting, hash-seed-sensitive iteration, platform
+  line-ending drift, or environment-dependent paths in generated report text.
+  A fixture renders the same report twice under different environment settings
+  and requires an empty diff.
 - `scripts/audit_reports.py` is a local audit tool for reports generated before
   the pre-emit gate existed or for explicitly non-decision/dev-mode output; it
   is not a substitute for the shared gate and cannot bless decision-ready
@@ -171,19 +206,31 @@ Build:
   reference-data effective dates, and private-input fingerprints. Fingerprints
   for household/profile inputs are stored only in local private manifests or are
   computed as keyed HMACs with a local uncommitted secret; shareable reports and
-  redacted manifests must omit these fields.
+  redacted manifests must omit these fields. The HMAC key is generated on first
+  run with `secrets.token_bytes(32)`, stored outside the repo at
+  `$XDG_CONFIG_HOME/mortgage-ops/fingerprint.key` or
+  `~/.config/mortgage-ops/fingerprint.key` with owner-only permissions, and
+  never committed. Losing the key makes historical private fingerprints
+  incomparable. Rotation is an explicit user action that writes a new key and
+  emits old-key and new-key fingerprints for one retained manifest cycle;
+  multi-machine consistency is out of scope unless the user manually installs
+  the same key on each machine.
 - A hash-stability test for `lib/trace_canonical.py` proving that equivalent
   nested inputs, including `Decimal("0.065")` and `Decimal("0.0650")`, dates,
-  datetimes, and `None`, produce identical canonical preimages and hashes.
+  datetimes, and `None`, produce identical canonical preimages and hashes, while
+  string-vs-date, bool-key, tuple, Unicode normalization, and non-finite Decimal
+  boundary cases are either distinct or rejected as specified.
 
 Success criteria:
 
 - Committed fixture tests for each report-producing script verify every
-  report-visible numeric token maps to a `TraceEntry` or to an explicit
-  display-only/source-input tag.
+  report-visible numeric token maps to a `TraceEntry` unless it is pure display
+  formatting.
 - Any numeric value not traceable must be explicitly tagged as display-only
-  formatting, source input, or user-provided text, and the trace coverage gate
-  fails without that tag.
+  formatting only. User-provided values, source inputs, reference rows,
+  heuristic estimates, and values derived from private input require
+  `TraceEntry` records; the trace coverage gate rejects private or source-input
+  bypass tags.
 - The Phase 18.5 change checklist for any new report field names the added trace
   entry and test file; Claude does not need to infer provenance.
 - Phases 20-24 consume the frozen trace schema rather than redefining
@@ -207,15 +254,20 @@ Build:
 - A refresh ledger under `.planning/reference-refresh-{YEAR}.md` with source
   links, checked dates, changed rows, unchanged rows, and risk notes.
 - CI/test support for "decision mode": active property analysis fails when
-  required reference files are stale without a valid waiver, and decision mode
-  is the default for the property-analysis CLI.
+  required reference files are stale without a valid waiver or when a referenced
+  row is not applicable to the report decision date, and decision mode is the
+  default for the property-analysis CLI.
 - A tracked waiver file at `data/reference/waivers.yml` with required fields
   `path`, `reason`, `granted_by`, `granted_on`, and `expires_on`. The staleness
   check requires a waiver only when a reference file is stale, defined as more
   than 12 months after its `effective` date. For stale files, absent, malformed,
   or expired waivers cause failure; non-stale files do not require waivers.
-  Permissive CLI-only bypasses that still claim decision-ready output are out of
-  scope. A documented non-decision development mode, exposed as
+  Freshness and decision-date applicability are separate checks: the reference
+  index records `effective_from`/`effective_to` or superseded metadata for rows,
+  rejects future-effective rows unless an explicit simulation mode is selected,
+  and includes boundary fixtures around annual rule-change dates. Permissive
+  CLI-only bypasses that still claim decision-ready output are out of scope. A
+  documented non-decision development mode, exposed as
   `--no-decision-mode` or `MORTGAGE_OPS_DEV_MODE=1`, may downgrade
   stale-reference failures to warnings only when generated manifests are tagged
   `decision_mode: false`.
@@ -241,6 +293,12 @@ Build:
 - A stable verdict-reason taxonomy:
   `hard_blocker`, `cashflow_risk`, `stress_risk`, `data_gap`,
   `heuristic_estimate`, `tax_caveat`, `market_context`, `preference_mismatch`.
+- A `VerdictReason` Pydantic model whose `reason_kind` is one of the taxonomy
+  values or `legacy_free_text`, with `reason_text: str`, `severity: int`, and
+  `precedence: int`. Structured reasons are stored in a documented
+  `analyzed_listings` JSON field, and the migration sets
+  `reason_taxonomy_version=0` for existing rows and version `1` for new
+  structured rows.
 - Reason severity and precedence rules so the top three reasons explain the
   verdict without burying the user in raw matrix output.
 - Gap-fill prompts that ask only for decision-critical missing fields, with
@@ -288,6 +346,11 @@ Build:
   dependency risk just to gain oracle coverage.
 - A coverage matrix showing which calc/rule families have hand-calc,
   third-party, and engine-emitted fixtures.
+- `tests/test_calc_primitives_have_fixtures.py` enumerates the public
+  calculation primitives in `lib/amortize.py`, `lib/apr.py`, `lib/refinance.py`,
+  `lib/affordability.py`, `lib/stress.py`, `lib/arm.py`, and `lib/points.py`
+  and asserts each appears in at least one `tests/fixtures/hand_calc/*.yml`
+  fixture with a citation field.
 
 Success criteria:
 
@@ -321,7 +384,10 @@ Build:
   `scripts/replay_snapshot.py <snapshot.json>` to check out the pinned revision
   when available, rerun the analysis, and assert bit-identical output; if the
   revision or inputs are unavailable, replay fails loudly instead of silently
-  downgrading to inspection.
+  downgrading to inspection. Replay treats snapshots as trusted local artifacts
+  by default, refuses to run with a dirty worktree, never fetches remote revisions
+  automatically, and requires an explicit `--trusted --execute` opt-in before it
+  checks out and runs code from a pinned revision supplied by an external source.
 
 Success criteria:
 
@@ -344,10 +410,15 @@ Build:
 - A first-run onboarding flow that renders templates for User Layer files:
   `config/household.yml`, `config/profile.yml`, and optional narrative
   preferences. The flow previews values and writes generated templates to a
-  gitignored, pre-commit-blocked staging path only; the user copies them into
+  repo-external staging path such as
+  `$XDG_STATE_HOME/mortgage-ops/onboarding-staging/` or
+  `~/.local/state/mortgage-ops/onboarding-staging/`; the user copies them into
   place manually. System code must not create, overwrite, or migrate User Layer
   paths, and onboarding staging artifacts are classified as private anywhere
-  they may contain household values.
+  they may contain household values. If tests or local development override the
+  staging path into the repo, `.gitignore` and
+  `scripts/hooks/block-user-layer.py` provide only a bypassable backstop against
+  accidental forced adds, not the privacy boundary.
 - Strict schemas and validation messages for household income, debts, cash,
   applicants, credit assumptions, location, risk preferences, tax assumptions,
   and preferred loan programs.
@@ -357,9 +428,11 @@ Build:
   templates for User Layer config without mutating existing User Layer files.
 - A privacy audit command that extends `DATA_CONTRACT.md`, `.gitignore`,
   `.pre-commit-config.yaml`, and `scripts/hooks/block-user-layer.py`
-  protections to User Layer paths and onboarding staging artifacts. It proves no
-  private paths are staged or committed, and its shareable-report mode depends
-  on Phase 19 trace data: every `TraceEntry` with `source_kind=user_provided`,
+  protections to User Layer paths and any repo-local onboarding staging
+  overrides. It proves no private paths are staged or committed, verifies the
+  default onboarding staging path is outside the repo, and its shareable-report
+  mode depends on Phase 19 trace data: every `TraceEntry` with
+  `source_kind=user_provided`,
   `derived_from_user_input=true`, or private `sensitivity` is treated as
   redactable, and `--share` succeeds only when each redactable entry is redacted
   or explicitly whitelisted by the user.
