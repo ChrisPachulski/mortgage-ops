@@ -143,9 +143,12 @@ Build:
   enforcement is Python-only. Node tooling that needs the same grammar consumes
   a JSON fixture of pre-tested accepted/rejected literals exported by
   `scripts/dump_checklist_grammar.py` rather than recompiling the markdown
-  regexes. `FILE_PATH` matches identifier text only, rejects `.` and `..` path
-  components, and must not be passed to filesystem operations unless the
-  consumer first performs a repo-root realpath containment check.
+  regexes. `FILE_PATH` matches identifier text only and is exposed only through
+  `scripts/checklist_grammar.py:match_file_path(text, repo_root)`, which returns
+  a `ValidatedRelPath` after splitting the matched path, rejecting `.` and `..`
+  components, resolving it against the repo root, and verifying realpath
+  containment. Callers must use that helper result for filesystem operations and
+  must not run existence checks or opens against the raw regex match.
   A sub-prompt that is genuinely out of scope may instead use the literal prefix
   `NOT_APPLICABLE: ` followed by a reason of at least 30 characters; this bypasses
   the filler blocklist and identifier requirement only for that sub-prompt and
@@ -185,9 +188,12 @@ Success criteria:
 
 Build:
 
-- A frozen Pydantic v2 `TraceEntry` / `TraceIndex` schema, shipped before any
-  other Phase 19 implementation work and treated as a stability contract for
-  Phases 20-24. The schema records:
+- A frozen Pydantic v2 `TraceEntry` / `TraceIndex` / `TraceDecimalArg` schema,
+  shipped before any other Phase 19 implementation work and treated as a
+  stability contract for Phases 20-24. Each model sets
+  `model_config = ConfigDict(frozen=True)`, nested collections exposed on the
+  models use immutable tuple forms, and a regression test proves post-
+  construction mutation of any field raises. The schema records:
   `display_path`, `value`, `source_kind`, `function_or_script`, `args_hash`,
   `input_field`, `reference_file`, `reference_row`, `effective`,
   `oracle_coverage`, `sensitivity`, and `derived_from_user_input`.
@@ -247,10 +253,11 @@ Build:
   `"None"`, and `""` have distinct hash preimages. `args_hash` is computed only
   over
   function/script args; `oracle_coverage` is trace metadata and is never part of
-  the hash preimage. `oracle_coverage` is a canonical sorted list of unique named
-  oracle or fixture identifiers, validated at `TraceEntry` construction and
-  normalized for storage/reporting so order-only differences cannot change
-  coverage reporting. Computed values backed by committed golden fixtures start with
+  the hash preimage. `oracle_coverage` is stored on `TraceEntry` as an immutable
+  `tuple[str, ...]` containing canonical sorted unique named oracle or fixture
+  identifiers, validated at construction and normalized for storage/reporting so
+  order-only differences cannot change coverage reporting. Computed values backed
+  by committed golden fixtures start with
   `hand_calc:<fixture>`, Phase 22 appends third-party oracle identifiers, and
   the list may be empty only for
   `source_input`/`user_provided`/`heuristic_estimate`/`reference_row` values
@@ -311,13 +318,20 @@ Build:
   rule so ordinary documentation can name `data/reference/` without becoming a
   data-access bypass. Unrelated YAML usage for user config, fixtures, and
   planning metadata remains allowed through safe loaders and its own tests; only
-  reference YAML access must go through `lib/reference_index.py`. Test fixtures
-  also install a narrow runtime trap based on Python `sys.addaudithook` `open`
+  reference YAML access must go through `lib/reference_index.py`. Decision-mode
+  startup for every report generator and analysis CLI imports
+  `lib/reference_index.py` before loading rules or reports; that module installs
+  one process-wide narrow runtime trap based on Python `sys.addaudithook` `open`
   events, filtered to resolved `data/reference/*.yml` paths and the exact
-  authorized caller paths. It fails unauthorized reference YAML opens without
+  authorized caller paths. Startup asserts the trap is installed and aborts
+  decision-mode execution if the assertion fails. It fails unauthorized reference
+  YAML opens without
   monkey-patching `open`, `io.open`, `Path.open`, `Path.read_text`, `os.open`,
   or stdlib internals, catching common variable indirection and helper-module
-  bypasses that static analysis misses. The trap is defense-in-depth, not
+  bypasses that static analysis misses. Test fixtures also install the same trap
+  during unit and integration runs, and an end-to-end regression invokes the
+  production CLI with `python -m ... --decision-mode` to prove the hook is active
+  outside pytest. The trap is defense-in-depth, not
   exhaustive: file descriptors opened before trap installation and native
   extensions that bypass Python audit events remain outside its guarantee and
   are covered by static lint and code review. A negative fixture proves
@@ -369,13 +383,14 @@ Build:
   is not a substitute for the shared gate and cannot bless decision-ready
   reports that failed pre-emit validation. Every Phase 19+ report producer sets
   `manifest_schema_version: 1` in its JSON manifest, and
-  `manifest_schema_version` is a JSON integer. Non-integer values, including
-  string `"1"`, float `1.0`, and `null`, cause `scripts/audit_reports.py` to
-  exit `3` with an error naming the offending manifest file; unit tests cover
-  all three malformed values. A report blessing requires a
-  version-1-or-newer manifest with both `pre_emit_gate_passed: true` and
-  `decision_mode: true`. When no manifest is present, or when a manifest is
-  present with `manifest_schema_version < 1`, `scripts/audit_reports.py` exits
+  `manifest_schema_version` is a JSON integer greater than or equal to 0.
+  Non-integer values, including string `"1"`, float `1.0`, and `null`, or
+  negative integer values such as `-1`, cause `scripts/audit_reports.py` to exit
+  `3` with an error naming the offending manifest file; unit tests cover all
+  malformed values plus the `-1`, `0`, and `1` boundaries. A report blessing
+  requires a version-1-or-newer manifest with both `pre_emit_gate_passed: true`
+  and `decision_mode: true`. When no manifest is present, or when a manifest is
+  present with `manifest_schema_version: 0`, `scripts/audit_reports.py` exits
   with code `2` to signal genuine legacy or explicitly non-decision/dev-mode
   inspection without decision-use blessing. When
   `manifest_schema_version >= 1` but `pre_emit_gate_passed` or `decision_mode`
@@ -409,8 +424,12 @@ Build:
   `O_CREAT | O_EXCL | O_WRONLY | O_NOFOLLOW` and mode `0600`, writes all 32 bytes
   with a checked full-length write, `fsync`s the temporary key file, publishes it
   with `linkat`/`os.link` from the temporary basename to `fingerprint.key` so an
-  existing final key is never overwritten, `fsync`s the parent directory, closes
-  the descriptor, and unlinks the temporary file on success or failure. Platforms
+  existing final key is never overwritten, re-`fstat`s the parent directory fd and
+  verifies its device/inode still match the originally opened parent before
+  treating the key as published, `fsync`s the parent directory, closes the
+  descriptor, and unlinks the temporary file on success or failure. If the
+  post-publish parent check fails, creation unlinks the temporary name when still
+  present, refuses to use the new key, and fails loudly. Platforms
   may use `renameat2(RENAME_NOREPLACE)` only with a tested fallback to the link
   publish path; plain POSIX `rename` is forbidden for publishing the final key
   because it can overwrite a concurrent winner. If first-run creation loses the
@@ -554,16 +573,22 @@ Build:
   `--no-decision-mode` or `MORTGAGE_OPS_DEV_MODE`, may downgrade
   stale-reference failures to warnings only when generated manifests are tagged
   `decision_mode: false`. The environment variable enables dev mode only when
-  set to exactly `1`, `true`, `yes`, or `on`, case-insensitive and with no
+  set to exactly ASCII `1`, `true`, `yes`, or `on`, case-insensitive and with no
   leading or trailing whitespace; `0`, `false`, `no`, and `off` are explicit
-  opt-outs equivalent to unset, and an empty value is treated as unset. Strict
-  rejection of every other non-empty value, such as `maybe`, `2`, or
+  opt-outs equivalent to unset, and an empty value is treated as unset. Parsing
+  first encodes the value as ASCII with strict errors and rejects non-ASCII
+  input, embedded NUL bytes, Unicode lookalikes such as fullwidth digits, and
+  any value whose stripped form differs from the original; only then does it
+  apply locale-independent lowercase comparison against the closed ASCII token
+  sets. Strict rejection of every other non-empty value, such as `maybe`, `2`, or
   whitespace-only strings, applies only to commands that consult decision/dev
   mode, such as analysis, report generation, `scripts/audit_reports.py`, and
   snapshot replay. The accepted true/false sets are implemented once in
   `lib/env_flags.py:is_truthy(name)` and reused by every privacy- or
   safety-relevant environment flag, including
   `MORTGAGE_OPS_AUDIT_ACK_REPO_STAGING`.
+  Fuzz fixtures cover embedded NUL bytes, non-ASCII fullwidth digits, Unicode
+  case lookalikes, and whitespace variants.
   Read-only discovery paths such as `--help` and `--version` parse argv first,
   report an unrecognized `MORTGAGE_OPS_DEV_MODE` as a warning, and continue
   unless the command is explicitly checking decision-mode blockers. The
@@ -643,7 +668,14 @@ Build:
   the nullable-add/backfill/rebuild path succeeds against existing rows and that
   the post-migration table contains zero `NULL` verdict-reason or taxonomy
   values; they do not accept a branch where `verdict_reasons` remains `NULL`
-  after backfill.
+  after backfill. The migration records step completion in a durable migration
+  version table inside the same DuckDB file before releasing the lock, and
+  startup resumes from the recorded step rather than assuming a never-migrated
+  database. Each step is idempotent: re-running after failure between nullable
+  add, backfill, validation, rebuild, and atomic swap either observes the
+  completed step or completes it without data loss. Regression tests inject a
+  failure between each pair of steps and prove the next invocation finishes with
+  the final NOT NULL/CHECK-constrained table.
   `db-write.mjs` asserts before INSERT/UPDATE that `verdict_reasons` is a JSON
   array literal and that
   `reason_taxonomy_version` is never explicitly `NULL`. Unit tests prove direct
@@ -668,7 +700,8 @@ Build:
   XML-empty-element form
   `<stale source="atr-qm-thresholds.yml" effective="2024-01-01"/>`; `source` must
   be XML-escaped and match the reference filename grammar
-  `[a-z0-9_-]+\.yml`. If the cited row cannot be identified precisely,
+  `[A-Za-z0-9_.-]+\.ya?ml`, the same basename character set accepted by the
+  reference-index `FILE_PATH` lexicon. If the cited row cannot be identified precisely,
   counterfactual generation is suppressed with
   `counterfactual analysis suppressed: reference data is stale`.
   Example report language:
@@ -772,19 +805,33 @@ Build:
   `origin/main` is inspect-only unless the reachable commit or ref is signed by a
   configured trusted key; no replay command fetches remote revisions
   automatically. Trust means signed provenance from a configured key, not branch
-  reachability. Before execution, replay prints the exact commit hash, author,
-  signature or signed-ref verification result, and diffstat from the signed base,
-  then requires an interactive `y/N` confirmation. Unsigned snapshots from
+  reachability. The executable replay sequence is fixed: first verify signed-tag
+  reachability or the detached snapshot signature using only the current trusted
+  checkout and local metadata; second print the exact commit hash, author,
+  signature or signed-ref verification result, and diffstat from the signed base
+  and require an interactive `y/N` confirmation; third, and only after that trust
+  gate succeeds, create the temporary pinned checkout and invoke its compatibility
+  probes; fourth materialize embedded state; fifth run the replay. Invoking
+  pinned-code probes is code execution, so no `--print-*` probe may run before
+  signature verification and user confirmation. Unsigned snapshots from
   unprotected revisions remain inspect-only. Inspect-only replay never requires a
   clean source worktree because validation reads only the snapshot and local
   metadata, not mutable checkout files. Snapshots record
-  `replay_protocol_version: 1`; before execution, the temporary checkout of the
-  pinned code must expose `--print-replay-protocol-version` and return a
-  compatible integer greater than or equal to the snapshot version. Pinned
-  revisions without the marker, or with an older protocol, are non-replayable by
-  design and abort before any embedded state is materialized. Execution uses a
-  unique temporary `git worktree add` checkout path containing the PID, monotonic
-  timestamp, and short snapshot hash. Before execution, replay refuses to proceed
+  `replay_protocol_version: 1`; the temporary checkout of the pinned code must
+  expose `--print-replay-protocol-version` and return a compatible integer
+  greater than or equal to the snapshot version. It must also expose
+  `--print-snapshot-schema-compat-version` and return an integer greater than or
+  equal to the snapshot's `snapshot_schema_version`; pinned revisions without the
+  marker, with junk or non-integer output, with an older replay protocol, or with
+  an older snapshot-schema compatibility version are non-replayable by design and
+  abort with the incompatible schema/taxonomy non-zero exit before any embedded
+  state is materialized. Regression fixtures cover a pinned revision whose
+  `--print-replay-protocol-version` exits 0 with junk output, and a pre-Phase-21
+  pinned revision without `verdict_reasons`/snapshot-schema compatibility support,
+  and both must fail after the trust gate but before state materialization.
+  Execution uses a unique temporary `git worktree add` checkout path containing
+  the host identifier, PID, monotonic timestamp, and short snapshot hash. Before
+  execution, replay refuses to proceed
   when the source worktree has modified, staged, deleted, renamed, copied, or
   unmerged tracked paths; ignores untracked files that are already gitignored;
   fails on untracked non-ignored files by default with the offending paths
@@ -792,7 +839,8 @@ Build:
   reviewing that path list. Replay never
   writes embedded inputs to standard User Layer paths. Instead, replay
   materializes the embedded `user_layer_state` block into a repo-external
-  temporary state directory and passes explicit config-path overrides to the
+  temporary state directory created in the same cleanup scope as the replay
+  worktree and passes explicit config-path overrides to the
   pinned code. `user_layer_state` keys are a closed enum of allowed User Layer
   relative paths such as `config/household.yml`, `config/profile.yml`, and
   configured narrative preference files; replay rejects any unknown key, `..`
@@ -809,23 +857,33 @@ Build:
   temporary DuckDB database with the snapshot schema version, verifies each row
   hash before report generation, and never reads current User Layer files or
   current `data/analyzed_listings.duckdb` from disk. Before reading
-  `verdict_reasons`, replay verifies that the pinned
-  code supports the snapshot-pinned `reason_taxonomy_version`; if the snapshot
-  version is higher than the pinned code's compatibility floor, replay aborts
-  non-zero. A fixture proves a v1-taxonomy snapshot fails replay against pinned
-  v0-compatible code. Replay removes the temporary
-  checkout with `git worktree remove --force` in `try/finally` and
-  `SIGTERM`/`SIGINT`/`SIGHUP` handlers. Each replay worktree records PID,
+  `verdict_reasons`, replay verifies that the pinned code declares snapshot
+  schema compatibility for the snapshot's embedded listing-row serialization and
+  `min_supported_reason_taxonomy_version` and
+  `max_supported_reason_taxonomy_version`, and that the snapshot-pinned
+  `reason_taxonomy_version` falls inside that inclusive range; snapshots below
+  the minimum or above the maximum abort non-zero. Fixtures cover supported v0,
+  supported v1, below-minimum, and above-maximum taxonomy versions. Replay removes
+  the temporary checkout with `git worktree remove --force` and removes the
+  temporary state directory in `try/finally` and `SIGTERM`/`SIGINT`/`SIGHUP`
+  handlers. Temporary User Layer materialization cleanup best-effort overwrites
+  regular files before unlinking where the platform permits, then unlinks files
+  and directories even after replay exceptions. Each replay worktree and
+  temporary state directory records PID,
   process creation time, host identifier, wall-clock UTC creation timestamp,
   optional monotonic timestamp, and snapshot hash in a sidecar file. Each replay
   invocation uses the wall-clock UTC timestamp for the 24-hour stale-worktree
   decision and uses the monotonic timestamp only for in-process ordering or
-  diagnostics. It prunes stale replay worktrees older than 24 hours only when
+  diagnostics. It prunes stale replay worktrees and replay state directories
+  older than 24 hours only when
   the recorded PID is absent or the live process creation time/host identifier
-  does not match the sidecar, so PID reuse cannot keep a dead checkout
-  indefinitely. If the recorded process still matches, or if
-  `git worktree add` fails because a stale path still exists, replay reports the
-  path and exits non-zero instead of reusing it. If the revision, trusted
+  does not match the sidecar, so PID reuse cannot keep a dead checkout or
+  materialized private-state directory indefinitely. If the recorded process
+  still matches, or if `git worktree add` or state-directory creation fails
+  because a stale path still exists, replay reports the path, recorded host and
+  PID when available, and a remediation message to rerun after that process exits
+  or remove the stale replay directory only after confirming the process is gone,
+  then exits non-zero instead of reusing it. If the revision, trusted
   provenance, or inputs are unavailable, replay fails loudly instead of silently
   continuing into execution.
 
@@ -910,13 +968,20 @@ Build:
   `--whitelist-file <path>` pointing at a YAML file used only for that run.
   `<field_path>` must be an exact `TraceEntry.display_path` value present in the
   trace index; globs, regexes, wildcards, empty strings, `*`, `?`, `..`, leading
-  slash, and trailing slash are rejected before rendering. A single share run may
-  whitelist at most 10 entries, and interactive runs require a confirmation that
-  lists every display path and source kind; non-interactive runs require an
-  explicit `--confirm-whitelist-file` whose contents hash to the listed paths. No
-  persistent whitelist exists in committed files, household config, or user
-  config. The redacted output records the whitelisted field paths in the share
-  manifest so recipients can see which redactions were skipped.
+  slash, and trailing slash are rejected before rendering. Whitelisting is
+  audited per snapshot/report hash through a repo-external private ledger in the
+  same XDG state location as other local private state; no persistent whitelist
+  exists in committed files, household config, or user config. Before rendering,
+  share mode unions the requested whitelist with prior ledger entries for the
+  same snapshot/report hash and enforces a cumulative maximum of 10 whitelisted
+  display paths. Interactive runs require a confirmation that lists every display
+  path and source kind being newly added plus the cumulative ledger set;
+  non-interactive runs require an explicit `--confirm-whitelist-file`. That file
+  contains the SHA-256 digest of a deterministic canonical whitelist form:
+  UTF-8 without BOM, LF line endings, sorted unique display paths, one path per
+  line, and a final trailing newline. The same SHA-256 digest and canonicalized
+  whitelisted field paths are recorded in the share manifest so recipients can
+  verify which redactions were skipped and detect post-hoc expansion.
 - A "household assumptions" report section that lets users see exactly which
   personal assumptions affected a verdict.
 
