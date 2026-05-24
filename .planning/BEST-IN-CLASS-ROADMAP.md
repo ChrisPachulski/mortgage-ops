@@ -125,12 +125,22 @@ Build:
   function/script name, issue id, or command token. Empty answers,
   placeholder-only answers, and normalized filler fail the check. The template
   and checker publish the exact identifier grammar as named patterns:
-  `FILE_PATH = (?<![\w./-])[A-Za-z0-9_./-]+\.(py|yml|yaml|md|mjs|js|json)(?![\w./-])`,
+  `FILE_PATH = (?<![\w./-])(?:\.?[A-Za-z0-9_-]+/)*\.?[A-Za-z0-9_-]+\.(py|yml|yaml|md|mjs|js|json)(?![\w./-])`,
   `FIXTURE_ID = (?<![\w-])(fixture|scenario|case):[A-Za-z0-9_.-]+(?![\w-])`,
-  `CITATION = (?<![\w])(?:12|24)\s*CFR\s*(?:\xA7|Sec\.)?\s*[0-9.]+[A-Za-z0-9().-]*`,
-  `FUNCTION = (?<![\w.])[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)?(?=\()`,
+  `CITATION = (?<![\w])(?:12|24|26)\s*CFR\s*(?:\xA7|Sec\.)?\s*[0-9.]+[A-Za-z0-9().-]*`,
+  `HUD_CITATION = (?<![\w-])(?:HUD\s+)?ML\s*\d{4}-\d{2}(?![\w-])`,
+  `IRC_CITATION = (?<![\w])IRC\s*(?:\xA7|Sec\.)?\s*[0-9A-Za-z().-]+(?![\w.-])`,
+  `FUNCTION = (?<![\w.])[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*){0,4}(?![\w])`,
   `ISSUE_ID = (?<![\w-])(?:#[0-9]+|[A-Z][A-Z0-9]+-[0-9]+)(?![\w-])`, and
   `COMMAND = (?<![\w-])(?:pytest|ruff|mypy|uv|node|npm|python|python3)\s+[-\w./:=]+`.
+  The canonical checker compiles these patterns with Python `re.compile(...)`
+  from ordinary Python string values, so `\xA7` resolves to `§`; CI checklist
+  enforcement is Python-only. Node tooling that needs the same grammar consumes
+  a JSON fixture of pre-tested accepted/rejected literals exported by
+  `scripts/dump_checklist_grammar.py` rather than recompiling the markdown
+  regexes. `FILE_PATH` matches identifier text only, rejects `.` and `..` path
+  components, and must not be passed to filesystem operations unless the
+  consumer first performs a repo-root realpath containment check.
   A sub-prompt that is genuinely out of scope may instead use the literal prefix
   `NOT_APPLICABLE: ` followed by a reason of at least 30 characters; this bypasses
   the filler blocklist and identifier requirement only for that sub-prompt and
@@ -184,10 +194,18 @@ Build:
   operation, overflow, division by zero, and invalid context. Decimals whose
   coefficient length exceeds the canonical context precision, or whose adjusted
   exponent is outside the `Emin`/`Emax` bounds, are rejected instead of rounded.
-  All Decimal arithmetic that can feed trace args must be performed through the
-  project context in `lib/decimal_context.py`; constructors reject Decimal values
-  marked as arithmetic-derived without that context metadata, and tests cover
-  arithmetic values produced under caller contexts 9, 28, and 50.
+  Decimal provenance is explicit because Python `Decimal` values cannot carry
+  metadata. All Decimal arithmetic that can feed trace args must be performed
+  through `lib/decimal_context.py:project_decimal_arg`, which executes the
+  operation under the project context and returns a `TraceDecimalArg`
+  `(value, provenance="project_context_arithmetic", context_fingerprint)`.
+  Plain `Decimal` values are accepted only for parsed source/reference literals
+  whose provenance is declared as non-arithmetic by the caller. `TraceEntry`
+  construction rejects computed trace args containing a plain `Decimal` unless
+  the caller explicitly marks that path as a parsed literal, and rejects
+  `TraceDecimalArg` instances whose fingerprint does not match the project
+  context. Tests cover arithmetic values produced while caller contexts are 9,
+  28, and 50 and prove caller precision cannot silently change accepted hashes.
   Zero-like Decimals are values where `d.is_zero()` is true, regardless of sign
   or exponent, and they are serialized as `"0"` so legitimate arithmetic
   residuals such as `Decimal("-0E-2")` do not destabilize trace hashing. All
@@ -196,8 +214,9 @@ Build:
   `0.065` and `0.0650` hash identically without context-driven rounding.
   Canonicalization rejects non-finite Decimal values. `args_hash` input values
   may only be `str`,
-  `int`, `Decimal`, `bool`, `date`, `datetime`, `None`, `list`, or recursively
-  nested `dict[str, allowed_value]`; dictionary keys must be strings, so boolean,
+  `int`, `Decimal`, `TraceDecimalArg`, `bool`, `date`, `datetime`, `None`,
+  `list`, or recursively nested `dict[str, allowed_value]`; dictionary keys must
+  be strings, so boolean,
   integer, float, Decimal, date, and other non-string keys are rejected instead
   of coerced. Unsupported input types, including `float`, `set`, `frozenset`,
   `tuple` unless the caller explicitly converts it to a list, `bytes`,
@@ -210,11 +229,12 @@ Build:
   Decimals serialize as Decimal tags, strings serialize as string tags, and
   dates/datetimes serialize as temporal tags. Therefore `True`, `1`,
   `Decimal("1.0")`, `"1"`, a raw string `"2025-01-01"`, and a date for
-  2025-01-01 all hash differently. `oracle_coverage` is a canonical sorted list
-  of unique named
-  oracle or fixture identifiers, validated at `TraceEntry` construction before
-  hashing so order-only differences cannot change `args_hash` or coverage
-  reporting. Computed values backed by committed golden fixtures start with
+  2025-01-01 all hash differently. `args_hash` is computed only over
+  function/script args; `oracle_coverage` is trace metadata and is never part of
+  the hash preimage. `oracle_coverage` is a canonical sorted list of unique named
+  oracle or fixture identifiers, validated at `TraceEntry` construction and
+  normalized for storage/reporting so order-only differences cannot change
+  coverage reporting. Computed values backed by committed golden fixtures start with
   `hand_calc:<fixture>`, Phase 22 appends third-party oracle identifiers, and
   the list may be empty only for
   `source_input`/`user_provided`/`heuristic_estimate`/`reference_row` values
@@ -259,11 +279,17 @@ Build:
   joined `pathlib`/`os.path.join` component sequence that normalizes to the
   substring `data/reference/`; imports or re-exports a reference-data path
   constant for use outside the shared index; imports `yaml` in a module that
-  also mentions `data/reference`; calls `yaml.safe_load` on bytes/text read from
-  a `.yml` path in unauthorized code; or performs `.yml` globbing/reads without
-  an exact allowlist entry. The checker separately fails any unauthorized module
-  importing `yaml` from the disallowed file set, so reference YAML access must
-  go through `lib/reference_index.py`. Test fixtures also install a runtime trap
+  also constructs, reads, or parses `data/reference/*.yml`; calls
+  `yaml.safe_load` on bytes/text read from a reference `.yml` path in
+  unauthorized code; or performs reference `.yml` globbing/reads without an
+  exact allowlist entry. The checker ignores module, class, and function
+  docstrings, and ignores triple-quoted explanatory strings inside blocks marked
+  with `# noqa: REF-INDEX`; those exclusions are documented next to the lint
+  rule so ordinary documentation can name `data/reference/` without becoming a
+  data-access bypass. Unrelated YAML usage for user config, fixtures, and
+  planning metadata remains allowed through safe loaders and its own tests; only
+  reference YAML access must go through `lib/reference_index.py`. Test fixtures
+  also install a runtime trap
   that monkey-patches `open`, `io.open`, `Path.open`, `Path.read_text`, `os.open`,
   and project-owned YAML loading wrappers so attempts to open a resolved
   `data/reference/*.yml` path outside `lib/reference_index.py` or the exact
@@ -278,7 +304,11 @@ Build:
   imports, or `data/reference` path construction outside an explicit
   Node-side allowlist entry. Allowlist entries are exact file paths, never globs,
   and approved test fixtures must still exercise the shared staleness and
-  applicability checks.
+  applicability checks. The reference index utility owns an explicit
+  `control_plane_files = {"waivers.yml"}` set. Files in that set never appear
+  in `rows()` and are never subject to reference-row sensitivity enforcement;
+  they are exposed through a separate `control_metadata()` API used by the
+  Phase 20 refresh audit to validate waiver owners, reasons, and expiry dates.
 - A shared pre-emit trace coverage gate, for example `lib/trace_emit.py`, used by
   every markdown/report producer including `lib/property_report.py`, refi NPV,
   amortization, ARM simulation, and stress-test output. It fails generation when
@@ -307,7 +337,11 @@ Build:
   the pre-emit gate existed or for explicitly non-decision/dev-mode output; it
   is not a substitute for the shared gate and cannot bless decision-ready
   reports that failed pre-emit validation. Every Phase 19+ report producer sets
-  `manifest_schema_version: 1` in its manifest. A report blessing requires a
+  `manifest_schema_version: 1` in its JSON manifest, and
+  `manifest_schema_version` is a JSON integer. Non-integer values, including
+  string `"1"`, float `1.0`, and `null`, cause `scripts/audit_reports.py` to
+  exit `3` with an error naming the offending manifest file; unit tests cover
+  all three malformed values. A report blessing requires a
   version-1-or-newer manifest with both `pre_emit_gate_passed: true` and
   `decision_mode: true`. When no manifest is present, or when a manifest is
   present with `manifest_schema_version < 1`, `scripts/audit_reports.py` exits
@@ -340,12 +374,16 @@ Build:
   Creation writes a same-directory temporary file with a random suffix using
   `O_CREAT | O_EXCL | O_WRONLY | O_NOFOLLOW` and mode `0600`, writes all 32 bytes
   with a checked full-length write, `fsync`s the temporary key file, publishes it
-  with a no-overwrite atomic link/rename operation, `fsync`s the parent
-  directory, closes the descriptor, and unlinks the temporary file on success or
-  failure. If first-run creation loses the publish race because `fingerprint.key`
-  already exists, the loser follows the read path with bounded retry/backoff for
-  up to one second so it cannot consume an empty or partial file while the winner
-  is still publishing. Reads use `O_RDONLY | O_NOFOLLOW`. After opening and
+  with `linkat`/`os.link` from the temporary basename to `fingerprint.key` so an
+  existing final key is never overwritten, `fsync`s the parent directory, closes
+  the descriptor, and unlinks the temporary file on success or failure. Platforms
+  may use `renameat2(RENAME_NOREPLACE)` only with a tested fallback to the link
+  publish path; plain POSIX `rename` is forbidden for publishing the final key
+  because it can overwrite a concurrent winner. If first-run creation loses the
+  publish race because `fingerprint.key` already exists, the loser follows the
+  read path with bounded retry/backoff for up to one second so it cannot consume
+  an empty or partial file while the winner is still publishing. Reads use
+  `O_RDONLY | O_NOFOLLOW`. After opening and
   reading the key, the
   implementation verifies the key inode is a regular file owned by the current
   user with mode `0600`, verifies the parent directory inode still matches the
@@ -357,9 +395,11 @@ Build:
   overwrites a corrupt final `fingerprint.key` without an explicit user command.
   The error message for a corrupt final key names the path, reports
   `expected 32 bytes, found N`, and includes both recovery choices: run
-  `truncate -s 32 <path>` only when the extra bytes are confirmed trailing
-  whitespace, or run `rm <path>` to delete and regenerate the key after confirming
-  no other process is creating it.
+  `truncate -s 32 <quoted-path>` only when the extra bytes are confirmed
+  trailing whitespace, or run `rm <quoted-path>` to delete and regenerate the key
+  after confirming no other process is creating it. The rendered commands use
+  `shlex.quote(path)` for POSIX shell display, and a unit test covers a resolved
+  path containing a single quote, a space, and `$`.
   Any broader permission, parent-swap mismatch, pre-existing symlink,
   non-regular file, or insecure key-owned parent directory fails loudly before
   fingerprints are computed. On
@@ -405,8 +445,9 @@ Build:
   symlinked XDG config path that resolves inside the repo.
 - `oracle_coverage` tests verify constructor-time sorting and deduplication
   rejection, prove two traces differing only in coverage order produce the same
-  `args_hash`, and reject a hand-calc fixture trace entry that lists itself as
-  covered by its own fixture id.
+  normalized coverage list, prove two traces with identical function args but
+  different coverage annotations produce the same `args_hash`, and reject a
+  hand-calc fixture trace entry that lists itself as covered by its own fixture id.
 
 Success criteria:
 
@@ -482,9 +523,11 @@ Build:
   `lib/env_flags.py:is_truthy(name)` and reused by every privacy- or
   safety-relevant environment flag, including
   `MORTGAGE_OPS_AUDIT_ACK_REPO_STAGING`.
-  Read-only discovery paths such as `--help`, `--version`, and `doctor` parse
-  argv first, report an unrecognized `MORTGAGE_OPS_DEV_MODE` as a warning, and
-  continue unless the command is explicitly checking decision-mode blockers.
+  Read-only discovery paths such as `--help` and `--version` parse argv first,
+  report an unrecognized `MORTGAGE_OPS_DEV_MODE` as a warning, and continue
+  unless the command is explicitly checking decision-mode blockers. The
+  `doctor` command is a blocker-checking command, so it uses strict env-flag
+  parsing and exits non-zero for an unrecognized decision/dev-mode value.
   Every markdown report generated in that mode must include the visible
   blockquote banner
   `> DEV MODE - REFERENCE DATA IS STALE - NOT FOR DECISION USE` after any UTF-8
@@ -505,14 +548,19 @@ Build:
   CI fails when any decision reference row in `data/reference/*.yml` omits it.
   `data/reference/waivers.yml` is excluded from reference-row sensitivity
   enforcement and reference-row catalog generation because it is control-plane
-  metadata, not decision reference data. A new
+  metadata, not decision reference data. The reference index's
+  `control_plane_files = {"waivers.yml"}` exclusion is the only allowed waiver
+  bypass: `waivers.yml` entries are visible through `control_metadata()` for
+  expiry auditing, but never through `rows()` or `row.sensitivity` loading. A new
   `references/reference-row-catalog.md` maps each reference row identifier to
   its sensitivity when row-level YAML metadata is not sufficient. The Phase 19
   reference index utility exposes `row.sensitivity` from the reference-row
   YAML/catalog source, not from `references/rules-catalog.md`, so trace defaults
   and share redaction do not infer privacy from free-form notes. Share-mode
   regression tests prove an omitted reference-row sensitivity fails loading
-  before report generation rather than being emitted as public.
+  before report generation rather than being emitted as public, and that
+  `data/reference/waivers.yml` does not trip that gate while still being audited
+  for waiver expiry through `control_metadata()`.
 
 Success criteria:
 
@@ -536,6 +584,9 @@ Build:
   `precedence: int`. Structured reasons are stored in the
   `analyzed_listings.verdict_reasons` JSON field. The forward-only migration is
   executed through `orchestration/db-write.mjs` under the existing lockfile and
+  runs idempotent `INSTALL json; LOAD json;` setup before the migration
+  transaction so DuckDB JSON functions are available consistently in local and
+  CI environments. It
   adds `verdict_reasons JSON NOT NULL DEFAULT '[]' CHECK
   (json_valid(verdict_reasons) AND json_type(verdict_reasons) = 'ARRAY')` and
   `reason_taxonomy_version INTEGER NOT NULL DEFAULT 0` to `analyzed_listings`.
@@ -549,8 +600,10 @@ Build:
   array literal and that
   `reason_taxonomy_version` is never explicitly `NULL`. Unit tests prove direct
   DB-layer inserts of `NULL`, invalid JSON, non-array JSON, and
-  `reason_taxonomy_version=NULL` fail. `verdict_reasons` is always a JSON array,
-  never `NULL`; absence of structured reasons is represented as `[]`.
+  `reason_taxonomy_version=NULL` fail, including a non-array valid JSON literal
+  that confirms the JSON extension-backed `json_type` check is active.
+  `verdict_reasons` is always a JSON array, never `NULL`; absence of structured
+  reasons is represented as `[]`.
 - Reason severity and precedence rules so the top three reasons explain the
   verdict without burying the user in raw matrix output.
 - Gap-fill prompts that ask only for decision-critical missing fields, with
@@ -676,14 +729,19 @@ Build:
   then requires an interactive `y/N` confirmation. Unsigned snapshots from
   unprotected revisions remain inspect-only. Inspect-only replay never requires a
   clean source worktree because validation reads only the snapshot and local
-  metadata, not mutable checkout files. Execution uses a unique temporary
-  `git worktree add` checkout path containing the PID, monotonic timestamp, and
-  short snapshot hash. Before execution, replay refuses to proceed when the
-  source worktree has modified, staged, deleted, renamed, copied, or unmerged
-  tracked paths; ignores untracked files that are already gitignored; warns but
-  does not fail on untracked non-ignored files unless `--strict` is passed; and
-  prints the rationale for each tier so users do not need to stash unrelated
-  local work to preserve replay safety. Replay never
+  metadata, not mutable checkout files. Snapshots record
+  `replay_protocol_version: 1`; before execution, the temporary checkout of the
+  pinned code must expose `--print-replay-protocol-version` and return a
+  compatible integer greater than or equal to the snapshot version. Pinned
+  revisions without the marker, or with an older protocol, are non-replayable by
+  design and abort before any embedded state is materialized. Execution uses a
+  unique temporary `git worktree add` checkout path containing the PID, monotonic
+  timestamp, and short snapshot hash. Before execution, replay refuses to proceed
+  when the source worktree has modified, staged, deleted, renamed, copied, or
+  unmerged tracked paths; ignores untracked files that are already gitignored;
+  warns but does not fail on untracked non-ignored files unless `--strict` is
+  passed; and prints the rationale for each tier so users do not need to stash
+  unrelated local work to preserve replay safety. Replay never
   writes embedded inputs to standard User Layer paths. Instead, replay
   materializes the embedded `user_layer_state` block into a repo-external
   temporary state directory and passes explicit config-path overrides to the
@@ -692,23 +750,32 @@ Build:
   configured narrative preference files; replay rejects any unknown key, `..`
   component, leading slash, `~`, Windows drive letter, absolute path, symlink, or
   resolved realpath outside the temporary state directory before writing any
-  file. Replay refuses to execute snapshots without `user_layer_state`, verifies
-  the hash of each materialized input against the snapshot before running code,
-  materializes embedded listing rows into a temporary DuckDB database with the
-  snapshot schema version, verifies each row hash before report generation, and
-  never reads current User Layer files or current `data/analyzed_listings.duckdb`
-  from disk. Before reading `verdict_reasons`, replay verifies that the pinned
+  file. All YAML deserialization of snapshot-embedded `user_layer_state` uses
+  `yaml.safe_load` exclusively on already schema-bounded values; `yaml.load`,
+  `yaml.full_load`, and custom-object constructors are forbidden anywhere
+  snapshot-derived bytes flow. A regression fixture with a
+  `!!python/object` payload must fail before any materialized file write, hash
+  check, checkout, or execution. Replay refuses to execute snapshots without
+  `user_layer_state`, verifies the hash of each materialized input against the
+  snapshot before running code, materializes embedded listing rows into a
+  temporary DuckDB database with the snapshot schema version, verifies each row
+  hash before report generation, and never reads current User Layer files or
+  current `data/analyzed_listings.duckdb` from disk. Before reading
+  `verdict_reasons`, replay verifies that the pinned
   code supports the snapshot-pinned `reason_taxonomy_version`; if the snapshot
   version is higher than the pinned code's compatibility floor, replay aborts
   non-zero. A fixture proves a v1-taxonomy snapshot fails replay against pinned
   v0-compatible code. Replay removes the temporary
   checkout with `git worktree remove --force` in `try/finally` and
   `SIGTERM`/`SIGINT`/`SIGHUP` handlers. Each replay worktree records PID,
-  process creation time, host identifier, monotonic timestamp, and snapshot hash
-  in a sidecar file. Each replay invocation prunes stale replay worktrees older
-  than 24 hours only when the recorded PID is absent or the live process creation
-  time/host identifier does not match the sidecar, so PID reuse cannot keep a
-  dead checkout indefinitely. If the recorded process still matches, or if
+  process creation time, host identifier, wall-clock UTC creation timestamp,
+  optional monotonic timestamp, and snapshot hash in a sidecar file. Each replay
+  invocation uses the wall-clock UTC timestamp for the 24-hour stale-worktree
+  decision and uses the monotonic timestamp only for in-process ordering or
+  diagnostics. It prunes stale replay worktrees older than 24 hours only when
+  the recorded PID is absent or the live process creation time/host identifier
+  does not match the sidecar, so PID reuse cannot keep a dead checkout
+  indefinitely. If the recorded process still matches, or if
   `git worktree add` fails because a stale path still exists, replay reports the
   path and exits non-zero instead of reusing it. If the revision, trusted
   provenance, or inputs are unavailable, replay fails loudly instead of silently
@@ -819,8 +886,10 @@ Build:
 - A synthetic demo dataset and fixtures that exercise property mode end-to-end
   with no real household data.
 - A read-only `doctor` command that checks Python/Node/uv dependencies, missing
-  config, stale references, and optional oracle availability, returning
-  non-zero only for required setup or decision-mode blockers.
+  config, stale references, optional oracle availability, and strict parsing of
+  safety-relevant environment flags such as `MORTGAGE_OPS_DEV_MODE`, returning
+  non-zero only for required setup, malformed safety flags, or decision-mode
+  blockers.
 - A "local-first" setup guide for Codex/Claude maintainers: what agents may
   edit, what they may read, and what they must never commit.
 - Redaction support for sharing a report externally without household/private
