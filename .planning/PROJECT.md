@@ -2,20 +2,20 @@
 
 ## What This Is
 
-Personal-use mortgage analysis tool for the Pachulski household — a sibling to `career-ops` and `card-ops`. Combines a deterministic Python calculation engine (amortization, ARM modeling, refi NPV, affordability, stress tests, points breakeven, estimated APR) with a Claude-skill frontend that routes natural-language requests to the right calc and produces human-readable reports. Built for making real household mortgage decisions, not commercial use.
+Private underwriting workbench for the Pachulski household — a sibling to `career-ops` and `card-ops`. Combines deterministic mortgage math, citation-backed eligibility predicates, household state, property ingestion, and report generation into reproducible GO / WATCH / NO-GO decisions. Built for making real household mortgage decisions, not commercial use and not to compete as a generic mortgage calculator.
 
 ## Core Value
 
-**Math correctness first.** Every dollar figure that exits this system must be traceable to a tested, deterministic Python function. The LLM frontend is a router and narrator — it never owns numbers.
+**Auditable household decisions first.** Every dollar figure that exits this system must be traceable to a tested, deterministic Python function or cited reference row, and every recommendation must resolve to a concrete household/property verdict. The LLM frontend is a router and narrator — it never owns numbers.
 
 ## Current State
 
 **Shipped:** v1.0 (2026-05-13)
-**Status:** Deterministic Python calc engine + Claude skill frontend live. 12 phases, 87 plans, 116 requirements, 644 pytest passing. Eval gate at `route_match=numeric_match=1.0`. See [v1.0 milestone archive](milestones/v1.0-ROADMAP.md) for the full closure receipt.
+**Status:** Private underwriting workbench foundation live: deterministic math primitives + rules-as-predicates + Claude skill frontend. 12 phases, 87 plans, 116 requirements, 644 pytest passing. Eval gate at `route_match=numeric_match=1.0`. See [v1.0 milestone archive](milestones/v1.0-ROADMAP.md) for the full closure receipt.
 
 ### Highlights
-- Money discipline locked (Decimal-from-strings, ROUND_HALF_UP, condecimal)
-- 11 regulatory predicates cited 1:1 (HMDA Platform pattern)
+- Money discipline locked for money/rate state (Decimal-from-strings, ROUND_HALF_UP, condecimal); APR seeds from `numpy_financial.rate` then iterates in Decimal to `0.00001` tolerance
+- 13 predicate modules cited 1:1 or explicitly tagged as heuristic (HMDA Platform pattern)
 - 7 calc primitives with hand-calc fixtures: amortize, affordability, ARM, refi-NPV, APR (Reg Z App. J), stress, points
 - DuckDB persistence + Node orchestration (`db-write.mjs` + `lockfile.mjs`)
 - Claude skill frontend with 7 modes + 3 subagents (Haiku/Sonnet split for context isolation)
@@ -23,7 +23,7 @@ Personal-use mortgage analysis tool for the Pachulski household — a sibling to
 
 ## Current Milestone: v1.1 Property Analysis Mode
 
-**Goal:** Feed any Zillow listing URL → get a single-page underwriting workup that runs the full v1.0 calc engine (amortize × affordability × ARM × refi × stress × points × IRS Pub 936) against the property × household, with a clear GO / WATCH / NO-GO verdict.
+**Goal:** Feed any Zillow listing URL → get a single-page underwriting workup that runs the full v1.0 workbench (amortize × affordability × ARM × refi × stress × points × IRS Pub 936) against the property × household, with a clear GO / WATCH / NO-GO verdict.
 
 **Target features (6 phases, ~14 requirements):**
 - Zillow URL ingestion via hybrid pipeline — WebFetch + `__NEXT_DATA__` JSON extraction + interactive gap-fill when fields missing or ambiguous (no paid scraper API in v1.1; deferred to v1.2 if/when WebFetch degrades)
@@ -48,6 +48,23 @@ Personal-use mortgage analysis tool for the Pachulski household — a sibling to
 
 **Research:** `.planning/research/v1.1-property-analysis.md` (997 lines; 9 locked patterns + 12 pitfalls + 8 open questions surfaced for /gsd-discuss-phase)
 
+## Strategic Scope Guardrail
+
+The project moat is not commodity mortgage math. The moat is the workbench layer:
+rules-as-predicates, cited reference data, household state, property ingestion,
+verdict synthesis, and reproducible reports. Existing packages such as
+MortgageModeler can overlap with amortization, ARM, refinance, APR, HELOC, and
+breakeven math; they should be used as comparative oracles where conventions
+match, not as runtime dependencies unless a future plan proves replacement value.
+
+New generic calc primitives are soft-frozen. Future math requests such as HELOC,
+second liens, interest-only periods, or prepayment penalties must first answer:
+"Can MortgageModeler, pyloan, or another maintained library return this with
+acceptable precision and documented conventions?" A new `lib/*.py` primitive is
+strategic only when it directly supports an underwriting verdict or when no
+external implementation can be trusted under this repo's Decimal/citation/test
+discipline.
+
 ## Requirements
 
 ### Validated
@@ -63,7 +80,7 @@ Personal-use mortgage analysis tool for the Pachulski household — a sibling to
 - [ ] Affordability rule predicates (Fannie/Freddie/FHA/VA/USDA, one predicate per citation)
 - [ ] Stress testing (rate shock, income shock, ARM reset parameter sweeps)
 - [ ] Points breakeven analysis
-- [ ] Estimated APR per Reg Z Appendix J (Newton-Raphson, labeled "estimated", validated against FFIEC tool)
+- [ ] Estimated APR per Reg Z Appendix J (Newton-Raphson seeded from `numpy_financial.rate`, then Decimal iteration to `0.00001`; labeled "estimated", validated against FFIEC tool)
 - [ ] Household-aware data model (joint income, joint applicants, shared decisions)
 - [ ] Pydantic v2 + condecimal Loan/Schedule/Payment models
 - [ ] DuckDB persistence with lockfile pattern (from career-ops)
@@ -96,11 +113,11 @@ Personal-use mortgage analysis tool for the Pachulski household — a sibling to
 
 **Architectural decisions made before project init (from 5 prior research agents):**
 1. Build on `numpy-financial` for core math (NOT reimplement). Wrap `pmt/ipmt/ppmt` — they support Decimal, vectorize, and use Excel-compatible signatures.
-2. `Decimal` for money (construct from strings, quantize end-of-period, ROUND_HALF_UP for cents). Float for IRR/Newton solvers.
+2. `Decimal` for money and rate state (construct from strings, quantize end-of-period, ROUND_HALF_UP for cents). Solver seeds may cross through float only at documented boundaries: APR uses `numpy_financial.rate` as a seed, converts via `Decimal(str(seed))`, then iterates in Decimal.
 3. Pydantic v2 + `condecimal(max_digits=14, decimal_places=2)` for Loan/Schedule/Payment models.
 4. `pyxirr` (Rust+PyO3) for batch refi-NPV scenarios when needed.
 5. `python-dateutil` `relativedelta` for monthly date arithmetic (handles month-end edges).
-6. Encode regulatory rules as **named predicates per citation** (cfpb/hmda-platform pattern): `reg_z.py`, `fannie_eligibility.py`, `fha_mip.py`, `va_funding_fee.py`, `irs_pub936.py`.
+6. Encode rules as **named predicates per citation** (cfpb/hmda-platform pattern) and explicitly label heuristic predicates: see `references/rules-catalog.md` for the current roster.
 7. Reference data as YAML with source URLs + effective dates, refreshed manually annually. No silent scraping.
 8. Bundle scripts INSIDE `.claude/skills/mortgage-ops/scripts/` (not at project root) for skill portability — career-ops/card-ops both miss this.
 9. SKILL.md ≤ 500 lines / ≤ 5k tokens; load-bearing routing in first 5k tokens (post-compaction re-attach budget).
@@ -141,8 +158,10 @@ Personal-use mortgage analysis tool for the Pachulski household — a sibling to
 
 | Decision | Rationale | Outcome |
 |----------|-----------|---------|
+| Position as private underwriting workbench, not mortgage calculator | Commodity calculators already exist; this project's durable value is household-specific verdicts backed by citations, provenance, and local state. | Active scope test |
 | Wrap numpy-financial; do not reimplement amortization math | Active, BSD-3, Decimal support, vectorizes for parameter sweeps. Re-implementing risks subtle bugs. Identified via prior research. | — Pending |
 | Encode rules as one-predicate-per-citation (HMDA Platform pattern) | Each function tied to a single regulatory citation makes annual refreshes safe and auditable. | — Pending |
+| Soft-freeze new generic calc primitives | Future math should use maintained external packages as comparative or implementation candidates before adding new primitives. Workbench/verdict layers get default phase budget. | Active guardrail |
 | Pydantic v2 + condecimal over plain dataclasses | First-class Decimal support, JSON-string serialization (not float), runtime validation at boundaries. | — Pending |
 | DuckDB + lockfile from career-ops, not parquet/YAML from card-ops | Mortgage analysis benefits from SQL across scenarios/loans; single-writer model is simpler than card-ops' file-based persistence for cross-scenario queries. | — Pending |
 | Subagents (amortization, refi-npv, stress-test) for context isolation | Stress-test parameter sweeps (50+ scenarios) would pollute main conversation; subagents per Anthropic sub-agents docs. Career-ops/card-ops don't use this. | — Pending |

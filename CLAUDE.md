@@ -1,9 +1,9 @@
 <!-- GSD:project-start source:PROJECT.md -->
 ## Project
 
-**mortgage-ops** — Personal-use mortgage analysis tool for the Pachulski household. Sibling to `career-ops` and `card-ops`. Combines a deterministic Python calculation engine (amortization, ARM modeling, refi NPV, affordability, stress tests, points breakeven, estimated APR) with a Claude-skill frontend that routes natural-language requests to the right calc and produces human-readable reports.
+**mortgage-ops** — Private underwriting workbench for the Pachulski household. Sibling to `career-ops` and `card-ops`. Combines deterministic mortgage math, citation-backed eligibility predicates, household state, property ingestion, and report generation into reproducible GO / WATCH / NO-GO decisions.
 
-**Core Value:** Math correctness first. Every dollar figure that exits this system must be traceable to a tested, deterministic Python function. The LLM frontend is a router and narrator — it never owns numbers.
+**Core Value:** Auditable household decisions first. Every dollar figure that exits this system must be traceable to a tested, deterministic Python function or cited reference row. The LLM frontend is a router and narrator — it never owns numbers.
 
 See `.planning/PROJECT.md` for full context, requirements, and key decisions.
 <!-- GSD:project-end -->
@@ -11,7 +11,7 @@ See `.planning/PROJECT.md` for full context, requirements, and key decisions.
 <!-- GSD:stack-start source:STACK.md -->
 ## Technology Stack
 
-**Python calc engine (3.12+):**
+**Python workbench core (3.12+):**
 - `numpy-financial` — Wraps Excel-style PMT/IPMT/PPMT/NPV/IRR. **Wrap, do not reimplement.** Beware bugs #130 (pmt fv-sign) and #131 (irr arch-dependent).
 - `pydantic` ≥2.6 — Loan/Schedule/Payment models with `condecimal(max_digits=14, decimal_places=2)`.
 - `python-dateutil` — `relativedelta` for monthly payment scheduling.
@@ -42,8 +42,15 @@ See `.planning/research/STACK.md` for full verdict matrix.
 - `quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)` end-of-period only.
 - Never mix `float` and `Decimal` in the same expression.
 - Pydantic v2 `condecimal` at all script boundaries.
+- Documented solver exception: `lib/apr.py` seeds Newton-Raphson from `numpy_financial.rate` (float), converts via `Decimal(str(seed))`, then iterates in Decimal to `Decimal("0.00001")` tolerance. Do not describe APR as "pure Decimal everywhere."
 
-**Calc engine separation:**
+**Workbench scope:**
+- This is not a generic mortgage calculator. New work should improve household underwriting decisions: rules coverage, reference refreshes, property ingestion, verdict synthesis, report traceability, or comparative-oracle confidence.
+- Upstream filter: would this reduce the chance of making a six-figure housing mistake? If yes, it is likely strategic. If it only makes the project feel more advanced, skip it.
+- Post-v1.1 strategic roadmap lives at `.planning/BEST-IN-CLASS-ROADMAP.md`; use it before proposing new phases or major feature work.
+- Generic new calc primitives are soft-frozen. Before adding HELOC, second liens, interest-only periods, prepayment penalties, or similar math, check whether MortgageModeler, pyloan, or another maintained package can supply the result or an oracle with acceptable precision and conventions.
+
+**Computation separation:**
 - Every dollar figure is computed by Python in `lib/`. Claude never owns numbers.
 - SKILL.md routes to `scripts/*.py` for math; scripts return JSON; Claude narrates.
 - Bundled scripts: run `--help` first; do not read source unless customization needed (Anthropic webapp-testing doctrine).
@@ -52,6 +59,7 @@ See `.planning/research/STACK.md` for full verdict matrix.
 - One file per regulatory citation in `lib/rules/`.
 - Docstring includes citation (12 CFR §X.Y, HUD ML Z, etc.).
 - 1:1 test-to-citation mapping.
+- `references/rules-catalog.md` is the human-readable roster of predicate, source, effective date, and fixture coverage. Keep it in sync when adding or retiring a predicate.
 
 **Reference data discipline:**
 - All regulatory parameters in `data/reference/*.yml` with `source:` URL and `effective:` date.

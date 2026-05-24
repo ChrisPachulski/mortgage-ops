@@ -1,13 +1,15 @@
-"""Conventional PMI annual rate lookup (4x4 LTV x FICO MGIC abridged schedule).
+"""Conventional PMI annual rate lookup (4x4 LTV x FICO abridged schedule).
 
-Citation: MGIC Rate Card "Standard MI" (Borrower-Paid Monthly Premium) —
-  industry-published rate schedule, NOT a regulatory predicate. Phase 16
-  ships an abridged 4x4 subset (16 cells); the full MGIC 8x7 schedule is
-  deferred to v2 per CONTEXT D-16-PMI-01. Out-of-band combos return the
-  worst-cell rate per D-16-PMI-02 (no raise, no interpolation).
-Source URL: https://www.mgic.com/rates/rate-cards
-  (additional bulletin form-number pinning lives in the YAML notes block)
-Effective: 2024-03-04 (MGIC Rate Card "Standard MI" published bulletin date)
+Citation: Arch MI Borrower-Paid Monthly Non-Refundable Annualized BPMI Rate
+  Card — industry-published rate schedule, NOT a regulatory predicate.
+  Phase 16 ships an abridged 4x4 subset (16 cells); the full vendor 8x7
+  schedule is deferred to v2 per CONTEXT D-16-PMI-01. Out-of-band combos
+  return the worst-cell rate per D-16-PMI-02 (no raise, no interpolation).
+  The reason-tag literal still contains `MGIC` for downstream stability; the
+  token is now historical, not vendor-binding.
+Source URL: https://mortgage.archgroup.com/wp-content/uploads/sites/4/MCUS-B0283B-AMI-BP-Monthly-FICO-Rate-Card.pdf
+  (cross-source pinning lives in the YAML notes block)
+Effective: 2026-02-09 (Arch MI rate card effective date; re-pinned 2026-05-23)
 
 What this predicate decides:
   Given a representative FICO score and an LTV ratio at origination,
@@ -28,7 +30,7 @@ Worked example:
   >>> from decimal import Decimal
   >>> r = lookup_rate(fico=745, ltv=Decimal("0.92"))
   >>> r.annual_rate
-  Decimal('0.0035')
+  Decimal('0.0048')
   >>> r.reason_tag
   'PMI-RATE-ESTIMATED-MGIC-90-95-740-759'
 

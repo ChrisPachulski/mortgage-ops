@@ -2,14 +2,26 @@
 
 ## Shipped Milestones
 
-- **v1.0** — Deterministic Python mortgage calc engine + Claude skill frontend (12 phases, 87 plans, 644 tests passing; SHIPPED 2026-05-13) → [`.planning/milestones/v1.0-ROADMAP.md`](milestones/v1.0-ROADMAP.md)
+- **v1.0** — Private underwriting workbench foundation: deterministic mortgage math, citation-backed rules, persistence, and Claude skill frontend (12 phases, 87 plans, 644 tests passing; SHIPPED 2026-05-13) → [`.planning/milestones/v1.0-ROADMAP.md`](milestones/v1.0-ROADMAP.md)
 
 ## Active Milestone
 
 **v1.1 Property Analysis Mode** — Started 2026-05-14
-**Goal:** Feed any Zillow listing URL → get a single-page underwriting workup that runs the full v1.0 calc engine against the property × household, with a GO / WATCH / NO-GO verdict.
+**Goal:** Feed any Zillow listing URL → get a single-page underwriting workup that runs the full v1.0 workbench against the property × household, with a GO / WATCH / NO-GO verdict.
 **Research:** [`.planning/research/v1.1-property-analysis.md`](research/v1.1-property-analysis.md)
 **Requirements:** [`REQUIREMENTS.md`](REQUIREMENTS.md) (16 reqs across 6 phases)
+**Strategic roadmap:** [`BEST-IN-CLASS-ROADMAP.md`](BEST-IN-CLASS-ROADMAP.md)
+defines the post-v1.1 path for making this unusually trustworthy rather than
+cutting edge.
+
+### Phase Budget Rule
+
+Phases 1-12 built enough generic mortgage math. Phase 13+ budget defaults to
+the differentiated workbench layer: property ingestion, reference-data refresh,
+rules coverage, verdict synthesis, report traceability, and optional oracle
+comparison. Future proposals to improve a standalone calc primitive are rejected
+unless they directly improve a GO / WATCH / NO-GO underwriting decision or a
+maintained external package cannot provide a suitable oracle/implementation.
 
 ### Granularity
 
@@ -150,3 +162,4 @@ Plans:
 - **Apify / scraper-API fallback** — if WebFetch degradation observed in real use, wire Apify Zillow Detail Scraper actor as secondary path
 - **School / commute / walkability** — third-party API pulls per zip
 - **Multi-property side-by-side** — comparison tables across a shortlist
+- **Optional external math oracles** — MortgageModeler / pyloan parity harnesses for calc primitives where conventions match; these remain dev/test-only and never runtime dependencies without a separate decision record

@@ -1,6 +1,6 @@
 # mortgage-ops
 
-Personal-use mortgage analysis: deterministic Python calc engine + Claude skill frontend. Math correctness first — every dollar figure traces to a tested, deterministic Python function. The LLM is a router and narrator, never an arithmetic owner.
+Private underwriting workbench for household mortgage decisions. It combines deterministic mortgage math, citation-backed eligibility predicates, household state, property ingestion, and report generation into reproducible GO / WATCH / NO-GO decisions. The LLM is a router and narrator, never an arithmetic owner.
 
 See `.planning/PROJECT.md` for full context, `.planning/ROADMAP.md` for the phase plan, and `CLAUDE.md` for non-negotiable conventions (Decimal money, Pydantic v2, mypy --strict, ruff, pytest).
 
