@@ -323,11 +323,15 @@ def test_mock_sonnet_fixture_returns_none_for_unknown_html(
     ),
 )
 def test_extract_listing_live_smoke() -> None:
-    """Optional live smoke test. Requires ANTHROPIC_API_KEY + a minimal HTML payload.
+    """Live Sonnet extraction smoke. Requires ANTHROPIC_API_KEY.
 
-    The contrived synthetic NEXT_DATA blob may or may not produce a clean
-    dict from Sonnet; either outcome is acceptable for a smoke test - we only
-    assert the function returns the expected type or None.
+    Sends a contrived but well-formed NEXT_DATA payload — Sonnet should
+    reliably return a non-empty dict containing at least one canonical
+    listing field (price / zpid / zipcode / property type / address). A
+    None return or empty dict here is NOT acceptable: it signals either
+    an Anthropic-side failure (rate limit, auth, network blip, model
+    drift) or a real parser regression — both worth surfacing as a CI
+    failure rather than silently passing.
     """
     pytest.importorskip("anthropic")
     html = (
@@ -340,4 +344,20 @@ def test_extract_listing_live_smoke() -> None:
     result = property_extractor.extract_listing(
         html, "https://zillow.com/homedetails/x/12345_zpid/"
     )
-    assert result is None or isinstance(result, dict)
+    assert isinstance(result, dict), (
+        f"Live Sonnet extraction returned {type(result).__name__}; expected dict. "
+        "None typically indicates an Anthropic API issue (rate limit, auth, network) "
+        "rather than the engine's parser failing — but either way the smoke shouldn't "
+        "silently pass on a no-result outcome."
+    )
+    assert result, "Live Sonnet extraction returned an empty dict; expected non-empty"
+    # At least one canonical listing field should have made it through. The schema
+    # of property_extractor's output is governed by EXTRACTION_PROMPT; if these
+    # field names drift, update the allowlist here too rather than loosening
+    # the assertion. The synthetic input carries zpid + price + zipcode +
+    # propertyTypeDimension — Sonnet should reliably surface ≥ 1 of them.
+    _canonical_keys = {"price", "zpid", "zipcode", "address", "property_type", "city"}
+    assert _canonical_keys & set(result.keys()), (
+        f"Live extraction returned non-empty dict but no canonical listing fields; "
+        f"expected one of {sorted(_canonical_keys)}, got keys: {sorted(result.keys())}"
+    )
