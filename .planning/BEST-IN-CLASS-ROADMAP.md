@@ -94,15 +94,25 @@ These are the steady-state quality bars.
 
 ## Roadmap
 
-Cross-phase YAML deserialization policy: every user-supplied YAML input that the
-workbench reads uses `yaml.safe_load` only, rejects custom tags and Python object
-constructors, and has a regression fixture proving `!!python/object` payloads
-fail before any value is trusted. The named inputs covered by this policy are
-User Layer `config/household.yml`, `config/profile.yml`, and
-`config/narrative_preferences.yml`; onboarding-staged copies of those files;
-User Layer migration patch templates; snapshot-embedded `user_layer_state`; and
-Phase 24 `--whitelist-file` inputs. Code review and lint rules forbid
-`yaml.load`, `yaml.full_load`, and custom loaders for those paths.
+Cross-phase YAML deserialization policy: every YAML file or YAML payload the
+workbench reads anywhere under the repository uses `yaml.safe_load` or a
+stricter typed loader only, rejects custom tags and Python object constructors,
+and has a regression fixture proving `!!python/object` payloads fail before any
+value is trusted. This includes User Layer `config/household.yml`,
+`config/profile.yml`, and `config/narrative_preferences.yml`;
+onboarding-staged copies of those files; User Layer migration patch templates;
+snapshot-embedded `user_layer_state`; Phase 24 `--whitelist-file` inputs;
+reference YAML under `data/reference/*.yml`; `data/known-loans.yml`;
+`data/reference/waivers.yml`; planning metadata such as
+`.planning/reference-index-allowlist.yml` and
+`.planning/runbook-coverage-map.yml`; and checklist grammar fixture exports.
+Code review and lint rules scan every `.py`, `.mjs`, and `.js` file in the repo,
+including `lib/reference_index.py`, and forbid `yaml.load`, `yaml.full_load`, or
+custom loaders unless the exact committed YAML path is listed in a closed
+allowlist with an owner, expiry, and custom-tag rationale. The default allowlist
+is empty. Per-file regression fixtures cover representative
+`data/reference/*.yml`, `data/known-loans.yml`, and `data/reference/waivers.yml`
+object-constructor payloads.
 
 ### Phase 18.5: Maintenance Scaffold
 
@@ -131,12 +141,12 @@ Build:
   remaining whitespace before comparing against a closed filler blocklist that
   includes `tbd`, `na`, `notapplicable`, `seeabove`, `asabove`, `pending`,
   `none`, `todo`, `unknown`, and dash/period-only answers. After the same
-  repeated-prompt removal, each answer must contain at least 30 characters and
-  at least one high-specificity concrete identifier matching a file path,
-  fixture id, citation id, issue id, or command token. Empty answers,
-  placeholder-only answers, and normalized filler fail the check. The template
+  repeated-prompt removal, each answer must be non-empty and contain at least one
+  high-specificity concrete identifier matching a file path, fixture id,
+  citation id, issue id, or command token. Empty answers, placeholder-only
+  answers, and normalized filler fail the check. The template
   and checker publish the exact identifier grammar as named patterns:
-  `FILE_PATH = (?<![\w./-])(?:\.?[A-Za-z0-9_-]+/)*\.?[A-Za-z0-9_.-]+\.(py|yml|yaml|md|mjs|js|json|toml|csv|parquet|sql|txt|lock)(?![\w./-])`,
+  `FILE_PATH = (?<![\w./@-])(?:[A-Za-z0-9_.@-]+/)*[A-Za-z0-9_.-]+\.(py|yml|yaml|md|mjs|js|json|toml|csv|parquet|sql|txt|lock)(?![\w./@-])`,
   `FIXTURE_ID = (?<![\w-])(fixture|scenario|case):[A-Za-z0-9_.-]+(?![\w-])`,
   `CITATION = (?<![\w])(?:12|24|26)[ \t]*CFR[ \t]*(?:§|Sec\.)?[ \t]*[0-9.]+[A-Za-z0-9().-]*`,
   `HUD_CITATION = (?<![\w-])HUD[ \t]+ML[ \t]*\d{4}-\d{2}(?![\w-])`,
@@ -162,9 +172,9 @@ Build:
   must not run existence checks or opens against the raw regex match.
   A sub-prompt that is genuinely out of scope may instead use the literal prefix
   `NOT_APPLICABLE: ` only when that sub-prompt is listed in the template's
-  `not_applicable_allowed` allowlist. The reason must be at least 30 characters,
-  must still contain a concrete identifier accepted by the published grammar, and
-  must explain the out-of-scope condition, for example
+  `not_applicable_allowed` allowlist. The reason must be non-empty, must still
+  contain a concrete identifier accepted by the published grammar, and must
+  explain the out-of-scope condition, for example
   `NOT_APPLICABLE: no files under data/reference/*.yml are touched by #123`.
   This bypasses only the filler blocklist for that sub-prompt and still fails
   when the reason is empty, placeholder-only, normalized filler, lacks a concrete
@@ -207,8 +217,10 @@ Success criteria:
   adversarial fixtures include `not applicable`, `n/a`, and repeated placeholder
   prompt text followed by a valid-looking file path; each must fail unless it
   uses the allowlisted `NOT_APPLICABLE: ` path with a real reason. File path
-  fixtures include `schema.v1.yml`, `tests/test.amortize.py`, and
-  `data/known-loans.v2.yml`.
+  fixtures include `schema.v1.yml`, `tests/test.amortize.py`,
+  `data/known-loans.v2.yml`, `data/v2.0/foo.yml`,
+  `.planning/phase-19.5/PLAN.md`, and
+  `node_modules/@scope/pkg.utils/index.js`.
 - A runbook-coverage CI check fails when a Phase 19+ code or reference-data
   change omits the runbook file named by `.planning/runbook-coverage-map.yml`.
 - Phase 26 can focus on end-state release polish, stale-link tests, and
@@ -270,7 +282,16 @@ Build:
   running batch commands open a fresh scope per report/listing, and validation of
   a token after its scope has ended fails explicitly. Each scope has a documented
   maximum entry count, and exceeding it raises a structured error instead of
-  silently evicting live tokens. `TraceEntry` validation recomputes the HMAC from
+  silently evicting live tokens. The registry is process-local: multiprocessing
+  workers may return primitive Decimal/string results only, and parent processes
+  assemble `TraceEntry`/`TraceDecimalArg` values inside their own registry scope.
+  `lib/decimal_context.py` registers `os.register_at_fork(after_in_child=...)`
+  where available to reset the child secret, counter, lock, and registry, and
+  validation of a token minted in another process fails with a structured
+  cross-process fingerprint error instead of falling through as a generic forged
+  token. A fork regression mints a token in a child process, returns it to the
+  parent, and asserts parent-side validation rejects it with that cross-process
+  error. `TraceEntry` validation recomputes the HMAC from
   that registry entry and rejects any `provenance="project_context_arithmetic"`
   token that was not minted in the current registry scope, including deserialized
   or hand-constructed tokens. After validation, canonicalization serializes the
@@ -370,7 +391,11 @@ Build:
   OR-folds the flag across parents, and the gate rejects computed entries
   constructed without that derivation metadata. Trace indexes include a
   report-scoped identifier so `display_path` collisions across reports cannot
-  alias entries.
+  alias entries. `derived_from_redactable_reference` is true when a value
+  directly or transitively depends on a `reference_row` whose reference-index
+  row has `share_visibility=redact`; `TraceEntry.derive(...)` OR-folds that
+  flag across parents too, and share-mode treats missing propagation metadata on
+  computed descendants as a trace construction failure.
 - Report-side citation footers generated from trace data, not manually composed
   strings.
 - A shared reference index utility, for example `lib/reference_index.py`, that
@@ -405,19 +430,25 @@ Build:
   startup for every report generator and analysis CLI imports
   `lib/reference_index.py` before loading rules or reports; that module installs
   one process-wide narrow runtime trap based on Python `sys.addaudithook` events
-  for both `open` and `os.open`. The hook's caller inspection checks only the
-  nearest Python frame outside the audit-hook function itself; an authorized
-  caller is present only when that frame's resolved `f_code.co_filename` equals
-  the realpath of `lib/reference_index.py` or an exact realpath in
-  `.planning/reference-index-allowlist.yml` for approved tests/tools. Module
-  names, package prefixes, symlink aliases, full-stack "called from" matches,
-  and helper functions outside those resolved files are not authorization;
-  helper modules must receive already opened handles or parsed rows rather than
-  reopening reference paths themselves. For every candidate path from either
-  audit event, the hook first performs that exact caller check and returns
-  immediately for authorized callers, so `lib/reference_index.py` can create
-  first-run or test fixture files such as `data/reference/test_*.yml` before
-  those paths exist. For all other callers,
+  for `open`, `os.open`, and `os.openat` where the running Python exposes a
+  separate audit event. The hook authorizes callers through explicit registration,
+  not package-name or `co_filename` string matching: `lib/reference_index.py`
+  registers its own module identity at import time, and any approved test/tool
+  file listed in `.planning/reference-index-allowlist.yml` must call the
+  reference-index registration API with an opaque token before opening reference
+  YAML. Registration validates that both `Path(frame.f_code.co_filename).resolve(strict=False)`
+  and the calling module's `__file__` resolve to the exact allowlisted realpath.
+  Frames with non-filesystem `co_filename` values such as `<frozen ...>`, zipped
+  import paths, missing `__file__`, or mismatched symlink/module paths fail closed
+  with a precise error naming the offending frame and module; they are not treated
+  as implicit authorization. Module names, package prefixes, full-stack "called
+  from" matches, and helper functions outside registered files are not
+  authorization. Helper modules must receive already opened handles or parsed rows
+  unless they are explicitly allowlisted and registered. For every candidate path
+  from a covered audit event, the hook first performs this registration check and
+  returns immediately for authorized callers, so `lib/reference_index.py` can
+  create first-run or test fixture files such as `data/reference/test_*.yml`
+  before those paths exist. For all other callers,
   the hook converts with `os.fspath`, decodes bytes with `os.fsdecode`, resolves
   with `Path(path).resolve(strict=False)`, and treats conversion or resolution
   exceptions as "not a confirmed reference path" so unrelated file opens keep
@@ -425,17 +456,21 @@ Build:
   confirmed to be under `data/reference/*.yml`. Startup asserts the trap is
   installed and aborts
   decision-mode execution if the assertion fails. The trap catches Python-level
-  `open`/`os.open` audit events without monkey-patching `open`, `io.open`,
-  `Path.open`, `Path.read_text`, `os.open`, or stdlib internals, catching common
-  variable indirection and helper-module bypasses that static analysis misses.
+  `open`/`os.open`/`os.openat` audit events without monkey-patching `open`,
+  `io.open`, `Path.open`, `Path.read_text`, `os.open`, or stdlib internals,
+  catching common variable indirection and helper-module bypasses that static
+  analysis misses.
   Fixtures cover `..` components, symlinks targeting `data/reference/`,
   case-variant paths on case-insensitive filesystems, bytes-vs-str path
   arguments, and an unauthorized `os.open(path, os.O_RDONLY)` call against a
-  reference YAML file. Test fixtures also install the
-  same trap during unit and integration runs, and an end-to-end regression
-  invokes the production CLI with `python -m ... --decision-mode` under
-  `strace -e openat,open` on Linux or `dtruss -t open` on macOS and asserts
-  every reference-YAML open originates from `lib/reference_index.py`. The trap
+  reference YAML file. Additional fixtures cover `python -m` execution,
+  symlinked `sys.path`, and a zipped/frozen-style non-filesystem frame, proving
+  the hook either authorizes through registration or aborts with the precise
+  unsupported-layout error. Test fixtures also install the same trap during unit
+  and integration runs, and an end-to-end regression invokes the production CLI
+  with `python -m ... --decision-mode` under `strace -e openat,open` on Linux or
+  `dtruss -t open` on macOS and asserts every reference-YAML open originates from
+  a registered reference-index caller. The trap
   also has a fixture where authorized reference-index code creates a new
   `data/reference/test_*.yml` file during a test run, plus an unrelated
   missing-file open outside `data/reference/`, proving the audit hook neither
@@ -445,9 +480,16 @@ Build:
   installation, native extensions that bypass Python audit events,
   implementation paths that issue raw syscalls without Python audit events,
   concurrent symlink swaps between audit-time `Path.resolve(strict=False)` and
-  the later open syscall, and out-of-process reads through `subprocess.Popen`
-  remain outside its guarantee and are covered by static lint, the syscall-level
-  regression, and code review. Authorized reference-index opens that must defend
+  the later open syscall, mmap readers over pre-opened descriptors, and
+  out-of-process reads through `subprocess.Popen` remain outside its guarantee
+  and are covered by static lint, the syscall-level regression, and code review.
+  Reference-index authorization forbids `mmap.mmap` for reference YAML bytes.
+  CI lint rejects `mmap`, `os.openat`, `os.scandir`/`os.listdir`/`glob.glob`
+  enumeration of `data/reference`, and `subprocess.run`/`Popen` calls to
+  shell-style readers such as `cat`, `head`, `awk`, or `sed` against reference
+  paths outside the authorized wrapper. Decision-mode syscall fixtures are the
+  acceptance backstop for the supported CLI entrypoints, not a claim that the
+  Python audit hook is complete. Authorized reference-index opens that must defend
   against symlink TOCTOU use `os.open(..., O_NOFOLLOW)` where available and
   revalidate `fstat()` after open before parsing bytes.
   Any out-of-process reference-data tooling must be exposed through an
@@ -761,11 +803,18 @@ Build:
   `MORTGAGE_OPS_*` flag requires adding it to that registry and routing reads
   through `is_truthy`. `MORTGAGE_OPS_AUDIT_ACK_REPO_STAGING` is a rejected
   legacy/input-diagnostic token, not an authorization flag: tests prove setting
-  it never satisfies the repo-local private-staging acknowledgement. An AST lint
-  fails
-  `os.environ.get(...)`, `os.getenv(...)`, and `os.environ[...]` reads of any
-  `MORTGAGE_OPS_*` key outside `lib/env_flags.py`, so strict parsing cannot be
-  bypassed by ad hoc environment checks.
+  it never satisfies the repo-local private-staging acknowledgement. `lib/env_flags.py`
+  is the closed set of allowed APIs for reading safety-relevant environment
+  variables. An AST lint fails any `MORTGAGE_OPS_*` read outside that module,
+  including `os.environ.get(...)`, `os.getenv(...)`, `os.environ[...]`,
+  `from os import environ; environ.get(...)`, aliases bound to `os.environ`,
+  `os.environ.copy()`, `dict(os.environ)`, `os.environ.items()`/`keys()`,
+  `setdefault(...)`, `getenv` imported under an alias, and any matching string
+  literal passed to a known third-party environment reader such as
+  `environs.Env`, `python-decouple`, or `pydantic-settings.BaseSettings`.
+  Lint fixtures cover environ aliasing, alias rebinding, copied/dict-cast
+  environment maps, enumeration, and declarative pydantic-settings reads, so
+  strict parsing cannot be bypassed by ad hoc environment checks.
   Fuzz fixtures cover unset, `""`, `" "`, `"\t"`, embedded NUL bytes, non-ASCII
   fullwidth digits, Unicode case lookalikes, and whitespace variants, with
   expected blocker-command exit codes for each.
@@ -850,8 +899,10 @@ Build:
   (json_valid(verdict_reasons) AND json_type(verdict_reasons) = 'ARRAY')` and
   `reason_taxonomy_version INTEGER NOT NULL DEFAULT 0 CHECK
   (reason_taxonomy_version >= 0)`, plus a table-level CHECK enforcing
-  `(reason_taxonomy_version = 0 AND CAST(verdict_reasons AS VARCHAR) = '[]') OR
-  reason_taxonomy_version >= 1`. The old table is replaced
+  `(reason_taxonomy_version = 0 AND json_array_length(verdict_reasons) = 0) OR
+  (reason_taxonomy_version >= 1 AND json_array_length(verdict_reasons) > 0)`.
+  The constraint is structural and must not depend on DuckDB JSON-to-VARCHAR
+  serialization of `[]`. The old table is replaced
   through a two-phase migration journal, not an assumed table-swap primitive:
   before rename, the migration writes `phase21_rebuild_ready(old_table,
   new_table)`; the transaction that drops or renames the old table and renames the
@@ -867,9 +918,11 @@ Build:
   existing rows and that the post-migration table contains zero `NULL`
   verdict-reason or taxonomy values; they do not accept a branch where
   `verdict_reasons` remains `NULL`
-  after backfill. The migration records step completion in a durable migration
-  version table inside the same DuckDB file before releasing the lock, and startup
-  resumes from the recorded step rather than assuming a never-migrated database.
+  after backfill. Intermediate recovery state lives only in the two-phase
+  migration journal inside the same DuckDB file; the durable migration-version
+  table is written only after final post-rename validation succeeds. Startup
+  resumes by inspecting the journal and catalog state rather than assuming a
+  never-migrated database or trusting a partial version-table step marker.
   Each step is idempotent: re-running after failure between nullable add,
   backfill, validation, rebuild, rename, and completion either observes the
   completed step or completes it without data loss. Recovery rules are explicit
@@ -892,14 +945,26 @@ Build:
   inject a failure before the first journal write and between each later pair of
   steps, including the old-plus-temp/no-journal state, and prove the next
   invocation finishes with the final NOT NULL/CHECK-constrained table.
-  `db-write.mjs` asserts before INSERT/UPDATE that `verdict_reasons` is a JSON
-  array literal and that
-  `reason_taxonomy_version` is never explicitly `NULL` or inconsistent with the
-  payload shape. Unit tests prove direct DB-layer inserts of `NULL`, invalid
-  JSON, non-array JSON, `reason_taxonomy_version=NULL`, and
-  `reason_taxonomy_version=0` with a non-empty structured reason array fail,
+  `db-write.mjs` is the only write path for `data/analyzed_listings.duckdb`.
+  AST lint fails `duckdb.connect()` and direct `INSERT`/`UPDATE` calls against
+  the analyzed-listings database outside the allowlisted migration and
+  `db-write.mjs` modules; debugging scripts and Python helpers must call the
+  write API instead of opening the DuckDB file directly. `db-write.mjs` asserts
+  before INSERT/UPDATE that `verdict_reasons` is a JSON array literal, that
+  structured version `1+` payloads are non-empty and contain the required
+  structured reason fields, and that `reason_taxonomy_version` is never
+  explicitly `NULL` or inconsistent with the payload shape. Unit tests prove
+  direct DB-layer inserts of `NULL`, invalid JSON, non-array JSON,
+  `reason_taxonomy_version=NULL`, `reason_taxonomy_version=0` with a non-empty
+  structured reason array, and `reason_taxonomy_version=1` with `[]` fail,
   including a non-array valid JSON literal that confirms the JSON
-  extension-backed `json_type` check is active. A reanalysis regression starts
+  extension-backed `json_type` check is active. Write-path fixtures prove a
+  version-1 partial reason object missing required fields is rejected by
+  `db-write.mjs`, and lint fixtures prove future Python, Node, and one-off script
+  writers cannot bypass that API. A migration regression inserts via the
+  orchestration layer and reads back through the pinned DuckDB version, but no
+  correctness check relies on byte-for-byte JSON text cast stability. A
+  reanalysis regression starts
   with a migrated version-0 row, writes structured reasons, and proves the row
   advances to taxonomy version `1` in the same write.
   `verdict_reasons` is always a JSON array, never `NULL`; absence of structured
@@ -915,11 +980,12 @@ Build:
   search and monotonicity checks. The explanatory "because" clause may reference
   fixed, read-only constraints such as the current DTI cap or program limit, but
   it must not search or vary any deferred axis. When `decision_mode: false`, any
-  reference-derived number in that clause must carry an inline stale-reference
-  marker naming the source file and effective date, using the machine-parseable
-  XML-empty-element form
-  `<stale source="atr-qm-thresholds.yml" effective="2024-01-01"/>`; `source` must
-  be XML-escaped and match the reference filename grammar
+  reference-derived number in that clause must carry a visible inline markdown
+  stale-reference annotation naming the source file and effective date, for
+  example `[STALE: atr-qm-thresholds.yml @ 2024-01-01]`. The corresponding
+  report manifest keeps the machine-readable stale marker as structured fields,
+  and any XML-empty-element export uses the same validated values. `source` must
+  match the reference filename grammar
   `[A-Za-z][A-Za-z0-9_-]*(\.[A-Za-z0-9_-]+)*\.ya?ml`, the same basename grammar
   enforced by the reference-index filename lint for new files under
   `data/reference/`. The lint rejects hidden-dot, parent-component-like, and
@@ -931,9 +997,11 @@ Build:
   "This becomes GO if down payment rises to X" or
   "This remains NO-GO even at 25% down because the fixed DTI cap is still
   exceeded." In non-decision/dev-mode output, the second sentence must inline
-  the stale marker immediately after the reference-derived cap value. A report
-  pipeline fixture parses and re-emits the stale marker and proves it round-trips
-  without corruption.
+  the stale annotation immediately after the reference-derived cap value. A
+  report pipeline fixture parses and re-emits the stale marker and proves it
+  round-trips without corruption, and a downstream-render fixture converts the
+  report through the intended HTML/PDF renderer and asserts the visible
+  `[STALE: ...]` annotation remains present in rendered output.
 - Golden verdict fixtures for ambiguous cases, not just happy paths.
 - A backward-compatibility policy for pre-Phase-21 free-text reasons:
   preserve them outside `TraceEntry.source_kind` as `reason_kind=legacy_free_text`
@@ -1022,8 +1090,12 @@ Build:
   is missing/empty for the fallback, fail with a clear configuration error.
   Repo-local snapshot output is
   allowed only when the caller passes an explicit output path plus
-  `--allow-in-repo-snapshot` and a per-run acknowledgement after the tool prints
-  the resolved repo root and snapshot path. Any repo-local private snapshot path
+  `--allow-in-repo-snapshot` and, after the tool prints the resolved repo root
+  and snapshot path, provides either an interactive TTY `y/N` confirmation or a
+  detached signed approval file whose payload covers the exact command, resolved
+  repo root, resolved snapshot path, audience/purpose, and expiry. Plain
+  `--yes`, piped input in non-interactive mode, environment variables, and config
+  files are not accepted as acknowledgements. Any repo-local private snapshot path
   must fall under one committed wildcard-protected private prefix such as
   `snapshots/private/**`; `.gitignore`, `.pre-commit-config.yaml`,
   `scripts/hooks/block-user-layer.py`, `DATA_CONTRACT.md`, and the Phase 24
@@ -1080,19 +1152,36 @@ Build:
   revisions without the markers, with junk or non-integer output, or whose
   supported ranges exclude the snapshot versions are non-replayable by design
   and abort with the incompatible schema/taxonomy non-zero exit before any
-  embedded state is materialized. Regression fixtures cover a pinned revision
-  whose protocol probe exits 0 with junk output, a pre-Phase-21 pinned revision
-  without `verdict_reasons`/snapshot-schema compatibility support, and pinned
-  code declaring `min=2 max=2` for a snapshot at v1; all must fail after the
-  trust gate but before state materialization.
+  embedded state is materialized. Version-probe parsing reads stdout only and
+  requires stderr to be empty. The complete stdout byte stream must be ASCII and
+  match `^(0|[1-9][0-9]*)\n?$`; the parser may strip at most one trailing LF and
+  rejects leading/trailing spaces, `+1`, `-1`, `01`, `1.0`, multi-line output,
+  missing output, and strings such as `1 (build deadbeef)`. Regression fixtures
+  cover each rejected form, a pinned revision whose protocol probe exits 0 with
+  junk output, a pre-Phase-21 pinned revision without
+  `verdict_reasons`/snapshot-schema compatibility support, and pinned code
+  declaring `min=2 max=2` for a snapshot at v1; all must fail after the trust
+  gate but before state materialization.
   Execution uses a unique temporary `git worktree add` checkout path containing
-  the host identifier, PID, monotonic timestamp, and short snapshot hash. Before
-  execution, replay refuses to proceed
+  the host identifier, PID, monotonic timestamp, and short snapshot hash. Every
+  path component used for that checkout is produced by one normalization function
+  and must match `[A-Za-z0-9_-]+`; replay rejects host identifiers, snapshot
+  hashes, PIDs, timestamps, or future embedded components that do not conform,
+  including spaces, path separators, control characters, and newlines. The short
+  snapshot hash is revalidated as lowercase hex before truncation. Before any
+  `git worktree add`, `git worktree remove --force`, or temp-state deletion,
+  replay resolves the final path with `Path.resolve()` and verifies it is
+  relative to the configured replay temp root. Before execution, replay refuses to
+  proceed
   when the source worktree has modified, staged, deleted, renamed, copied, or
   unmerged tracked paths; ignores untracked files that are already gitignored;
   fails on untracked non-ignored files by default with the offending paths
-  printed; and allows them only when the user passes `--allow-untracked` after
-  reviewing that path list. Replay never
+  printed; and allows them only when the user passes `--allow-untracked` and
+  provides either an interactive TTY confirmation after reviewing that exact path
+  list or a detached signed approval file whose payload covers the exact replay
+  command, source worktree, untracked path list digest, and expiry. CI and
+  codex-loop invocations may use the flag only with the signed approval file.
+  Replay never
   writes embedded inputs to standard User Layer paths. Instead, replay
   materializes the embedded `user_layer_state` block into a repo-external
   temporary state directory created in the same cleanup scope as the replay
@@ -1131,7 +1220,13 @@ Build:
   `tempfile.TemporaryDirectory` under the repo-external replay-state root,
   registers it with `atexit`, and removes the temporary checkout with
   `git worktree remove --force` plus the temporary state directory in
-  `try/finally` and `SIGTERM`/`SIGINT`/`SIGHUP` handlers. Temporary User Layer
+  `try/finally` and `SIGTERM`/`SIGINT`/`SIGHUP` handlers. Signal-driven cleanup is
+  explicitly best-effort: Python may defer handlers while the main thread is
+  blocked in subprocess calls, a second termination signal may exit before cleanup
+  completes, and `SIGKILL`, OOM kills, process crashes, and hard power loss can
+  bypass in-process cleanup entirely. CI and codex-loop replay jobs must run on
+  ephemeral hosts or invoke `replay-prune --force` at job end to release manifest
+  entries that normal same-process cleanup cannot reach. Temporary User Layer
   materialization cleanup best-effort overwrites
   regular files before unlinking where the platform permits, then unlinks files
   and directories even after replay exceptions. Because `SIGKILL`, process
@@ -1163,9 +1258,15 @@ Build:
   recorded host identifier; on platforms where `psutil` is unavailable or cannot
   return creation time, cleanup treats entries older than 24 hours as stale
   regardless of PID reuse and leaves younger matching-PID entries for explicit
-  `replay-prune`. Remaining entries are left for the next replay startup or an
-  explicit `replay-prune` maintenance command; replay still checks and refuses
-  to reuse any stale path it is about to create. Regressions simulate two
+  `replay-prune`. `replay-prune --ephemeral-host` is available only for CI or
+  explicitly ephemeral runners; it bypasses PID/create-time matching but still
+  requires the recorded host identifier to equal the current normalized host
+  identifier before pruning. `replay-prune --force` is the documented cross-host
+  cleanup path and requires the same signed approval-file gate as other
+  destructive replay safety flags. Remaining entries are left for the next replay
+  startup or an explicit `replay-prune` maintenance command; replay still checks
+  and refuses to reuse any stale path it is about to create. Regressions simulate
+  two
   concurrent replay startups racing on manifest update through the Python replay
   command and a Node process holding the same lockfile, and prove neither entry
   is lost. PID reuse cannot keep a dead checkout or materialized private-state
@@ -1191,9 +1292,9 @@ Success criteria:
   incompatible schema/taxonomy version.
 - Snapshot privacy tests prove real snapshot output defaults to the repo-external
   XDG state path, repo-local output requires `--allow-in-repo-snapshot` plus
-  per-run acknowledgement, synthetic/redacted fixtures are the only committed
-  snapshots, and the pre-commit hook plus privacy audit block unacknowledged
-  repo-local private snapshots.
+  TTY or signed-file per-run acknowledgement, synthetic/redacted fixtures are the
+  only committed snapshots, and the pre-commit hook plus privacy audit block
+  unacknowledged repo-local private snapshots.
 - Ergonomics stay report/CLI/skill based; no complex UI unless repeated real
   use proves it would reduce decision risk.
 
@@ -1232,44 +1333,57 @@ Build:
   protections to User Layer paths and any repo-local onboarding staging
   overrides. It proves no private paths are staged or committed and verifies the
   resolved onboarding staging path after environment-variable expansion and
-  symlink resolution is outside the resolved repo root from
-  `git rev-parse --show-toplevel`, not merely that the default template path is
-  external. If `git rev-parse --show-toplevel` exits non-zero or returns empty
-  output, the audit exits non-zero with a clear message that it must be run from
-  inside the repository; it never treats an empty string as a repo root. The
+  symlink resolution is outside the expected repo root supplied by the audit
+  entrypoint. The audit invokes
+  `git -C <expected_repo_root> rev-parse --show-toplevel` with a sanitized
+  environment containing only the required `PATH` and with `GIT_DIR`,
+  `GIT_WORK_TREE`, and `GIT_COMMON_DIR` unset, then asserts the returned toplevel
+  resolves to exactly the expected repo root. It never trusts shell-controlled Git
+  environment variables or a submodule/parent mismatch as the privacy boundary.
+  If the command exits non-zero, returns empty output, or returns a different
+  root, the audit exits non-zero with a clear message that it must be run from the
+  expected repository; it never treats an empty string as a repo root. The
   audit compares `os.path.realpath`/`Path.resolve()` for both the expanded
   staging path and repo root, rejects equality or any resolved staging subpath
   below the resolved repo root, and includes fixtures where
   `$XDG_STATE_HOME=""` with absolute `$HOME` falls back to
   `$HOME/.local/state`, unset/empty/relative `$HOME` fails before expansion when
   the fallback is needed, `$XDG_STATE_HOME="relative/dir"` fails before path
-  expansion, and `$XDG_STATE_HOME` is a symlink to a directory inside the repo. A regression
-  invokes the audit from `/tmp` or another non-git directory and asserts this
-  explicit failure mode. The audit also
+  expansion, and `$XDG_STATE_HOME` is a symlink to a directory inside the repo.
+  Regression fixtures set `GIT_WORK_TREE=/tmp/fake-repo`, exercise a git
+  submodule worktree mismatch, and invoke the audit from `/tmp` or another
+  non-git directory; each must reject the redirected or missing root rather than
+  trusting it. The audit also
   verifies default snapshot output resolves outside the repo and covers any
   configured repo-local snapshot output override, treating snapshots as private
   whenever they contain embedded User Layer state. Onboarding refuses to write
   staging artifacts below the resolved repo root even when `$XDG_STATE_HOME`
   points there directly or through a symlink unless the caller passes an
   explicit `--allow-in-repo-staging` flag and a per-invocation acknowledgement.
-  The acknowledgement is an interactive `y/N` confirmation on a TTY after the
-  tool prints the resolved repo root and staging path. Non-interactive token,
-  environment-variable, and config-file acknowledgements are not accepted. It
+  The acknowledgement is either an interactive `y/N` confirmation on a TTY after
+  the tool prints the resolved repo root and staging path, or a detached signed
+  approval file whose payload covers the exact command, resolved repo root,
+  resolved staging path, purpose, and expiry. Non-interactive token,
+  environment-variable, config-file acknowledgements, and piped `yes` input are
+  not accepted. It
   prints a structured warning block that names `$XDG_STATE_HOME` as
   shell-controlled and that pre-commit treats as a hard failure. Without a valid
   per-invocation acknowledgement, the audit exits non-zero. The audit also
   verifies owner-only mode for default and overridden snapshot-private,
   onboarding-staging, and replay-state roots, fails when any parent of those
   private paths is group/other-writable, and applies the same symlink and
-  `O_NOFOLLOW`/`fstat` checks used for the fingerprint key. CI refuses
-  `--allow-in-repo-staging`. The
+  `O_NOFOLLOW`/`fstat` checks used for the fingerprint key. CI refuses any
+  `--allow-*` safety flag unless the invocation supplies the matching signed
+  approval file. The
   shareable-report mode depends on Phase 19 trace data: every `TraceEntry` with
   `source_kind=user_provided`,
-  `derived_from_user_input=true`, private `sensitivity`, or
-  `source_kind=reference_row` whose reference-index row has
-  `share_visibility=redact` is treated as redactable, and `--share` succeeds
-  only when each redactable entry is redacted or explicitly whitelisted by the
-  user. Whitelists are per share invocation: users pass one or more
+  `derived_from_user_input=true`, `derived_from_redactable_reference=true`,
+  private `sensitivity`, or `source_kind=reference_row` whose reference-index row
+  has `share_visibility=redact` is treated as redactable, and `--share` succeeds
+  only when each redactable entry and every computed descendant of a redactable
+  reference row is redacted or explicitly whitelisted by the user. A public
+  `sensitivity` value on a computed entry never overrides redactable-reference
+  ancestry. Whitelists are per share invocation: users pass one or more
   `--whitelist-field <json>` arguments, each a JSON object with exactly
   `report_id` and `display_path` string fields, or `--whitelist-file <path>`
   pointing at a YAML file used only for that run whose top-level value is a
@@ -1321,10 +1435,12 @@ Build:
   before whitelist digesting. Privacy regressions
   cover repeated shares of the same snapshot to different audiences and prove a
   field disclosed in one share is redacted again unless it is explicitly
-  whitelisted in the later run. The same SHA-256 digest, signature metadata, and
-  canonicalized share confirmation payload are recorded in the share manifest so
-  recipients can verify which redactions were skipped and detect post-hoc
-  expansion.
+  whitelisted in the later run. Additional fixtures create computed values from
+  redacted reference rows, including values whose own sensitivity is public, and
+  prove those descendants are redacted unless explicitly whitelisted. The same
+  SHA-256 digest, signature metadata, and canonicalized share confirmation
+  payload are recorded in the share manifest so recipients can verify which
+  redactions were skipped and detect post-hoc expansion.
 - A "household assumptions" report section that lets users see exactly which
   personal assumptions affected a verdict.
 
