@@ -115,8 +115,15 @@ Build:
   `Reference-data impact` asks which reference files are read, which
   `effective_from` dates are crossed, and whether a waiver is added. CI
   verifies that each required sub-prompt is present and has a non-blocklisted
-  answer line beneath it; empty answers, placeholder-only answers, and filler
-  such as `TBD`, `N/A`, or "see above" fail the check.
+  answer line beneath it. The checker normalizes candidate answers by trimming
+  whitespace, case-folding, and stripping punctuation before comparing against a
+  closed filler blocklist that includes `tbd`, `na`, `notapplicable`,
+  `seeabove`, `asabove`, `pending`, `none`, `todo`, `unknown`, and
+  dash/period-only answers. After removing whitespace and any repeated
+  sub-prompt text, each answer must contain at least 30 characters and at least
+  one concrete identifier matching a file path, fixture id, citation id,
+  function/script name, issue id, or command token. Empty answers,
+  placeholder-only answers, and normalized filler fail the check.
 - A committed runbook coverage map at `.planning/runbook-coverage-map.yml` and a
   CI script that maps workflow code paths to required runbook files. For
   example, changes under `lib/rules/` require
@@ -134,8 +141,10 @@ Success criteria:
   that alters a covered workflow updates the runbook in the same PR, so Phase 26
   is a copyedit and audit pass rather than a backfill.
 - A checklist-enforcement test fails when a Phase 19+ plan is missing any of
-  the six required headings, omits a required sub-prompt, or leaves a required
-  sub-prompt answer empty, placeholder-only, or blocklisted as filler.
+  the six required headings, omits a required sub-prompt, leaves a required
+  sub-prompt answer empty, placeholder-only, shorter than the minimum content
+  floor, lacking a concrete identifier, or blocklisted as filler after
+  normalization.
 - A runbook-coverage CI check fails when a Phase 19+ code or reference-data
   change omits the runbook file named by `.planning/runbook-coverage-map.yml`.
 - Phase 26 can focus on end-state release polish, stale-link tests, and
@@ -164,13 +173,14 @@ Build:
   operation, overflow, division by zero, and invalid context. Decimals whose
   coefficient length exceeds the canonical context precision, or whose adjusted
   exponent is outside the `Emin`/`Emax` bounds, are rejected instead of rounded.
-  Unsigned zero-like Decimals are values where `d.is_zero()` is true and
-  `d.is_signed()` is false, and they are serialized as `"0"`; signed zero values
-  such as `Decimal("-0")` are rejected as ambiguous. All other finite Decimals
-  are serialized from their sign, digit tuple, and exponent after stripping only
-  insignificant trailing zeros, so equivalent values such as `0.065` and
-  `0.0650` hash identically without context-driven rounding. Canonicalization
-  rejects non-finite Decimal values. `args_hash` input values may only be `str`,
+  Zero-like Decimals are values where `d.is_zero()` is true, regardless of sign
+  or exponent, and they are serialized as `"0"` so legitimate arithmetic
+  residuals such as `Decimal("-0E-2")` do not destabilize trace hashing. All
+  other finite Decimals are serialized from their sign, digit tuple, and exponent
+  after stripping only insignificant trailing zeros, so equivalent values such as
+  `0.065` and `0.0650` hash identically without context-driven rounding.
+  Canonicalization rejects non-finite Decimal values. `args_hash` input values
+  may only be `str`,
   `int`, `Decimal`, `bool`, `date`, `datetime`, `None`, `list`, or recursively
   nested `dict[str, allowed_value]`; dictionary keys must be strings, so boolean,
   integer, float, Decimal, date, and other non-string keys are rejected instead
@@ -181,12 +191,17 @@ Build:
   Heterogeneous primitive
   values that would otherwise collapse in JSON, such as a raw string
   `"2025-01-01"` and a date for 2025-01-01, must have distinct canonical
-  preimages. `oracle_coverage` is a list of named oracle or fixture
-  identifiers; computed values backed by committed golden fixtures start with
+  preimages. `oracle_coverage` is a canonical sorted list of unique named
+  oracle or fixture identifiers, validated at `TraceEntry` construction before
+  hashing so order-only differences cannot change `args_hash` or coverage
+  reporting. Computed values backed by committed golden fixtures start with
   `hand_calc:<fixture>`, Phase 22 appends third-party oracle identifiers, and
   the list may be empty only for
   `source_input`/`user_provided`/`heuristic_estimate`/`reference_row` values
-  whose source kind documents why coverage is not applicable. `sensitivity`
+  whose source kind documents why coverage is not applicable. Fixture-emitted
+  trace entries must not list their own fixture identifier in `oracle_coverage`,
+  and constructor validation rejects duplicates, unknown identifier syntax, and
+  self-reference before emission. `sensitivity`
   classifies trace values as public or private. Trace writers must set it
   explicitly for `source_input`, `user_provided`, and `heuristic_estimate`
   entries; reference rows default to public unless their catalog entry marks
@@ -220,12 +235,24 @@ Build:
   `lib/reference_index.py` and exact paths listed in
   `.planning/reference-index-allowlist.yml`. The lint fails when a call site
   such as `open`, `Path.read_text`, `yaml.safe_load`, `glob`, or
-  `os.path.join` contains constants or f-strings that can resolve to both
-  `data` and `reference`; when a module imports or re-exports a reference-data
-  path constant for use outside the shared index; or when any module other than
-  `lib/reference_index.py` imports `yaml` and reads from `data/reference`.
-  Allowlist entries are exact file paths, never globs, and approved test
-  fixtures must still exercise the shared staleness and applicability checks.
+  `os.path.join` contains constants, f-strings, joined path parts,
+  `pathlib.Path` construction, or variable-origin arguments that can resolve to
+  both `data` and `reference`; when a module imports or re-exports a
+  reference-data path constant for use outside the shared index; when any module
+  other than `lib/reference_index.py` imports `yaml` and reads from
+  `data/reference`; or when a `.yml` read cannot be statically proven to be
+  outside `data/reference` or inside the allowlist. Test fixtures also install a
+  runtime trap that monkey-patches `open`, `Path.read_text`, and YAML loading so
+  any attempt to open a resolved `data/reference/*.yml` path outside
+  `lib/reference_index.py` or the exact allowlist fails, catching variable
+  indirection and helper-module bypasses that static analysis misses. Node
+  orchestration code is not allowed to read reference YAML directly:
+  `.mjs`/`.js` files must call the Python reference-index command/API for
+  reference metadata, and CI rejects direct `fs` YAML reads, `yaml` package
+  imports, or `data/reference` path construction outside an explicit
+  Node-side allowlist entry. Allowlist entries are exact file paths, never globs,
+  and approved test fixtures must still exercise the shared staleness and
+  applicability checks.
 - A shared pre-emit trace coverage gate, for example `lib/trace_emit.py`, used by
   every markdown/report producer including `lib/property_report.py`, refi NPV,
   amortization, ARM simulation, and stress-test output. It fails generation when
@@ -266,15 +293,26 @@ Build:
   committed. Key resolution uses exactly one path: if `$XDG_CONFIG_HOME` is set,
   `$XDG_CONFIG_HOME/mortgage-ops/fingerprint.key`; otherwise
   `~/.config/mortgage-ops/fingerprint.key`. The loader never searches both
-  locations or falls back silently. On POSIX, the parent directory is created
-  and verified as a non-symlink directory with mode `0700` before the key is
-  touched. The key file is created atomically with
-  `os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY | os.O_NOFOLLOW, 0o600)`;
-  reads use `os.open(path, os.O_RDONLY | os.O_NOFOLLOW)` followed by `os.fstat`
-  to verify the inode is a regular file owned by the current user with mode
-  `0600` before any bytes are read. Any broader permission, pre-existing
-  symlink, non-regular file, or insecure parent directory fails loudly before
-  fingerprints are computed. On Windows, the key resolves to
+  locations or falls back silently. On POSIX, the parent directory is created and
+  then opened once with `O_DIRECTORY | O_NOFOLLOW`; the opened directory file
+  descriptor is verified with `fstat` as a non-symlink directory owned by the
+  current user with mode `0700` before the key is touched. Key creation and reads
+  use `os.open(..., dir_fd=parent_fd)` on the basename only, with
+  `O_CREAT | O_EXCL | O_WRONLY | O_NOFOLLOW` and mode `0600` for creation, or
+  `O_RDONLY | O_NOFOLLOW` for reads. Creation writes all 32 bytes with a checked
+  full-length write, `fsync`s the key file and parent directory, and closes the
+  descriptor before publishing success. If first-run creation loses an
+  `O_EXCL` race with `EEXIST`, the loser follows the read path with bounded
+  retry/backoff for up to one second so it cannot consume an empty or partial
+  file while the winner is still writing. After opening and reading the key, the
+  implementation verifies the key inode is a regular file owned by the current
+  user with mode `0600`, verifies the parent directory inode still matches the
+  originally opened parent fd, and requires the key contents to be exactly 32
+  bytes. Empty, short, or longer files are treated as corrupt partial-write
+  artifacts and fail loudly before fingerprints are computed. Any broader
+  permission, parent-swap mismatch, pre-existing symlink, non-regular file, or
+  insecure parent directory fails loudly before fingerprints are computed. On
+  Windows, the key resolves to
   `%LOCALAPPDATA%\mortgage-ops\fingerprint.key` only if the implementation sets
   an explicit current-user-only ACL, for example via `pywin32`; otherwise the
   fingerprint feature refuses to run with a clear unsupported-platform message.
@@ -291,17 +329,25 @@ Build:
   until the user runs an explicit `prune-old-keys` command; multi-machine
   consistency is out of scope unless the user manually installs the same key on
   each machine.
-- A hash-stability test for `lib/trace_canonical.py` proving that equivalent
-  nested inputs, including `Decimal("0.065")` and `Decimal("0.0650")`, dates,
-  datetimes, and `None`, produce identical canonical preimages and hashes, while
-  string-vs-date, string-vs-numeric dictionary keys, bool-key, tuple, Unicode
-  normalization, signed zero `Decimal("-0")`, exponent-zero `Decimal("0E+10")`,
-  scale-zero `Decimal("0.00")`, high-precision Decimal values longer than the
-  canonical context, caller process contexts with `getcontext().prec` set to 9,
-  28, and 50, and non-finite Decimal boundary cases are either distinct or
-  rejected as specified. The fingerprint-key tests pre-create the POSIX key path
-  as a symlink and require both creation and read attempts to fail loudly without
-  following the link.
+- A hash-stability test for `lib/trace_canonical.py` with explicit buckets:
+  equivalent cases include nested inputs, `Decimal("0.065")` and
+  `Decimal("0.0650")`, Unicode canonical equivalents after NFC normalization,
+  unsigned and signed zero variants such as `Decimal("0E+10")`,
+  `Decimal("0.00")`, and `Decimal("-0E-2")`, and caller process contexts with
+  `getcontext().prec` set to 9, 28, and 50; distinct cases include string-vs-date
+  and string-vs-numeric values; rejected cases include non-string dictionary
+  keys, bool keys, tuples, high-precision Decimal values longer than the
+  canonical context, adjusted exponents outside the canonical bounds, and
+  non-finite Decimal boundary cases. The fingerprint-key tests pre-create the
+  POSIX key path and parent path as symlinks and require both creation and read
+  attempts to fail loudly without following the link. They also simulate two
+  first-run processes racing key creation and a partial key file, requiring the
+  loser to retry until it reads exactly 32 bytes and requiring short-key reads to
+  fail.
+- `oracle_coverage` tests verify constructor-time sorting and deduplication
+  rejection, prove two traces differing only in coverage order produce the same
+  `args_hash`, and reject a hand-calc fixture trace entry that lists itself as
+  covered by its own fixture id.
 
 Success criteria:
 
@@ -344,11 +390,17 @@ Build:
   check requires a waiver only when a reference file is stale, defined as more
   than 12 months after its `effective` date. For stale files, absent, malformed,
   or expired waivers cause failure; non-stale files do not require waivers.
-  Waiver paths are exact relative file paths under `data/reference/`; globs are
-  rejected. The waiver loader rejects entries where `granted_on > expires_on`,
-  where `granted_on` is in the future, or where two entries share the same
-  `path`, and it reports the offending waiver line instead of surfacing a
-  generic staleness failure.
+  Waiver paths are exact normalized POSIX relative file paths under
+  `data/reference/`; globs, absolute paths, backslashes, `..` components,
+  leading `./`, symlinks, and realpaths outside `data/reference/` are rejected.
+  The loader normalizes paths before duplicate detection by stripping redundant
+  separators and comparing both the repo-relative realpath and
+  `os.path.normcase`/inode identity where the filesystem is case-insensitive, so
+  variants such as `./data/reference/x.yml` or mixed-case aliases cannot create
+  duplicate-equivalent waivers. The waiver loader rejects entries where
+  `granted_on > expires_on`, where `granted_on` is in the future, or where two
+  entries share the same normalized path, and it reports the offending waiver
+  line instead of surfacing a generic staleness failure.
   Freshness and decision-date applicability are separate checks: the reference
   index records `effective_from`/`effective_to` or superseded metadata for rows,
   rejects future-effective rows unless an explicit simulation mode is selected,
@@ -359,13 +411,20 @@ Build:
   stale-reference failures to warnings only when generated manifests are tagged
   `decision_mode: false`. The environment variable enables dev mode only when
   set to exactly `1`, `true`, `yes`, or `on`, case-insensitive and with no
-  leading or trailing whitespace; an empty value is treated as unset, and every
-  other non-empty value, including `0`, `false`, `no`, and `off`, is rejected at
-  startup with an error naming `MORTGAGE_OPS_DEV_MODE`. Every markdown report
-  generated in that mode must start with the visible blockquote banner
-  `> DEV MODE - REFERENCE DATA IS STALE - NOT FOR DECISION USE`, and CI verifies
-  the banner is present in dev-mode fixtures, absent in decision-mode fixtures,
-  and that
+  leading or trailing whitespace; an empty value is treated as unset. Strict
+  rejection of every other non-empty value, including `0`, `false`, `no`, and
+  `off`, applies only to commands that consult decision/dev mode, such as
+  analysis, report generation, `scripts/audit_reports.py`, and snapshot replay.
+  Read-only discovery paths such as `--help`, `--version`, and `doctor` parse
+  argv first, report an unrecognized `MORTGAGE_OPS_DEV_MODE` as a warning, and
+  continue unless the command is explicitly checking decision-mode blockers.
+  Every markdown report generated in that mode must include the visible
+  blockquote banner
+  `> DEV MODE - REFERENCE DATA IS STALE - NOT FOR DECISION USE` after any UTF-8
+  BOM and YAML front matter, within the first five non-blank content lines, and
+  before the first non-banner heading or body paragraph. CI parses markdown
+  structure rather than byte-matching the file prefix, verifies the banner is
+  present in dev-mode fixtures, absent in decision-mode fixtures, and that
   `MORTGAGE_OPS_DEV_MODE` is unset in decision-mode test jobs. Dev-mode parser
   tests cover every accepted value and a representative set of rejected values.
 - Extend the existing rules-catalog floor in
@@ -374,12 +433,15 @@ Build:
   `lib/rules/*.py`; do not create parallel citation-coverage mechanisms.
   The existing rules catalog gains a `sensitivity: public | private` column for
   each predicate row it already indexes. Reference YAML row schemas separately
-  gain `sensitivity: public | private` with default `public`, and a new
+  require an explicit `sensitivity: public | private` field with no default, and
+  CI fails when any row in `data/reference/*.yml` omits it. A new
   `references/reference-row-catalog.md` maps each reference row identifier to
   its sensitivity when row-level YAML metadata is not sufficient. The Phase 19
   reference index utility exposes `row.sensitivity` from the reference-row
   YAML/catalog source, not from `references/rules-catalog.md`, so trace defaults
-  and share redaction do not infer privacy from free-form notes.
+  and share redaction do not infer privacy from free-form notes. Share-mode
+  regression tests prove an omitted reference-row sensitivity fails loading
+  before report generation rather than being emitted as public.
 
 Success criteria:
 
@@ -403,12 +465,15 @@ Build:
   `precedence: int`. Structured reasons are stored in the
   `analyzed_listings.verdict_reasons` JSON field. The forward-only migration is
   executed through `orchestration/db-write.mjs` under the existing lockfile and
-  adds `verdict_reasons JSON DEFAULT '[]'` and
+  adds `verdict_reasons JSON NOT NULL DEFAULT '[]'` and
   `reason_taxonomy_version INTEGER DEFAULT 0` to `analyzed_listings`. The same
   migration transaction backfills `UPDATE analyzed_listings SET verdict_reasons
   = '[]' WHERE verdict_reasons IS NULL`; existing rows remain version `0`, and
-  new structured rows write version `1`. `verdict_reasons` is always a JSON
-  array, never `NULL`; absence of structured reasons is represented as `[]`.
+  new structured rows write version `1`. `db-write.mjs` asserts before
+  INSERT/UPDATE that `verdict_reasons` is a JSON array literal, and a unit test
+  proves an explicit DB-layer insert of `NULL` fails. `verdict_reasons` is always
+  a JSON array, never `NULL`; absence of structured reasons is represented as
+  `[]`.
 - Reason severity and precedence rules so the top three reasons explain the
   verdict without burying the user in raw matrix output.
 - Gap-fill prompts that ask only for decision-critical missing fields, with
@@ -511,17 +576,40 @@ Build:
   `scripts/replay_snapshot.py <snapshot.json>` is inspect-only by default for
   every snapshot: it validates the snapshot schema, pinned revision, reference
   data, and embedded input hashes but does not check out or run code. Execution
-  requires explicit `--trusted --execute` for every snapshot, uses an isolated
-  temporary `git worktree add` checkout of the pinned revision, never fetches
-  remote revisions automatically, refuses to proceed if `git status --porcelain
-  --untracked-files=all` reports any changes in the source worktree, and
-  materializes the embedded `user_layer_state` block into the temporary worktree
-  at the standard User Layer paths before invoking the pinned code. Replay
-  refuses to execute snapshots without `user_layer_state`, verifies the hash of
-  each materialized input against the snapshot before running code, never reads
-  current User Layer files from disk, and removes the temporary checkout with
-  `git worktree remove --force` on exit. If the revision or inputs are
-  unavailable, replay fails loudly instead of silently downgrading to inspection.
+  requires explicit `--trusted --execute` for every snapshot and then refuses to
+  run unless the pinned revision is reachable from a configured protected ref,
+  defaulting to `origin/main` or a signed release tag already present locally; no
+  replay command fetches remote revisions automatically. Before execution, replay
+  prints the exact commit hash, author, protected-ref reachability result, and
+  diffstat from the protected base, then requires an interactive `y/N`
+  confirmation. A snapshot may alternatively carry a detached signature from a
+  key registered in local user config; unsigned snapshots from unprotected
+  revisions remain inspect-only. Execution uses a unique temporary
+  `git worktree add` checkout path containing the PID, monotonic timestamp, and
+  short snapshot hash. Before execution, replay refuses to proceed when the
+  source worktree has modified, staged, deleted, renamed, copied, or unmerged
+  tracked paths; ignores untracked files that are already gitignored; warns but
+  does not fail on untracked non-ignored files unless `--strict` is passed; and
+  prints the rationale for each tier so users do not need to stash unrelated
+  local work to preserve replay safety. Replay never
+  writes embedded inputs to standard User Layer paths. Instead, replay
+  materializes the embedded `user_layer_state` block into a repo-external
+  temporary state directory and passes explicit config-path overrides to the
+  pinned code. `user_layer_state` keys are a closed enum of allowed User Layer
+  relative paths such as `config/household.yml`, `config/profile.yml`, and
+  configured narrative preference files; replay rejects any unknown key, `..`
+  component, leading slash, `~`, Windows drive letter, absolute path, symlink, or
+  resolved realpath outside the temporary state directory before writing any
+  file. Replay refuses to execute snapshots without `user_layer_state`, verifies
+  the hash of each materialized input against the snapshot before running code,
+  never reads current User Layer files from disk, and removes the temporary
+  checkout with `git worktree remove --force` in `try/finally` and
+  `SIGTERM`/`SIGINT`/`SIGHUP` handlers. Each replay invocation prunes stale
+  replay worktrees older than 24 hours only when their recorded PID is no longer
+  live; if `git worktree add` fails because a stale path still exists, replay
+  reports the path and exits non-zero instead of reusing it. If the revision,
+  trusted provenance, or inputs are unavailable, replay fails loudly instead of
+  silently continuing into execution.
 
 Success criteria:
 
@@ -567,14 +655,19 @@ Build:
   `.pre-commit-config.yaml`, and `scripts/hooks/block-user-layer.py`
   protections to User Layer paths and any repo-local onboarding staging
   overrides. It proves no private paths are staged or committed and verifies the
-  resolved onboarding staging path after environment-variable expansion is
-  outside `git rev-parse --show-toplevel`, not merely that the default template
-  path is external. The audit also covers `reports/snapshots/private/` and any
-  configured snapshot output override, treating snapshots as private whenever
-  they contain embedded User Layer state. Onboarding refuses to write staging
-  artifacts below the repo
-  root even when `$XDG_STATE_HOME` points there unless the caller passes an
-  explicit `--allow-in-repo-staging` flag. When that flag is used, the audit
+  resolved onboarding staging path after environment-variable expansion and
+  symlink resolution is outside the resolved repo root from
+  `git rev-parse --show-toplevel`, not merely that the default template path is
+  external. The audit compares `os.path.realpath`/`Path.resolve()` for both the
+  expanded staging path and repo root, rejects equality or any resolved staging
+  subpath below the resolved repo root, and includes a fixture where
+  `$XDG_STATE_HOME` is a symlink to a directory inside the repo. The audit also
+  covers `reports/snapshots/private/` and any configured snapshot output
+  override, treating snapshots as private whenever they contain embedded User
+  Layer state. Onboarding refuses to write staging artifacts below the resolved
+  repo root even when `$XDG_STATE_HOME` points there directly or through a
+  symlink unless the caller passes an explicit `--allow-in-repo-staging` flag.
+  When that flag is used, the audit
   exits `0` only if the current shell also sets
   `MORTGAGE_OPS_AUDIT_ACK_REPO_STAGING=1`; it prints a structured warning block
   that names `$XDG_STATE_HOME` as shell-controlled and that pre-commit treats as
