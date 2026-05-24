@@ -2,15 +2,26 @@
   "schema_version": 1,
   "id": "evaluate-03",
   "mode": "evaluate",
-  "numeric_status": "skip",
-  "defer_until_phase": "13.0",
+  "numeric_status": "anchored",
   "expected_scripts": [
     {
       "script": "apr_reg_z.py",
       "args_must_include": ["--input"]
+    },
+    {
+      "script": "amortize.py",
+      "args_must_include": ["--input"]
     }
   ],
-  "expected_numbers": [],
-  "expected_route_keywords": ["evaluate", "apr_reg_z.py"],
-  "v1_frozen_at": "2026-05-10"
+  "expected_numbers": [
+    {
+      "label": "monthly_pi",
+      "value": "2528.27",
+      "tolerance": "0.005",
+      "source_script": "amortize.py",
+      "provenance": "stdout"
+    }
+  ],
+  "expected_route_keywords": ["evaluate", "apr_reg_z.py", "amortize.py", "estimated APR"],
+  "v1_frozen_at": "2026-05-23"
 }

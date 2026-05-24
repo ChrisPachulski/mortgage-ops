@@ -2,15 +2,36 @@
   "schema_version": 1,
   "id": "compare-03",
   "mode": "compare",
-  "numeric_status": "skip",
-  "defer_until_phase": "13.0",
+  "numeric_status": "anchored",
   "expected_scripts": [
     {
       "script": "refi_npv.py",
       "args_must_include": ["--input"]
     }
   ],
-  "expected_numbers": [],
+  "expected_numbers": [
+    {
+      "label": "offer_a_npv",
+      "value": "37182.13",
+      "tolerance": "0.01",
+      "source_script": "refi_npv.py",
+      "provenance": "stdout"
+    },
+    {
+      "label": "offer_b_npv",
+      "value": "40381.08",
+      "tolerance": "0.01",
+      "source_script": "refi_npv.py",
+      "provenance": "stdout"
+    },
+    {
+      "label": "offer_c_npv",
+      "value": "32149.65",
+      "tolerance": "0.01",
+      "source_script": "refi_npv.py",
+      "provenance": "stdout"
+    }
+  ],
   "expected_route_keywords": ["compare", "refi_npv.py", "amortize.py"],
-  "v1_frozen_at": "2026-05-10"
+  "v1_frozen_at": "2026-05-23"
 }

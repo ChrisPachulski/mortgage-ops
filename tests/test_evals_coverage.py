@@ -10,7 +10,7 @@ These three tests close ROADMAP SC-3 + SC-4 + SC-5 at the integration layer:
   test pins the contract).
 - test_runner_gate_passes_on_v1_set — SC-4 + D-12-SC4-01 + SC-6 end-to-end:
   `evals.runner.run_all` on the shipped 23-prompt set (22 Phase-12 prompts +
-  1 Phase-15 property-analysis-01) produces 14 pass / 0 fail / 9 skip,
+  1 Phase-15 property-analysis-01) produces 23 pass / 0 fail / 0 skip,
   gate at 100% >= 95%.
 """
 
@@ -71,21 +71,23 @@ def test_prompt_mode_matches_oracle_mode() -> None:
 
 
 def test_runner_gate_passes_on_v1_set() -> None:
-    """SC-4 + D-12-SC4-01 + SC-6 end-to-end: 14 anchored pass + 0 fail + 9 skip
+    """SC-4 + D-12-SC4-01 + SC-6 end-to-end: 23 anchored pass + 0 fail + 0 skip
     -> gate 100% >= 95%. Plan 15-05 added property-analysis-01 (numeric_status=
-    anchored, 3 anchored numerics) so the pass count grew from 13 to 14; skip
-    + fail counts are unchanged."""
+    anchored, 3 anchored numerics) growing pass count from 13 to 14; the 2026-
+    05-23 anchor pass flipped the 9 previously-skipped TBD oracles (affordability-
+    03, arm-02, arm-03, compare-03, evaluate-03, refinance-02, refinance-03,
+    stress-02, stress-03) to anchored, bringing pass count to 23 / skip to 0."""
     report = run_all(PROMPTS_DIR)
     assert report.n_prompts == 23, f"expected 23 prompts, got {report.n_prompts}"
-    assert report.numeric_pass_count == 14, (
-        f"expected 14 pass, got {report.numeric_pass_count} "
+    assert report.numeric_pass_count == 23, (
+        f"expected 23 pass, got {report.numeric_pass_count} "
         f"(fail={report.numeric_fail_count}, skip={report.numeric_skip_count}, "
         f"failures={report.failures})"
     )
     assert report.numeric_fail_count == 0, (
         f"expected 0 fail, got {report.numeric_fail_count}; failures: {report.failures}"
     )
-    assert report.numeric_skip_count == 9, f"expected 9 skip, got {report.numeric_skip_count}"
+    assert report.numeric_skip_count == 0, f"expected 0 skip, got {report.numeric_skip_count}"
     assert report.numeric_match_rate == pytest.approx(1.0), (
         f"expected gate at 1.0, got {report.numeric_match_rate}"
     )

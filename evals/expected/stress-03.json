@@ -2,15 +2,36 @@
   "schema_version": 1,
   "id": "stress-03",
   "mode": "stress",
-  "numeric_status": "skip",
-  "defer_until_phase": "13.0",
+  "numeric_status": "anchored",
   "expected_scripts": [
     {
       "script": "stress_test.py",
       "args_must_include": ["--input"]
     }
   ],
-  "expected_numbers": [],
+  "expected_numbers": [
+    {
+      "label": "parallel_shift_total_interest",
+      "value": "719508.17",
+      "tolerance": "0.50",
+      "source_script": "stress_test.py",
+      "provenance": "stdout"
+    },
+    {
+      "label": "gradual_rise_total_interest",
+      "value": "720666.78",
+      "tolerance": "0.50",
+      "source_script": "stress_test.py",
+      "provenance": "stdout"
+    },
+    {
+      "label": "fall_then_rise_total_interest",
+      "value": "584695.22",
+      "tolerance": "0.50",
+      "source_script": "stress_test.py",
+      "provenance": "stdout"
+    }
+  ],
   "expected_route_keywords": ["stress", "stress_test.py"],
-  "v1_frozen_at": "2026-05-10"
+  "v1_frozen_at": "2026-05-23"
 }

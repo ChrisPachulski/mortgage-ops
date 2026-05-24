@@ -2,15 +2,29 @@
   "schema_version": 1,
   "id": "stress-02",
   "mode": "stress",
-  "numeric_status": "skip",
-  "defer_until_phase": "13.0",
+  "numeric_status": "anchored",
   "expected_scripts": [
     {
       "script": "stress_test.py",
       "args_must_include": ["--input"]
     }
   ],
-  "expected_numbers": [],
+  "expected_numbers": [
+    {
+      "label": "baseline_monthly_pi_at_6_5pct",
+      "value": "2528.27",
+      "tolerance": "0.005",
+      "source_script": "stress_test.py",
+      "provenance": "stdout"
+    },
+    {
+      "label": "worst_case_monthly_pi_at_9pct",
+      "value": "3218.49",
+      "tolerance": "0.01",
+      "source_script": "stress_test.py",
+      "provenance": "stdout"
+    }
+  ],
   "expected_route_keywords": ["stress", "stress_test.py", "stress-test-agent"],
-  "v1_frozen_at": "2026-05-10"
+  "v1_frozen_at": "2026-05-23"
 }

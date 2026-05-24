@@ -2,15 +2,36 @@
   "schema_version": 1,
   "id": "refinance-03",
   "mode": "refinance",
-  "numeric_status": "skip",
-  "defer_until_phase": "13.0",
+  "numeric_status": "anchored",
   "expected_scripts": [
     {
       "script": "refi_npv.py",
       "args_must_include": ["--input"]
     }
   ],
-  "expected_numbers": [],
+  "expected_numbers": [
+    {
+      "label": "old_monthly_pi",
+      "value": "1847.15",
+      "tolerance": "0.01",
+      "source_script": "refi_npv.py",
+      "provenance": "stdout"
+    },
+    {
+      "label": "new_monthly_pi",
+      "value": "1798.65",
+      "tolerance": "0.01",
+      "source_script": "refi_npv.py",
+      "provenance": "stdout"
+    },
+    {
+      "label": "monthly_savings",
+      "value": "48.50",
+      "tolerance": "0.01",
+      "source_script": "refi_npv.py",
+      "provenance": "stdout"
+    }
+  ],
   "expected_route_keywords": ["refinance", "refi_npv.py"],
-  "v1_frozen_at": "2026-05-10"
+  "v1_frozen_at": "2026-05-23"
 }
