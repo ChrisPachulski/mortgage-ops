@@ -72,9 +72,9 @@ This means the best investments are boring, explicit, and checkable.
 
 These are the steady-state quality bars.
 
-- 100% of report-visible numbers emitted by the report formatter are traceable
-  or explicitly labeled as source input, user-provided value, or heuristic
-  estimate.
+- 100% of report-visible numbers emitted by any report or analysis markdown
+  producer are traceable or explicitly labeled as source input,
+  user-provided value, or heuristic estimate.
 - 0 orphan numeric values in generated reports: report generation itself fails
   before emitting markdown when trace coverage is incomplete.
 - 100% of `lib/rules/` predicates have citation, source URL, effective date,
@@ -106,12 +106,16 @@ Build:
 - A "change checklist" template that every Phase 19+ implementation plan must
   answer before code changes begin: six-figure filter, affected moat layer,
   User Layer impact, reference-data impact, oracle impact, and verification
-  commands.
+  commands. The template is shipped as
+  `.planning/templates/CHANGE-CHECKLIST.md`, GSD plan generation copies it into
+  each Phase 19+ `PLAN.md`, and CI fails plans that omit any required heading.
 
 Success criteria:
 
 - Phase 19 and later plans are written against the checklist instead of
   retrofitting the checklist after implementation.
+- A checklist-enforcement test fails when a Phase 19+ plan is missing any of
+  the six required headings.
 - Phase 26 can focus on end-state release polish, stale-link tests, and
   hardening rather than inventing the maintenance process late.
 
@@ -125,16 +129,27 @@ Build:
   other Phase 19 implementation work and treated as a stability contract for
   Phases 20-24. The schema records:
   `display_path`, `value`, `source_kind`, `function_or_script`, `args_hash`,
-  `input_field`, `reference_file`, `reference_row`, `effective`, and
-  `oracle_coverage`.
+  `input_field`, `reference_file`, `reference_row`, `effective`,
+  `oracle_coverage`, `sensitivity`, and `derived_from_user_input`.
 - Schema rules:
   `source_kind` is an enum covering `computed`, `source_input`,
   `user_provided`, `heuristic_estimate`, and `reference_row`; `args_hash` is
-  SHA-256 over sorted JSON with `Decimal` values serialized as strings at
-  construction precision; `oracle_coverage` is a list of named oracle or
-  fixture identifiers, empty only when the source kind documents why coverage is
-  not applicable; and trace indexes include a report-scoped identifier so
-  `display_path` collisions across reports cannot alias entries.
+  produced only through `lib/trace_canonical.py` using recursive canonical JSON:
+  UTF-8 bytes, codepoint `sort_keys=True`, `separators=(",", ":")`, no trailing
+  newline, explicit `null` handling, ISO-8601 date/datetime strings, and
+  `Decimal` values converted with `format(value.normalize(), "f")` after mapping
+  zero-like values to `"0"` so equivalent values such as `0.065` and `0.0650`
+  hash identically. `oracle_coverage` is a list of named oracle or fixture
+  identifiers; computed values backed by committed golden fixtures start with
+  `hand_calc:<fixture>`, Phase 22 appends third-party oracle identifiers, and
+  the list may be empty only for
+  `source_input`/`user_provided`/`heuristic_estimate`/`reference_row` values
+  whose source kind documents why coverage is not applicable. `sensitivity`
+  classifies trace values as public or private, and `derived_from_user_input` is
+  true when a value directly or transitively depends on User Layer inputs rather
+  than only when its own `source_kind` is `user_provided`. Trace indexes include
+  a report-scoped identifier so `display_path` collisions across reports cannot
+  alias entries.
 - Report-side citation footers generated from trace data, not manually composed
   strings.
 - A shared reference index utility, for example `lib/reference_index.py`, that
@@ -142,22 +157,30 @@ Build:
   and contributing rows. The report manifest writer and Phase 20 refresh audit
   must both consume this utility instead of scraping reference YAML
   independently.
-- A pre-emit trace coverage gate in the report formatter
-  (`lib/property_report.py` or its successor) that fails report generation when
-  orphan numbers are present. CI tests the gate with committed report fixtures
-  and reports generated under a temporary test directory; live `reports/*.md`
-  remain User/Data Layer and stay out of CI, while `scripts/audit_reports.py`
-  only revalidates local reports after generation.
+- A shared pre-emit trace coverage gate, for example `lib/trace_emit.py`, used by
+  every markdown/report producer including `lib/property_report.py`, refi NPV,
+  amortization, ARM simulation, and stress-test output. It fails generation when
+  orphan numbers are present. CI tests the gate with committed fixtures for each
+  producing script and reports generated under a temporary test directory; live
+  `reports/*.md` remain User/Data Layer and stay out of CI.
+- `scripts/audit_reports.py` is a local audit tool for reports generated before
+  the pre-emit gate existed or for explicitly non-decision/dev-mode output; it
+  is not a substitute for the shared gate and cannot bless decision-ready
+  reports that failed pre-emit validation.
 - A deterministic local report manifest containing code revision, listing hash,
   reference-data effective dates, and private-input fingerprints. Fingerprints
   for household/profile inputs are stored only in local private manifests or are
   computed as keyed HMACs with a local uncommitted secret; shareable reports and
   redacted manifests must omit these fields.
+- A hash-stability test for `lib/trace_canonical.py` proving that equivalent
+  nested inputs, including `Decimal("0.065")` and `Decimal("0.0650")`, dates,
+  datetimes, and `None`, produce identical canonical preimages and hashes.
 
 Success criteria:
 
-- A committed formatter fixture test verifies every report-visible numeric token
-  maps to a `TraceEntry` or to an explicit display-only/source-input tag.
+- Committed fixture tests for each report-producing script verify every
+  report-visible numeric token maps to a `TraceEntry` or to an explicit
+  display-only/source-input tag.
 - Any numeric value not traceable must be explicitly tagged as display-only
   formatting, source input, or user-provided text, and the trace coverage gate
   fails without that tag.
@@ -175,8 +198,12 @@ Build:
 - `scripts/reference_refresh_audit.py` that consumes the Phase 19 reference index
   utility and reports stale files, source URLs, effective dates, and impacted
   predicates.
-- Impact-diff reports: before/after snapshots for affected golden fixtures and
-  property-analysis scenarios.
+- `scripts/reference_impact_fixtures.py` produces before/after verdict diffs
+  against committed `tests/fixtures/property_listings/*.yml`, runs in CI, and
+  writes committable output for review.
+- `scripts/reference_impact_local.py` produces before/after verdict diffs
+  against local `data/analyzed_listings.duckdb` household data; its output stays
+  gitignored User/Data Layer material and never runs in CI.
 - A refresh ledger under `.planning/reference-refresh-{YEAR}.md` with source
   links, checked dates, changed rows, unchanged rows, and risk notes.
 - CI/test support for "decision mode": active property analysis fails when
@@ -184,8 +211,14 @@ Build:
   is the default for the property-analysis CLI.
 - A tracked waiver file at `data/reference/waivers.yml` with required fields
   `path`, `reason`, `granted_by`, `granted_on`, and `expires_on`. The staleness
-  check refuses missing, malformed, or expired waivers; permissive CLI-only
-  bypasses are out of scope.
+  check requires a waiver only when a reference file is stale, defined as more
+  than 12 months after its `effective` date. For stale files, absent, malformed,
+  or expired waivers cause failure; non-stale files do not require waivers.
+  Permissive CLI-only bypasses that still claim decision-ready output are out of
+  scope. A documented non-decision development mode, exposed as
+  `--no-decision-mode` or `MORTGAGE_OPS_DEV_MODE=1`, may downgrade
+  stale-reference failures to warnings only when generated manifests are tagged
+  `decision_mode: false`.
 - Extend the existing rules-catalog floor in
   `references/rules-catalog.md` and
   `tests/test_rules/test_citation_coverage.py` so the catalog cannot drift from
@@ -216,16 +249,19 @@ Build:
   Phase 14 and existing program matrices: down-payment percentage, 15-year vs
   30-year term, and loan program choice. Rate, income, debt, credit-score, and
   location counterfactuals are deferred until a later phase defines bounded
-  search and monotonicity checks.
+  search and monotonicity checks. The explanatory "because" clause may reference
+  fixed, read-only constraints such as the current DTI cap or program limit, but
+  it must not search or vary any deferred axis.
   Example report language:
   "This becomes GO if down payment rises to X" or
-  "This remains NO-GO even at 25% down because Y."
+  "This remains NO-GO even at 25% down because the fixed DTI cap is still
+  exceeded."
 - Golden verdict fixtures for ambiguous cases, not just happy paths.
 - A backward-compatibility policy for pre-Phase-21 free-text reasons:
-  tag them as `source_kind=legacy_freeform`, exclude them from precedence
-  ranking, add `reason_taxonomy_version` to `analyzed_listings`, and require
-  Phase 23 snapshot queries to gate on that version before using structured
-  reason fields.
+  preserve them outside `TraceEntry.source_kind` as `reason_kind=legacy_free_text`
+  with `reason_taxonomy_version=0`, exclude them from precedence ranking, add
+  `reason_taxonomy_version` to `analyzed_listings`, and require Phase 23 snapshot
+  queries to gate on that version before using structured reason fields.
 
 Success criteria:
 
@@ -258,8 +294,11 @@ Success criteria:
 - External parity failures are actionable because convention mismatches are
   documented up front.
 - Optional oracle absence does not break normal development.
-- Any calc primitive change has at least one independent check that did not
-  come from the same engine output.
+- Every calc primitive has a committed hand-calc golden-value fixture with a
+  citation, and CI requires that always-on fixture.
+- Where conventions match, each calc primitive also has a skip-unless-installed
+  third-party parity test; absence of optional oracle packages is informational
+  and never counts as coverage by itself.
 
 ### Phase 23: Decision Ergonomics
 
@@ -277,13 +316,21 @@ Build:
 - Watchlist summaries over persisted listings:
   GO candidates, WATCH requiring gap-fill, NO-GO with blocker reason.
 - Report snapshots that preserve assumptions used at decision time, even after
-  future reference-data refreshes.
+  future reference-data refreshes. Snapshots include the pinned code revision,
+  reference-data versions, and inputs needed for
+  `scripts/replay_snapshot.py <snapshot.json>` to check out the pinned revision
+  when available, rerun the analysis, and assert bit-identical output; if the
+  revision or inputs are unavailable, replay fails loudly instead of silently
+  downgrading to inspection.
 
 Success criteria:
 
 - The household can compare a shortlist without exporting to a spreadsheet.
 - The report preserves enough assumptions that a future agent can explain why a
   past listing was accepted or rejected.
+- Snapshots are replayable: `scripts/replay_snapshot.py <snapshot.json>`
+  verifies pinned code, inputs, and reference data reproduce bit-identical
+  results or exits non-zero with the missing prerequisite.
 - Ergonomics stay report/CLI/skill based; no complex UI unless repeated real
   use proves it would reduce decision risk.
 
@@ -297,8 +344,10 @@ Build:
 - A first-run onboarding flow that renders templates for User Layer files:
   `config/household.yml`, `config/profile.yml`, and optional narrative
   preferences. The flow previews values and writes generated templates to a
-  non-User-Layer staging path only; the user copies them into place manually.
-  System code must not create, overwrite, or migrate User Layer paths.
+  gitignored, pre-commit-blocked staging path only; the user copies them into
+  place manually. System code must not create, overwrite, or migrate User Layer
+  paths, and onboarding staging artifacts are classified as private anywhere
+  they may contain household values.
 - Strict schemas and validation messages for household income, debts, cash,
   applicants, credit assumptions, location, risk preferences, tax assumptions,
   and preferred loan programs.
@@ -308,11 +357,12 @@ Build:
   templates for User Layer config without mutating existing User Layer files.
 - A privacy audit command that extends `DATA_CONTRACT.md`, `.gitignore`,
   `.pre-commit-config.yaml`, and `scripts/hooks/block-user-layer.py`
-  protections. It proves no User Layer paths are staged or committed, and its
-  shareable-report mode depends on Phase 19 trace data: every `TraceEntry` with
-  `source_kind=user_provided` is treated as redactable, and `--share` succeeds
-  only when each redactable entry is redacted or explicitly whitelisted by the
-  user.
+  protections to User Layer paths and onboarding staging artifacts. It proves no
+  private paths are staged or committed, and its shareable-report mode depends
+  on Phase 19 trace data: every `TraceEntry` with `source_kind=user_provided`,
+  `derived_from_user_input=true`, or private `sensitivity` is treated as
+  redactable, and `--share` succeeds only when each redactable entry is redacted
+  or explicitly whitelisted by the user.
 - A "household assumptions" report section that lets users see exactly which
   personal assumptions affected a verdict.
 
