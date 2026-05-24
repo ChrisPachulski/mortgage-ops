@@ -210,8 +210,14 @@ def test_cross_language_race_python_waits_for_node(
         assert result_holder, "writer produced no result"
         assert result_holder[0] is True, f"write_listing did not succeed; got {result_holder[0]!r}"
         # Sanity: Python had to wait for Node's hold (~500ms), so elapsed
-        # should be >= ~300ms (Node startup variance) — but well under 1500ms.
-        assert elapsed < 1.4, f"elapsed {elapsed:.3f}s too long; bound was 1.5s"
+        # should be >= ~300ms (Node startup variance) but well under the
+        # writer.join(timeout=5) ceiling. Bound is generous (4.0s) because
+        # GHA ubuntu-latest runners exhibit highly variable subprocess +
+        # node startup latency under concurrent CI load — observed up to
+        # ~2.0s elapsed on a healthy CI run. The load-bearing assertions
+        # are the writer.is_alive / result_holder / result == True checks
+        # above; this elapsed bound just catches outright hangs.
+        assert elapsed < 4.0, f"elapsed {elapsed:.3f}s too long; bound was 4.0s"
     finally:
         node_proc.terminate()
         try:
