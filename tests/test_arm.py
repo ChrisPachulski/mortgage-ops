@@ -736,7 +736,15 @@ def test_initial_fixed_period_matches_phase1_oracle(
         "Excel template are JS/spreadsheet-driven and require human-only browser/Excel "
         "interaction; this session cannot perform the captures. Per Plan 05-06 Rule-4 "
         "deviation against threat T-05-34 (oracle URL/automation gaps), the cross-source "
-        "agreement test is queued for Phase 8+ after a human capture session."
+        "agreement test for 5/1, 7/1, 10/1 is queued for Phase 8+ after a human capture "
+        "session.\n\n"
+        "PARTIAL CROSS-SOURCE COVERAGE (Phase 17): the CFPB CHARM consumer-booklet "
+        "1/1 ARM with 2pp periodic cap is now covered byte-for-byte by an independent "
+        "oracle at tests/test_oracles_arm_reset.py — engine reproduces all three CHARM-"
+        "published values exactly ($1,199.10 / $1,461.72 / $1,600.42). This validates the "
+        "core ARM reset math against an independent published source; the gap that remains "
+        "is specifically the 5/1, 7/1, and 10/1 fixed-then-adjustable structures that "
+        "neither CHARM nor any other public-PDF oracle covers."
     ),
 )
 def test_oracle_cross_validation_5_1(arm_fixture: Callable[[str], dict[str, Any]]) -> None:
