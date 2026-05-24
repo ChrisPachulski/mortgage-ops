@@ -1,16 +1,26 @@
 """Tests for lib/rules/pmi.py — REF-09 (Phase 16 Wave 0).
 
-Citation under test: MGIC Rate Card "Standard MI" BPMI abridged 4x4
-schedule. Pinned to hand-calc anchored fixtures under
-`tests/fixtures/rules/pmi_*.json`.
+Citation under test: Arch MI Borrower-Paid Monthly Non-Refundable Annualized
+BPMI Rate Card (MCUS-B0283B-AMI, effective 2026-02-09); cross-verified
+against Enact MI / Essent / National MI. Pinned to hand-calc anchored
+fixtures under `tests/fixtures/rules/pmi_*.json`.
+
+Vendor history: this fixture set originally pinned MGIC's "Standard MI"
+BPMI rates (2024-03-04). MGIC's public BPMI PDF moved behind MiQ
+authentication during 2025; the 2026-05-23 polish refresh re-pinned the
+abridged 4x4 subset against Arch MI's currently-public rate card after
+filed-rate convergence verified against Enact / Essent / National MI (0bps
+drift across all 16 cells). The reason-tag literal `PMI-RATE-ESTIMATED-MGIC-*`
+is preserved across the vendor switch for citation stability.
 
 Coverage:
   - YAML metadata + 16-row table + capped-fallback row load via load_reference
   - In-band high-quality corner (FICO 760+ x LTV 80-85): annual_rate=0.0019
-  - In-band middle (FICO 740-759 x LTV 90-95): annual_rate=0.0035 (Pachulski baseline)
-  - In-band low-quality corner (FICO 700-719 x LTV 95-97): annual_rate=0.0078
+  - In-band middle (FICO 740-759 x LTV 90-95): annual_rate=0.0048 (Pachulski
+    baseline; +13bps vs the prior 2024-03-04 pin)
+  - In-band low-quality corner (FICO 700-719 x LTV 95-97): annual_rate=0.0079
     (rate coincides with capped-fallback but reason tag is the IN-band marker)
-  - Out-of-band low FICO (680 x 0.96): cap at 0.0078, capped reason tag
+  - Out-of-band low FICO (680 x 0.96): cap at 0.0079, capped reason tag
   - Boundary LTV exactly 0.80: falls THROUGH to cap per RESEARCH Pitfall 10 /
     PATTERNS Boundary Convention Divergence (verifies the divergence from
     lib/rules/fha_mip.py's ltv_min == 0.00 special-case is enforced)
@@ -44,7 +54,7 @@ def test_yaml_loads_with_metadata() -> None:
     assert "pmi_annual_rate_table" in ref
     assert len(ref["pmi_annual_rate_table"]) == 16
     assert "pmi_capped_fallback" in ref
-    assert ref["pmi_capped_fallback"]["annual_rate"] == "0.0078"
+    assert ref["pmi_capped_fallback"]["annual_rate"] == "0.0079"
 
 
 def test_pmi_lookup_in_band_corner_high_quality_760_80() -> None:
@@ -57,7 +67,7 @@ def test_pmi_lookup_in_band_corner_high_quality_760_80() -> None:
 
 
 def test_pmi_lookup_in_band_middle_740_90() -> None:
-    """Pachulski-baseline middle case: FICO 740-759 x LTV 90-95 -> 0.0035."""
+    """Pachulski-baseline middle case: FICO 740-759 x LTV 90-95 -> 0.0048."""
     fx = _fx("pmi_in_band_middle_740_90.json")
     result = lookup_rate(fico=fx["fico"], ltv=Decimal(fx["ltv"]))
     assert isinstance(result, PMILookupResult)
@@ -66,7 +76,7 @@ def test_pmi_lookup_in_band_middle_740_90() -> None:
 
 
 def test_pmi_lookup_in_band_corner_low_quality_700_95() -> None:
-    """Low-quality in-band corner: FICO 700-719 x LTV 95-97 -> 0.0078.
+    """Low-quality in-band corner: FICO 700-719 x LTV 95-97 -> 0.0079.
     The annual_rate value coincides with pmi_capped_fallback.annual_rate,
     but the reason tag is the IN-band marker because (fico, ltv) IS inside
     the table — proves the reason-tag branching is keyed on the lookup
@@ -117,5 +127,5 @@ def test_pmi_lookup_result_is_frozen() -> None:
 def test_pmi_lookup_reason_tag_pattern_for_inner_cell() -> None:
     """Spot-check that the 760+ x 90-95 cell emits the exact parameterized tag."""
     result = lookup_rate(fico=760, ltv=Decimal("0.95"))
-    assert result.annual_rate == Decimal("0.0028")
+    assert result.annual_rate == Decimal("0.0034")
     assert result.reason_tag == "PMI-RATE-ESTIMATED-MGIC-90-95-760+"

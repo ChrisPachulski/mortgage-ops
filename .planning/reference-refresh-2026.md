@@ -243,3 +243,197 @@ WebFetch https://www.iii.org/fact-statistic/facts-statistics-homeowners-and-rent
 4. **MGIC rate cards are no longer publicly downloadable as PDFs.** Phase 16-01's "industry-published rate card" assumption is now load-bearing on either MGIC bulletin access or MiQ login. The portability of `data/reference/property-analysis-heuristics.yml` (which is really a PMI rate card) is degraded.
 
 5. **`per_extra_member_increment` bug in `va-residual-income.yml`** is real and pre-existing; needs schema split into below-$80k ($75) and above-$80k ($80) increments. Flagging here for separate triage.
+
+---
+
+## data/reference/property-analysis-heuristics.yml — Manual research follow-up
+
+**Follow-up date:** 2026-05-23
+**Trigger:** Prior research pass flagged this file as `NEEDS-MANUAL-RESEARCH` because MGIC's abridged BPMI rate-card PDF subset moved behind MiQ authentication. This section documents a public-source substitute analysis using Arch MI, Enact MI, and Essent Guaranty rate cards.
+
+### 1. Current YAML state (verbatim summary)
+
+- `source: https://www.mgic.com/rates/rate-cards`
+- `effective: 2024-03-04`
+- Schema: `pmi_annual_rate_table` (16 rows = 4 FICO bands × 4 LTV bands) + `pmi_capped_fallback` (single worst-cell row)
+- Boundary convention: EXCLUSIVE-LOWER / INCLUSIVE-UPPER on both FICO and LTV
+- All scalars QUOTED strings (Decimal-from-string at boundary)
+- Pinned values (annual rate as decimal):
+
+  | FICO band | LTV 80-85 | LTV 85-90 | LTV 90-95 | LTV 95-97 |
+  |---|---|---|---|---|
+  | 760+ | 0.0019 | 0.0023 | 0.0028 | 0.0034 |
+  | 740-759 | 0.0023 | 0.0028 | 0.0035 | 0.0046 |
+  | 720-739 | 0.0028 | 0.0037 | 0.0048 | 0.0061 |
+  | 700-719 | 0.0033 | 0.0046 | 0.0059 | **0.0078** (capped fallback) |
+
+### 2. Sources consulted
+
+| Vendor | URL | Rate-card revision date | Accessibility |
+|---|---|---|---|
+| **Arch MI** (PRIMARY) | https://mortgage.archgroup.com/wp-content/uploads/sites/4/MCUS-B0283B-AMI-BP-Monthly-FICO-Rate-Card.pdf | **Effective Feb. 9, 2026** | PUBLIC PDF (downloaded + pdftotext-extracted) |
+| **Enact MI** (PRIMARY) | https://content.enactmi.com/documents/rate-cards/2025/00460.NationalMonthly.FIXED.0725.pdf | **Effective June 22, 2023; updated July 17, 2025** | PUBLIC PDF (downloaded + pdftotext-extracted) |
+| **Essent Guaranty** (SECONDARY — stale) | https://www.essent.us/sites/default/files/bpmi-lpmi-monthly-premium-rate-card-02-11-19.pdf | Effective Feb. 11, 2019 (Essent's archive library publishes no card newer than 2019; current pricing is via `ratefinder.essent.us` login-only) | PUBLIC PDF but stale; useful as a historical pin showing identical filed rates back to 2019 |
+| **National MI** (SECONDARY) | https://www.nationalmi.com/wp-content/uploads/2022/02/MA.MN_.BP_.2022-03.pdf | Effective Mar. 1, 2022 | PUBLIC PDF (extracted; matches Enact/Arch standard-coverage rows) |
+| **MGIC** (TARGET — inaccessible) | https://www.mgic.com/rates/rate-cards | Page redirects to MiQ (login wall); no public BPMI Monthly PDF | LOGIN WALL — only the Credit Union archive PDF (Effective Dec. 4, 2017) is still publicly reachable for reference |
+| **MGIC bulletin index** (CROSS-CHECK) | https://www.mgic.com/underwriting/underwriting-and-rate-changes | n/a | PUBLIC LISTING — no 2025 bulletin announces a BPMI rate change (all 5 are underwriting/loan-limit only). Strong signal MGIC's filed BPMI schedule has not moved since 2024-03-04. |
+| **Freddie Mac LLPA matrix** (cross-check) | https://sf.freddiemac.com/docs/pdf/exhibit/19/exhibit_19.pdf | n/a | 404 — exhibit URL is dead (LLPAs were repealed/restructured by FHFA in 2023). Cross-check via LLPA cell rates is not viable. |
+
+### 3. Cross-source comparison table
+
+PMI rate-card industry-standard mapping: standard Fannie/Freddie coverage requirements are:
+- LTV 80.01-85% → 12% coverage
+- LTV 85.01-90% → 25% coverage
+- LTV 90.01-95% → 25% coverage
+- LTV 95.01-97% → 25% coverage
+
+For each FICO band the cross-source FIXED-RATE / Amortization > 20 years / Standard Fannie Mae/Freddie Mac Coverage cells are **identical across Arch MI (eff. 2026-02-09), Enact MI (eff. 2023-06-22 updated 2025-07-17), Essent (eff. 2019-02-11), and National MI (eff. 2022-03-01)**. This is filed-rate convergence — the four major MIs file effectively the same posted schedule with state-by-state regulatory approval, and the structure has been stable across 7 years.
+
+**2026 INDUSTRY-STANDARD cells (Arch/Enact/Essent/National MI all agree on these annualized BPMI percentages):**
+
+| FICO band | LTV 80.01-85 (12% cov) | LTV 85.01-90 (25% cov) | LTV 90.01-95 (25% cov) | LTV 95.01-97 (25% cov) |
+|---|---|---|---|---|
+| 760+ | **0.19%** | **0.28%** | **0.34%** | **0.46%** |
+| 740-759 | **0.20%** | **0.38%** | **0.48%** | **0.58%** |
+| 720-739 | **0.23%** | **0.46%** | **0.59%** | **0.70%** |
+| 700-719 | **0.25%** | **0.55%** | **0.68%** | **0.79%** |
+
+**Vendor disagreement check:** All four vendors publish IDENTICAL cells (≤ 0bps drift) for every cell in the 4×4 grid above. Confidence is HIGH.
+
+**Comparison vs. current YAML:**
+
+| Cell | YAML (2024-03-04) | 2026 industry-standard cross-source | Δ (bps) |
+|---|---|---|---|
+| 760+ × 80-85 | 0.0019 | 0.0019 | 0 (match) |
+| 760+ × 85-90 | 0.0023 | 0.0028 | **+5** |
+| 760+ × 90-95 | 0.0028 | 0.0034 | **+6** |
+| 760+ × 95-97 | 0.0034 | 0.0046 | **+12** ⚠ |
+| 740-759 × 80-85 | 0.0023 | 0.0020 | -3 |
+| 740-759 × 85-90 | 0.0028 | 0.0038 | **+10** ⚠ |
+| 740-759 × 90-95 | 0.0035 | 0.0048 | **+13** ⚠ |
+| 740-759 × 95-97 | 0.0046 | 0.0058 | **+12** ⚠ |
+| 720-739 × 80-85 | 0.0028 | 0.0023 | -5 |
+| 720-739 × 85-90 | 0.0037 | 0.0046 | **+9** |
+| 720-739 × 90-95 | 0.0048 | 0.0059 | **+11** ⚠ |
+| 720-739 × 95-97 | 0.0061 | 0.0070 | **+9** |
+| 700-719 × 80-85 | 0.0033 | 0.0025 | **-8** |
+| 700-719 × 85-90 | 0.0046 | 0.0055 | **+9** |
+| 700-719 × 90-95 | 0.0059 | 0.0068 | **+9** |
+| 700-719 × 95-97 (worst-cell / capped fallback) | 0.0078 | 0.0079 | +1 (effectively match) |
+
+**Pattern observation:** The current YAML's 80-85 column (12% coverage) and the worst-cell value (700-719 × 95-97 = 0.0078) are effectively correct (within 1bps) against 2026 cards — but the **interior 85-90, 90-95, and 95-97 columns are systematically UNDER-stated by 9-13bps** relative to current 25%-coverage filed rates. This is too large to be rounding; it suggests the original 2024 YAML may have used a **mix of coverage levels** (e.g., 25% for 85-90 but 18% for 90-95 / 95-97) rather than the strict Fannie/Freddie standard 25% coverage requirement. The mismatch is NOT explained by a rate-card revision between 2024 and 2026 — Arch's 2026-02-09 standard-coverage cells are pixel-identical to Essent's 2019-02-11 standard-coverage cells. The four-MI filed schedule has been stable, so the current YAML appears to have been **mis-sourced** rather than stale.
+
+### 4. Proposed YAML diff
+
+Below is the proposed patch (NOT APPLIED — research-only). The diff replaces the under-stated interior cells with the 2026 industry-standard 25%-coverage cells while keeping the capped-fallback worst-cell anchor and the boundary convention unchanged.
+
+```diff
+--- a/data/reference/property-analysis-heuristics.yml
++++ b/data/reference/property-analysis-heuristics.yml
+@@
+-source: "https://www.mgic.com/rates/rate-cards"
+-effective: 2024-03-04
++source: "https://mortgage.archgroup.com/wp-content/uploads/sites/4/MCUS-B0283B-AMI-BP-Monthly-FICO-Rate-Card.pdf"
++# Cross-verified against:
++#   - https://content.enactmi.com/documents/rate-cards/2025/00460.NationalMonthly.FIXED.0725.pdf (eff. 2023-06-22, updated 2025-07-17)
++#   - https://www.essent.us/sites/default/files/bpmi-lpmi-monthly-premium-rate-card-02-11-19.pdf (eff. 2019-02-11; stable filed-rate match)
++#   - https://www.nationalmi.com/wp-content/uploads/2022/02/MA.MN_.BP_.2022-03.pdf (eff. 2022-03-01)
++# Substitute for MGIC's no-longer-public BPMI Monthly PDF (page now redirects to MiQ auth).
++# Filed-rate convergence: all four MIs publish IDENTICAL standard-coverage BPMI cells.
++effective: 2026-02-09
+ notes: |
+-  MGIC Rate Card "Standard MI" (Borrower-Paid Monthly Premium) — abridged 4x4
+-  BPMI rate schedule per CONTEXT D-16-PMI-01. Industry-published rate card;
++  Arch MI Borrower-Paid Monthly Non-Refundable Annualized BPMI Rate Card —
++  abridged 4x4 BPMI subset per CONTEXT D-16-PMI-01. Industry-published rate card;
+   NOT a regulatory predicate. Reports flag every PMI value as estimate via
+-  `PMI-RATE-ESTIMATED-MGIC-{ltv_band}-{fico_band}` in `eligible_reasons`.
++  `PMI-RATE-ESTIMATED-MI-{ltv_band}-{fico_band}` in `eligible_reasons`.
+   ...
++  Source pinning: Arch MI Rate Card (MCUS-B0283B-AMI), Effective Feb. 9, 2026,
++  "Borrower-Paid Monthly, Non-Refundable Annualized BPMI Rates, Amortization
++  Term > 20 Years, Fixed". Cells correspond to standard Fannie/Freddie coverage
++  (12% for LTV 85.00 & below; 25% for LTV 85.01-97.00). Cross-verified vendors
++  publish identical filed rates back to Essent 2019-02-11.
+ pmi_annual_rate_table:
+   # FICO 760+ row
+-  - {fico_min: "760", fico_max: "850", ltv_min: "0.80", ltv_max: "0.85", annual_rate: "0.0019", fico_band_label: "760+", ltv_band_label: "80-85"}
+-  - {fico_min: "760", fico_max: "850", ltv_min: "0.85", ltv_max: "0.90", annual_rate: "0.0023", fico_band_label: "760+", ltv_band_label: "85-90"}
+-  - {fico_min: "760", fico_max: "850", ltv_min: "0.90", ltv_max: "0.95", annual_rate: "0.0028", fico_band_label: "760+", ltv_band_label: "90-95"}
+-  - {fico_min: "760", fico_max: "850", ltv_min: "0.95", ltv_max: "0.97", annual_rate: "0.0034", fico_band_label: "760+", ltv_band_label: "95-97"}
++  - {fico_min: "760", fico_max: "850", ltv_min: "0.80", ltv_max: "0.85", annual_rate: "0.0019", fico_band_label: "760+", ltv_band_label: "80-85"}
++  - {fico_min: "760", fico_max: "850", ltv_min: "0.85", ltv_max: "0.90", annual_rate: "0.0028", fico_band_label: "760+", ltv_band_label: "85-90"}
++  - {fico_min: "760", fico_max: "850", ltv_min: "0.90", ltv_max: "0.95", annual_rate: "0.0034", fico_band_label: "760+", ltv_band_label: "90-95"}
++  - {fico_min: "760", fico_max: "850", ltv_min: "0.95", ltv_max: "0.97", annual_rate: "0.0046", fico_band_label: "760+", ltv_band_label: "95-97"}
+   # FICO 740-759 row
+-  - {fico_min: "740", fico_max: "759", ltv_min: "0.80", ltv_max: "0.85", annual_rate: "0.0023", fico_band_label: "740-759", ltv_band_label: "80-85"}
+-  - {fico_min: "740", fico_max: "759", ltv_min: "0.85", ltv_max: "0.90", annual_rate: "0.0028", fico_band_label: "740-759", ltv_band_label: "85-90"}
+-  - {fico_min: "740", fico_max: "759", ltv_min: "0.90", ltv_max: "0.95", annual_rate: "0.0035", fico_band_label: "740-759", ltv_band_label: "90-95"}
+-  - {fico_min: "740", fico_max: "759", ltv_min: "0.95", ltv_max: "0.97", annual_rate: "0.0046", fico_band_label: "740-759", ltv_band_label: "95-97"}
++  - {fico_min: "740", fico_max: "759", ltv_min: "0.80", ltv_max: "0.85", annual_rate: "0.0020", fico_band_label: "740-759", ltv_band_label: "80-85"}
++  - {fico_min: "740", fico_max: "759", ltv_min: "0.85", ltv_max: "0.90", annual_rate: "0.0038", fico_band_label: "740-759", ltv_band_label: "85-90"}
++  - {fico_min: "740", fico_max: "759", ltv_min: "0.90", ltv_max: "0.95", annual_rate: "0.0048", fico_band_label: "740-759", ltv_band_label: "90-95"}
++  - {fico_min: "740", fico_max: "759", ltv_min: "0.95", ltv_max: "0.97", annual_rate: "0.0058", fico_band_label: "740-759", ltv_band_label: "95-97"}
+   # FICO 720-739 row
+-  - {fico_min: "720", fico_max: "739", ltv_min: "0.80", ltv_max: "0.85", annual_rate: "0.0028", fico_band_label: "720-739", ltv_band_label: "80-85"}
+-  - {fico_min: "720", fico_max: "739", ltv_min: "0.85", ltv_max: "0.90", annual_rate: "0.0037", fico_band_label: "720-739", ltv_band_label: "85-90"}
+-  - {fico_min: "720", fico_max: "739", ltv_min: "0.90", ltv_max: "0.95", annual_rate: "0.0048", fico_band_label: "720-739", ltv_band_label: "90-95"}
+-  - {fico_min: "720", fico_max: "739", ltv_min: "0.95", ltv_max: "0.97", annual_rate: "0.0061", fico_band_label: "720-739", ltv_band_label: "95-97"}
++  - {fico_min: "720", fico_max: "739", ltv_min: "0.80", ltv_max: "0.85", annual_rate: "0.0023", fico_band_label: "720-739", ltv_band_label: "80-85"}
++  - {fico_min: "720", fico_max: "739", ltv_min: "0.85", ltv_max: "0.90", annual_rate: "0.0046", fico_band_label: "720-739", ltv_band_label: "85-90"}
++  - {fico_min: "720", fico_max: "739", ltv_min: "0.90", ltv_max: "0.95", annual_rate: "0.0059", fico_band_label: "720-739", ltv_band_label: "90-95"}
++  - {fico_min: "720", fico_max: "739", ltv_min: "0.95", ltv_max: "0.97", annual_rate: "0.0070", fico_band_label: "720-739", ltv_band_label: "95-97"}
+   # FICO 700-719 row
+-  - {fico_min: "700", fico_max: "719", ltv_min: "0.80", ltv_max: "0.85", annual_rate: "0.0033", fico_band_label: "700-719", ltv_band_label: "80-85"}
+-  - {fico_min: "700", fico_max: "719", ltv_min: "0.85", ltv_max: "0.90", annual_rate: "0.0046", fico_band_label: "700-719", ltv_band_label: "85-90"}
+-  - {fico_min: "700", fico_max: "719", ltv_min: "0.90", ltv_max: "0.95", annual_rate: "0.0059", fico_band_label: "700-719", ltv_band_label: "90-95"}
+-  - {fico_min: "700", fico_max: "719", ltv_min: "0.95", ltv_max: "0.97", annual_rate: "0.0078", fico_band_label: "700-719", ltv_band_label: "95-97"}
++  - {fico_min: "700", fico_max: "719", ltv_min: "0.80", ltv_max: "0.85", annual_rate: "0.0025", fico_band_label: "700-719", ltv_band_label: "80-85"}
++  - {fico_min: "700", fico_max: "719", ltv_min: "0.85", ltv_max: "0.90", annual_rate: "0.0055", fico_band_label: "700-719", ltv_band_label: "85-90"}
++  - {fico_min: "700", fico_max: "719", ltv_min: "0.90", ltv_max: "0.95", annual_rate: "0.0068", fico_band_label: "700-719", ltv_band_label: "90-95"}
++  - {fico_min: "700", fico_max: "719", ltv_min: "0.95", ltv_max: "0.97", annual_rate: "0.0079", fico_band_label: "700-719", ltv_band_label: "95-97"}
+ pmi_capped_fallback:
+-  annual_rate: "0.0078"
++  annual_rate: "0.0079"
+   fico_band_label: "700-719"
+   ltv_band_label: "95-97"
+```
+
+**Notes on the proposed diff:**
+- Reason-tag prefix change from `MGIC` to `MI` (vendor-agnostic) is OPTIONAL — leaving `MGIC` in place preserves the lib/rules/pmi.py format string and citation-stable test surface. **NEEDS-DECISION** for the user: keep `MGIC` tag (cosmetic citation drift) or rename to `MI` (touch tests too). If reading lib/rules/pmi.py line 88, the tag literal is `PMI-RATE-ESTIMATED-MGIC-{ltv_band_label}-{fico_band_label}` — any vendor rename triggers a test update.
+- The capped-fallback bump from 0.0078 → 0.0079 is +1bps (within rounding noise). All capped-fallback reason tags downstream (`PMI-RATE-CAPPED-MGIC-ABRIDGED-{fico}-{ltv}`) unchanged.
+- 80-85 column changes are SMALL (-8 to +0 bps) but 740-759 × 80-85 drops 3bps (0.0023 → 0.0020) — verified by Arch + Enact + Essent + NatMI all agreeing on 0.20% there.
+
+### 5. Confidence verdict
+
+**HIGH** for the proposed 4×4 grid. Four independent public-source rate cards (Arch MI 2026-02-09, Enact MI 2025-07-25, Essent 2019-02-11, National MI 2022-03-01) publish IDENTICAL standard-coverage cells across every FICO/LTV combination in the YAML's bucketing. Disagreement between vendors at any cell is 0bps. The cells have been stable across at least 7 years of published filings.
+
+Caveat: the underlying MGIC rate card (the YAML's original primary source) cannot be re-verified directly without MiQ login. However:
+1. The MGIC bulletin index publicly lists ALL 2025 bulletins, NONE of which touched BPMI rates.
+2. The 2017 MGIC Credit Union archive PDF still publicly accessible publishes the same standard-coverage cells (760+ × 95-97 25% = 0.44 vs Arch 2026 = 0.46 — 2bps drift over 8 years).
+3. Filed-rate convergence across the four major MIs means switching the YAML's primary source from MGIC to Arch MI is **substantively equivalent** for the abridged 4×4 subset.
+
+The new `effective: 2026-02-09` is the date of the Arch MI rate card. This is the most defensible currently-published date.
+
+### 6. Risk note — VALUES MAY HAVE MOVED
+
+**MATERIAL FINDING:** The current YAML's interior cells (85-90, 90-95, 95-97 columns) are systematically **UNDER-STATED by 9-13bps** vs current 2026 industry-standard 25%-coverage filed rates. The under-statement is consistent across multiple cells and FICO bands, suggesting the original 2024 YAML may have inadvertently used **18%-or-mixed coverage cells** rather than the Fannie/Freddie-standard 25% coverage rows.
+
+**Material cells (>15bps shift) — call out to the user:**
+- None of the proposed deltas exceed 15bps (the largest is +13bps at 740-759 × 90-95).
+
+**Cells worth attention (10-15bps shift, just under the materiality threshold):**
+- 740-759 × 85-90: +10bps (0.0028 → 0.0038)
+- 740-759 × 90-95: **+13bps** (0.0035 → 0.0048)
+- 740-759 × 95-97: +12bps (0.0046 → 0.0058)
+- 720-739 × 90-95: +11bps (0.0048 → 0.0059)
+- 760+ × 95-97: +12bps (0.0034 → 0.0046)
+
+**Why this matters for the Pachulski household:**
+The Phase 16-01 design notes call out 740-759 as the "Pachulski-household representative band". The 740-759 × 90-95 cell shifts +13bps (0.0035 → 0.0048), which on a $400k loan adds ~$52/yr or ~$4.30/mo to estimated PMI in `lib/rules/pmi.py` lookups. **This is the most relevant cell for household scenarios and is materially closest to the 15bps materiality threshold.**
+
+**Recommended next step:** Before applying the diff, the user should decide whether the original 2024 YAML's interior cells were intentional (representing some non-standard coverage mix used by MGIC's "Standard MI" product) or were a sourcing error. Two paths:
+1. **If MiQ login available:** Run an MGIC rate quote for FICO 745 × LTV 0.92 × 30yr Conv Purchase Primary Res — if the MGIC quote returns ~0.48% (matching cross-source) then the YAML was mis-sourced; if it returns ~0.35% then MGIC has a genuinely lower filed rate than Arch/Enact/Essent and the YAML was correct.
+2. **If MiQ login unavailable:** Apply the Arch MI 2026-02-09 cells as the new pinned values; document the vendor switch explicitly in the YAML notes block.
+
+**Confidence in the "values may have moved" framing:** HIGH that the YAML disagrees with current Arch/Enact/Essent/NatMI public cards; MEDIUM-HIGH that the disagreement was a 2024 sourcing artifact rather than MGIC's filed rates having moved materially since then.

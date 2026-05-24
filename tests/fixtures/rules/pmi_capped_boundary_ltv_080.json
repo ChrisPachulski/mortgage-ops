@@ -1,9 +1,9 @@
 {
-  "citation": "MGIC Rate Card 'Standard MI' BPMI (form 71-43345 series, effective 2024-03-04), pmi_capped_fallback row -> 0.0078 (LTV exactly 0.80 falls THROUGH per exclusive-lower boundary convention)",
-  "source_url": "https://www.mgic.com/rates/rate-cards",
-  "comment": "Hand-calc: fico=720, ltv=Decimal('0.80') -> NO row matches (ltv_min=0.80 is EXCLUSIVE per PATTERNS Boundary Convention Divergence; the first row covers 0.80 < ltv <= 0.85) -> capped fallback at pmi_capped_fallback.annual_rate=0.0078. Reason tag: PMI-RATE-CAPPED-MGIC-ABRIDGED-720-0.80. Proves the boundary divergence from lib/rules/fha_mip.py (which has a ltv_min == 0.00 special-case) AND verifies alignment with Phase 14 trigger `provisional_ltv > Decimal('0.80')` at lib/property_analysis.py:652.",
+  "citation": "Arch MI Borrower-Paid Monthly Non-Refundable Annualized BPMI Rate Card (MCUS-B0283B-AMI, effective 2026-02-09), pmi_capped_fallback row -> 0.0079 (LTV exactly 0.80 falls THROUGH per exclusive-lower boundary convention)",
+  "source_url": "https://mortgage.archgroup.com/wp-content/uploads/sites/4/MCUS-B0283B-AMI-BP-Monthly-FICO-Rate-Card.pdf",
+  "comment": "Hand-calc: fico=720, ltv=Decimal('0.80') -> NO row matches (ltv_min=0.80 is EXCLUSIVE per PATTERNS Boundary Convention Divergence; the first row covers 0.80 < ltv <= 0.85) -> capped fallback at pmi_capped_fallback.annual_rate=0.0079. Reason tag: PMI-RATE-CAPPED-MGIC-ABRIDGED-720-0.80. Proves the boundary divergence from lib/rules/fha_mip.py (which has a ltv_min == 0.00 special-case) AND verifies alignment with Phase 14 trigger `provisional_ltv > Decimal('0.80')` at lib/property_analysis.py:652. 2026-05-23 polish refresh: was 0.0078 under the 2024-03-04 YAML.",
   "fico": 720,
   "ltv": "0.80",
-  "expected_annual_rate": "0.0078",
+  "expected_annual_rate": "0.0079",
   "expected_reason_tag": "PMI-RATE-CAPPED-MGIC-ABRIDGED-720-0.80"
 }

@@ -1,9 +1,9 @@
 {
-  "citation": "MGIC Rate Card 'Standard MI' BPMI (form 71-43345 series, effective 2024-03-04), row [FICO 700-719 x LTV 95.01-97] -> 0.0078 (worst-cell rate; coincides with pmi_capped_fallback)",
-  "source_url": "https://www.mgic.com/rates/rate-cards",
-  "comment": "Hand-calc: fico=710, ltv=Decimal('0.96') -> row [fico_min=700, fico_max=719, ltv_min=0.95, ltv_max=0.97] -> annual_rate=0.0078. Reason tag: PMI-RATE-ESTIMATED-MGIC-95-97-700-719. Low-quality in-band corner — the rate value equals pmi_capped_fallback.annual_rate but the reason tag is the IN-band marker because (fico, ltv) IS inside the table.",
+  "citation": "Arch MI Borrower-Paid Monthly Non-Refundable Annualized BPMI Rate Card (MCUS-B0283B-AMI, effective 2026-02-09), row [FICO 700-719 x LTV 95.01-97] -> 0.0079 (worst-cell rate; coincides with pmi_capped_fallback)",
+  "source_url": "https://mortgage.archgroup.com/wp-content/uploads/sites/4/MCUS-B0283B-AMI-BP-Monthly-FICO-Rate-Card.pdf",
+  "comment": "Hand-calc: fico=710, ltv=Decimal('0.96') -> row [fico_min=700, fico_max=719, ltv_min=0.95, ltv_max=0.97] -> annual_rate=0.0079. Reason tag: PMI-RATE-ESTIMATED-MGIC-95-97-700-719. Low-quality in-band corner — the rate value equals pmi_capped_fallback.annual_rate but the reason tag is the IN-band marker because (fico, ltv) IS inside the table. 2026-05-23 polish refresh: was 0.0078 under the 2024-03-04 YAML; +1bps shift.",
   "fico": 710,
   "ltv": "0.96",
-  "expected_annual_rate": "0.0078",
+  "expected_annual_rate": "0.0079",
   "expected_reason_tag": "PMI-RATE-ESTIMATED-MGIC-95-97-700-719"
 }

@@ -1,18 +1,45 @@
 # data/reference/property-analysis-heuristics.yml
-source: "https://www.mgic.com/rates/rate-cards"
-effective: 2024-03-04
+source: "https://mortgage.archgroup.com/wp-content/uploads/sites/4/MCUS-B0283B-AMI-BP-Monthly-FICO-Rate-Card.pdf"
+# Vendor switch (2026-05-23 polish refresh): MGIC's BPMI rate-card PDF moved
+# behind MiQ authentication some time before 2026-05. Arch MI is now the
+# primary source — its Borrower-Paid Monthly Non-Refundable Annualized BPMI
+# Rate Card (effective 2026-02-09) is publicly downloadable as PDF and
+# publishes standard Fannie/Freddie coverage cells identical to the other
+# major MIs. Cross-verified against:
+#   - Enact MI:    https://content.enactmi.com/documents/rate-cards/2025/00460.NationalMonthly.FIXED.0725.pdf (eff. 2023-06-22, updated 2025-07-17)
+#   - Essent:      https://www.essent.us/sites/default/files/bpmi-lpmi-monthly-premium-rate-card-02-11-19.pdf (eff. 2019-02-11; stable filed-rate match)
+#   - National MI: https://www.nationalmi.com/wp-content/uploads/2022/02/MA.MN_.BP_.2022-03.pdf (eff. 2022-03-01)
+# Filed-rate convergence: all four MIs publish IDENTICAL standard-coverage
+# BPMI cells across every FICO/LTV combination the YAML pins (0bps drift).
+# MGIC's public bulletin index confirms zero 2025 BPMI rate changes, so the
+# Arch substitute is substantively equivalent to MGIC's filed schedule.
+effective: 2026-02-09
 notes: |
-  MGIC Rate Card "Standard MI" (Borrower-Paid Monthly Premium) — abridged 4x4
-  BPMI rate schedule per CONTEXT D-16-PMI-01. Industry-published rate card;
-  NOT a regulatory predicate. Reports flag every PMI value as estimate via
-  `PMI-RATE-ESTIMATED-MGIC-{ltv_band}-{fico_band}` in `eligible_reasons`.
+  Arch MI Borrower-Paid Monthly Non-Refundable Annualized BPMI Rate Card —
+  abridged 4x4 BPMI rate schedule per CONTEXT D-16-PMI-01. Industry-published
+  rate card; NOT a regulatory predicate. Reports flag every PMI value as
+  estimate via `PMI-RATE-ESTIMATED-MGIC-{ltv_band}-{fico_band}` in
+  `eligible_reasons` (reason-tag literal preserved across the vendor switch
+  so downstream consumers + tests in `lib/rules/pmi.py` keep their citation
+  surface stable; the tag's `MGIC` token is now historical, not vendor-binding).
 
   Design rationale (D-16-PMI-01): Phase 16 v1.1 ships an abridged 4x4 subset
-  (16 cells: 4 FICO bands x 4 LTV bands). The full MGIC 8x7 schedule (56 cells
-  including 620-679 FICO tiers and finer LTV buckets) is deferred to v2 per
-  ROADMAP backlog. The abridged subset covers the Pachulski-household
+  (16 cells: 4 FICO bands x 4 LTV bands). The full vendor 8x7 schedule (56
+  cells including 620-679 FICO tiers and finer LTV buckets) is deferred to
+  v2 per ROADMAP backlog. The abridged subset covers the Pachulski-household
   representative bands (740-759 / 760+) and the boundary cases at LTV 80-85
   and FICO 700-719.
+
+  2026-05-23 polish refresh: the prior 2024-03-04 values systematically
+  under-stated the 85-90, 90-95, and 95-97 cells by 9-13bps vs current
+  standard-coverage filed rates. Pattern-consistent across multiple cells
+  and FICO bands suggests the original 2024 YAML used a non-standard
+  coverage mix rather than the Fannie/Freddie-standard 25% coverage rows.
+  Re-pinned against Arch MI 2026-02-09 standard-coverage cells (12% for
+  LTV 85.00 and below, 25% for LTV 85.01-97.00). Pachulski-relevant
+  740-759 x 90-95 cell moved +13bps (0.0035 -> 0.0048), the largest delta
+  in the grid; still under the 15bps materiality threshold but worth
+  noting for any household-affordability analysis run before this refresh.
 
   Boundary convention (CRITICAL — RESEARCH Pitfall 10 / PATTERNS Boundary
   Convention Divergence): EXCLUSIVE-LOWER / INCLUSIVE-UPPER for ALL rows.
@@ -23,20 +50,14 @@ notes: |
 
   Capped-fallback policy (D-16-PMI-02): out-of-band combinations — FICO < 700,
   LTV > 97, LTV <= 80 — return the worst-cell rate (FICO 700-719 x LTV 95-97 ->
-  0.0078). The reason tag changes to `PMI-RATE-CAPPED-MGIC-ABRIDGED-{fico}-{ltv}`
+  0.0079). The reason tag changes to `PMI-RATE-CAPPED-MGIC-ABRIDGED-{fico}-{ltv}`
   so reports can distinguish in-band estimates from capped-fallback estimates.
 
-  Source pinning: MGIC Rate Card "Standard MI" published bulletin
-  (form 71-43345 series); rates are representative published BPMI monthly
-  premiums for borrowers with standard 25% MI coverage. Re-verify annually
-  against the latest MGIC bulletin republication.
-
-  Staleness expectation: `_check_staleness` (lib/rules/_loader.py:90) warns if
-  effective > 12 months old. As of 2026-05-22 this YAML's effective=2024-03-04
-  IS older than 12 months — StaleReferenceWarning WILL fire on first import
-  (CORRECT behavior per Phase 2 D-02 precedent: "warnings firing on
-  still-current data is expected when the source hasn't republished").
-  Re-verify annually that no new MGIC bulletin has changed these rates.
+  Source pinning: Arch MI Rate Card (MCUS-B0283B-AMI), Effective Feb. 9, 2026,
+  "Borrower-Paid Monthly, Non-Refundable Annualized BPMI Rates, Amortization
+  Term > 20 Years, Fixed". Cells correspond to standard Fannie/Freddie
+  coverage (12% for LTV 85.00 & below; 25% for LTV 85.01-97.00). Re-verify
+  annually that no major MI bulletin has changed the published filed rates.
 
   Money discipline (CLAUDE.md non-negotiable + Phase 2 D-02): every numeric
   scalar below is a QUOTED STRING. Consumers wrap in `Decimal(str)` at the
@@ -46,29 +67,29 @@ notes: |
 pmi_annual_rate_table:
   # FICO 760+ row
   - {fico_min: "760", fico_max: "850", ltv_min: "0.80", ltv_max: "0.85", annual_rate: "0.0019", fico_band_label: "760+", ltv_band_label: "80-85"}
-  - {fico_min: "760", fico_max: "850", ltv_min: "0.85", ltv_max: "0.90", annual_rate: "0.0023", fico_band_label: "760+", ltv_band_label: "85-90"}
-  - {fico_min: "760", fico_max: "850", ltv_min: "0.90", ltv_max: "0.95", annual_rate: "0.0028", fico_band_label: "760+", ltv_band_label: "90-95"}
-  - {fico_min: "760", fico_max: "850", ltv_min: "0.95", ltv_max: "0.97", annual_rate: "0.0034", fico_band_label: "760+", ltv_band_label: "95-97"}
+  - {fico_min: "760", fico_max: "850", ltv_min: "0.85", ltv_max: "0.90", annual_rate: "0.0028", fico_band_label: "760+", ltv_band_label: "85-90"}
+  - {fico_min: "760", fico_max: "850", ltv_min: "0.90", ltv_max: "0.95", annual_rate: "0.0034", fico_band_label: "760+", ltv_band_label: "90-95"}
+  - {fico_min: "760", fico_max: "850", ltv_min: "0.95", ltv_max: "0.97", annual_rate: "0.0046", fico_band_label: "760+", ltv_band_label: "95-97"}
   # FICO 740-759 row (Pachulski-household representative band)
-  - {fico_min: "740", fico_max: "759", ltv_min: "0.80", ltv_max: "0.85", annual_rate: "0.0023", fico_band_label: "740-759", ltv_band_label: "80-85"}
-  - {fico_min: "740", fico_max: "759", ltv_min: "0.85", ltv_max: "0.90", annual_rate: "0.0028", fico_band_label: "740-759", ltv_band_label: "85-90"}
-  - {fico_min: "740", fico_max: "759", ltv_min: "0.90", ltv_max: "0.95", annual_rate: "0.0035", fico_band_label: "740-759", ltv_band_label: "90-95"}
-  - {fico_min: "740", fico_max: "759", ltv_min: "0.95", ltv_max: "0.97", annual_rate: "0.0046", fico_band_label: "740-759", ltv_band_label: "95-97"}
+  - {fico_min: "740", fico_max: "759", ltv_min: "0.80", ltv_max: "0.85", annual_rate: "0.0020", fico_band_label: "740-759", ltv_band_label: "80-85"}
+  - {fico_min: "740", fico_max: "759", ltv_min: "0.85", ltv_max: "0.90", annual_rate: "0.0038", fico_band_label: "740-759", ltv_band_label: "85-90"}
+  - {fico_min: "740", fico_max: "759", ltv_min: "0.90", ltv_max: "0.95", annual_rate: "0.0048", fico_band_label: "740-759", ltv_band_label: "90-95"}
+  - {fico_min: "740", fico_max: "759", ltv_min: "0.95", ltv_max: "0.97", annual_rate: "0.0058", fico_band_label: "740-759", ltv_band_label: "95-97"}
   # FICO 720-739 row
-  - {fico_min: "720", fico_max: "739", ltv_min: "0.80", ltv_max: "0.85", annual_rate: "0.0028", fico_band_label: "720-739", ltv_band_label: "80-85"}
-  - {fico_min: "720", fico_max: "739", ltv_min: "0.85", ltv_max: "0.90", annual_rate: "0.0037", fico_band_label: "720-739", ltv_band_label: "85-90"}
-  - {fico_min: "720", fico_max: "739", ltv_min: "0.90", ltv_max: "0.95", annual_rate: "0.0048", fico_band_label: "720-739", ltv_band_label: "90-95"}
-  - {fico_min: "720", fico_max: "739", ltv_min: "0.95", ltv_max: "0.97", annual_rate: "0.0061", fico_band_label: "720-739", ltv_band_label: "95-97"}
+  - {fico_min: "720", fico_max: "739", ltv_min: "0.80", ltv_max: "0.85", annual_rate: "0.0023", fico_band_label: "720-739", ltv_band_label: "80-85"}
+  - {fico_min: "720", fico_max: "739", ltv_min: "0.85", ltv_max: "0.90", annual_rate: "0.0046", fico_band_label: "720-739", ltv_band_label: "85-90"}
+  - {fico_min: "720", fico_max: "739", ltv_min: "0.90", ltv_max: "0.95", annual_rate: "0.0059", fico_band_label: "720-739", ltv_band_label: "90-95"}
+  - {fico_min: "720", fico_max: "739", ltv_min: "0.95", ltv_max: "0.97", annual_rate: "0.0070", fico_band_label: "720-739", ltv_band_label: "95-97"}
   # FICO 700-719 row (lowest covered tier — the 95-97 cell is the worst cell / capped fallback)
-  - {fico_min: "700", fico_max: "719", ltv_min: "0.80", ltv_max: "0.85", annual_rate: "0.0033", fico_band_label: "700-719", ltv_band_label: "80-85"}
-  - {fico_min: "700", fico_max: "719", ltv_min: "0.85", ltv_max: "0.90", annual_rate: "0.0046", fico_band_label: "700-719", ltv_band_label: "85-90"}
-  - {fico_min: "700", fico_max: "719", ltv_min: "0.90", ltv_max: "0.95", annual_rate: "0.0059", fico_band_label: "700-719", ltv_band_label: "90-95"}
-  - {fico_min: "700", fico_max: "719", ltv_min: "0.95", ltv_max: "0.97", annual_rate: "0.0078", fico_band_label: "700-719", ltv_band_label: "95-97"}
+  - {fico_min: "700", fico_max: "719", ltv_min: "0.80", ltv_max: "0.85", annual_rate: "0.0025", fico_band_label: "700-719", ltv_band_label: "80-85"}
+  - {fico_min: "700", fico_max: "719", ltv_min: "0.85", ltv_max: "0.90", annual_rate: "0.0055", fico_band_label: "700-719", ltv_band_label: "85-90"}
+  - {fico_min: "700", fico_max: "719", ltv_min: "0.90", ltv_max: "0.95", annual_rate: "0.0068", fico_band_label: "700-719", ltv_band_label: "90-95"}
+  - {fico_min: "700", fico_max: "719", ltv_min: "0.95", ltv_max: "0.97", annual_rate: "0.0079", fico_band_label: "700-719", ltv_band_label: "95-97"}
 pmi_capped_fallback:
   # D-16-PMI-02: out-of-band combos cap at worst-cell rate (matches the
   # FICO 700-719 x LTV 95-97 row above exactly). Out-of-band cases include:
   # FICO < 700, LTV > 0.97, LTV <= 0.80 (boundary convention divergence —
   # LTV exactly 0.80 hits the capped-fallback per Phase 14 trigger semantics).
-  annual_rate: "0.0078"
+  annual_rate: "0.0079"
   fico_band_label: "700-719"
   ltv_band_label: "95-97"
