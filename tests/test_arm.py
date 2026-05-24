@@ -729,15 +729,22 @@ def test_initial_fixed_period_matches_phase1_oracle(
 # =========================================================================
 
 
-@pytest.mark.xfail(
-    strict=True,
+_BANKRATE_5_1_CAPTURE: Path = (
+    Path(__file__).resolve().parent / "fixtures" / "arm" / "oracle" / "bankrate_5_1_capture.json"
+)
+
+
+@pytest.mark.skipif(
+    not _BANKRATE_5_1_CAPTURE.exists(),
     reason=(
-        "Phase 8+: deferred — Bankrate ARM Calculator (5/1, 7/1, 10/1) and Vertex42 "
-        "Excel template are JS/spreadsheet-driven and require human-only browser/Excel "
-        "interaction; this session cannot perform the captures. Per Plan 05-06 Rule-4 "
-        "deviation against threat T-05-34 (oracle URL/automation gaps), the cross-source "
-        "agreement test for 5/1, 7/1, 10/1 is queued for Phase 8+ after a human capture "
-        "session.\n\n"
+        "External ARM oracle capture pending: Bankrate ARM Calculator (5/1, 7/1, 10/1) "
+        "is JS-rendered and Vertex42 templates are spreadsheet-driven; both require "
+        "human browser/Excel capture per Plan 05-06 Rule-4 deviation against threat "
+        "T-05-34 (oracle URL/automation gaps). Drop a captured fixture at "
+        "tests/fixtures/arm/oracle/bankrate_5_1_capture.json (schema: same as other "
+        "arm fixtures consumed by `_request_from_fixture` — `request` with `loan` + "
+        "`arm_terms` sub-objects, `expected.payments[]` with per-period `payment` "
+        "values) and this test will auto-activate.\n\n"
         "PARTIAL CROSS-SOURCE COVERAGE (Phase 17): the CFPB CHARM consumer-booklet "
         "1/1 ARM with 2pp periodic cap is now covered byte-for-byte by an independent "
         "oracle at tests/test_oracles_arm_reset.py — engine reproduces all three CHARM-"
@@ -748,10 +755,30 @@ def test_initial_fixed_period_matches_phase1_oracle(
     ),
 )
 def test_oracle_cross_validation_5_1(arm_fixture: Callable[[str], dict[str, Any]]) -> None:
-    """ARM-06 + D-04 [REVISED]: Hand-calc + Bankrate + Vertex42 captures AGREE EXACTLY (5/1)."""
-    pytest.fail(
-        "Bankrate + Vertex42 5/1 captures not yet committed (Phase 8+ deferred per Plan 05-06)"
+    """ARM-06 + D-04 [REVISED]: engine reproduces Bankrate 5/1 ARM captured values.
+
+    Activates automatically when the external oracle fixture lands at
+    `tests/fixtures/arm/oracle/bankrate_5_1_capture.json`. Asserts exact-Decimal
+    match between `schedule.payments[i].payment` and `fx["expected"]["payments"][i]["payment"]`.
+    """
+    from decimal import Decimal
+
+    from lib.arm import build_arm_schedule
+
+    fx = arm_fixture("oracle/bankrate_5_1_capture")
+    request = _request_from_fixture(fx)
+    schedule = build_arm_schedule(request)
+
+    expected_payments = fx["expected"]["payments"]
+    assert len(schedule.payments) == len(expected_payments), (
+        f"engine schedule length {len(schedule.payments)} != "
+        f"Bankrate capture length {len(expected_payments)}"
     )
+    for i, exp in enumerate(expected_payments):
+        actual = schedule.payments[i]
+        assert actual.payment == Decimal(exp["payment"]), (
+            f"period {i + 1}: Bankrate {exp['payment']} vs engine {actual.payment}"
+        )
 
 
 def test_oracle_cross_validation_5_6(arm_fixture: Callable[[str], dict[str, Any]]) -> None:
