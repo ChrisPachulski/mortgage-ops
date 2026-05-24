@@ -121,18 +121,23 @@ Build:
   `seeabove`, `asabove`, `pending`, `none`, `todo`, `unknown`, and
   dash/period-only answers. After removing whitespace and any repeated
   sub-prompt text, each answer must contain at least 30 characters and at least
-  one concrete identifier matching a file path, fixture id, citation id,
-  function/script name, issue id, or command token. Empty answers,
+  one high-specificity concrete identifier matching a file path, fixture id,
+  citation id, issue id, or command token. Empty answers,
   placeholder-only answers, and normalized filler fail the check. The template
   and checker publish the exact identifier grammar as named patterns:
-  `FILE_PATH = (?<![\w./-])(?:\.?[A-Za-z0-9_-]+/)*\.?[A-Za-z0-9_-]+\.(py|yml|yaml|md|mjs|js|json)(?![\w./-])`,
+  `FILE_PATH = (?<![\w./-])(?:\.?[A-Za-z0-9_-]+/)*\.?[A-Za-z0-9_-]+\.(py|yml|yaml|md|mjs|js|json|toml|csv|parquet|sql|txt|lock)(?![\w./-])`,
   `FIXTURE_ID = (?<![\w-])(fixture|scenario|case):[A-Za-z0-9_.-]+(?![\w-])`,
   `CITATION = (?<![\w])(?:12|24|26)\s*CFR\s*(?:\xA7|Sec\.)?\s*[0-9.]+[A-Za-z0-9().-]*`,
   `HUD_CITATION = (?<![\w-])(?:HUD\s+)?ML\s*\d{4}-\d{2}(?![\w-])`,
   `IRC_CITATION = (?<![\w])IRC\s*(?:\xA7|Sec\.)?\s*[0-9A-Za-z().-]+(?![\w.-])`,
-  `FUNCTION = (?<![\w.])[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*){0,4}(?![\w])`,
+  `FUNCTION = (?<![\w.])(?:lib|scripts|tests|orchestration)(?:\.[A-Za-z_][A-Za-z0-9_]*)+(?:\()?(?![\w])`,
   `ISSUE_ID = (?<![\w-])(?:#[0-9]+|[A-Z][A-Z0-9]+-[0-9]+)(?![\w-])`, and
   `COMMAND = (?<![\w-])(?:pytest|ruff|mypy|uv|node|npm|python|python3)\s+[-\w./:=]+`.
+  `FUNCTION` matches are supporting evidence only and never satisfy the
+  required concrete-identifier check by themselves; an answer containing only
+  prose plus bare words or function-like names still fails unless it also
+  contains one of `FILE_PATH`, `FIXTURE_ID`, `CITATION`, `HUD_CITATION`,
+  `IRC_CITATION`, `ISSUE_ID`, or `COMMAND`.
   The canonical checker compiles these patterns with Python `re.compile(...)`
   from ordinary Python string values, so `\xA7` resolves to `§`; CI checklist
   enforcement is Python-only. Node tooling that needs the same grammar consumes
@@ -164,8 +169,11 @@ Success criteria:
 - A checklist-enforcement test fails when a Phase 19+ plan is missing any of
   the six required headings, omits a required sub-prompt, leaves a required
   sub-prompt answer empty, placeholder-only, shorter than the minimum content
-  floor, lacking a concrete identifier, or blocklisted as filler after
-  normalization.
+  floor, lacking a high-specificity concrete identifier, or blocklisted as
+  filler after normalization. Adversarial fixtures include English-only prose
+  such as `We update the docs and reference files later`, which must fail even
+  though it exceeds the character floor and contains tokens that look like
+  function names.
 - A runbook-coverage CI check fails when a Phase 19+ code or reference-data
   change omits the runbook file named by `.planning/runbook-coverage-map.yml`.
 - Phase 26 can focus on end-state release polish, stale-link tests, and
@@ -188,12 +196,14 @@ Build:
   `user_provided`, `heuristic_estimate`, and `reference_row`; `args_hash` is
   produced only through `lib/trace_canonical.py` using recursive canonical JSON:
   UTF-8 bytes, codepoint `sort_keys=True`, `separators=(",", ":")`, no trailing
-  newline, explicit `null` handling, type-tagged dates/datetimes, NFC-normalized
-  strings, and `Decimal` values converted losslessly in
-  `decimal.Context(prec=50, Emax=999, Emin=-999)` with traps for invalid
-  operation, overflow, division by zero, and invalid context. Decimals whose
-  coefficient length exceeds the canonical context precision, or whose adjusted
-  exponent is outside the `Emin`/`Emax` bounds, are rejected instead of rounded.
+  newline, explicit `None` handling as `["null", null]`, type-tagged
+  dates/datetimes, NFC-normalized strings, and `Decimal` values converted
+  losslessly in `decimal.Context(prec=50, Emax=999, Emin=-999)` with traps for
+  invalid operation, overflow, division by zero, and invalid context. Decimals
+  whose normalized coefficient length after zero-collapse and insignificant
+  trailing-zero stripping exceeds the canonical context precision, or whose
+  adjusted exponent is outside the `Emin`/`Emax` bounds, are rejected instead
+  of rounded.
   Decimal provenance is explicit because Python `Decimal` values cannot carry
   metadata. All Decimal arithmetic that can feed trace args must be performed
   through `lib/decimal_context.py:project_decimal_arg`, which executes the
@@ -212,7 +222,10 @@ Build:
   other finite Decimals are serialized from their sign, digit tuple, and exponent
   after stripping only insignificant trailing zeros, so equivalent values such as
   `0.065` and `0.0650` hash identically without context-driven rounding.
-  Canonicalization rejects non-finite Decimal values. `args_hash` input values
+  A fixture proves `Decimal("0.065" + "0" * 60)` is accepted and hashes
+  identically to `Decimal("0.065")`, while a value whose stripped coefficient
+  still exceeds 50 digits is rejected. Canonicalization rejects non-finite
+  Decimal values. `args_hash` input values
   may only be `str`,
   `int`, `Decimal`, `TraceDecimalArg`, `bool`, `date`, `datetime`, `None`,
   `list`, or recursively nested `dict[str, allowed_value]`; dictionary keys must
@@ -226,10 +239,13 @@ Build:
   values that would otherwise collapse in JSON must have distinct canonical
   preimages. Type tags are mandatory for every primitive: booleans serialize as
   boolean tags with literal `true`/`false`, integers serialize as integer tags,
-  Decimals serialize as Decimal tags, strings serialize as string tags, and
-  dates/datetimes serialize as temporal tags. Therefore `True`, `1`,
+  Decimals serialize as Decimal tags, strings serialize as string tags,
+  `None` serializes as the null tag `["null", null]`, and dates/datetimes
+  serialize as temporal tags. Therefore `True`, `1`,
   `Decimal("1.0")`, `"1"`, a raw string `"2025-01-01"`, and a date for
-  2025-01-01 all hash differently. `args_hash` is computed only over
+  2025-01-01 all hash differently. A fixture proves `None`, `"null"`,
+  `"None"`, and `""` have distinct hash preimages. `args_hash` is computed only
+  over
   function/script args; `oracle_coverage` is trace metadata and is never part of
   the hash preimage. `oracle_coverage` is a canonical sorted list of unique named
   oracle or fixture identifiers, validated at `TraceEntry` construction and
@@ -239,9 +255,11 @@ Build:
   the list may be empty only for
   `source_input`/`user_provided`/`heuristic_estimate`/`reference_row` values
   whose source kind documents why coverage is not applicable. Fixture-emitted
-  trace entries must not list their own fixture identifier in `oracle_coverage`,
-  and constructor validation rejects duplicates, unknown identifier syntax, and
-  self-reference before emission. `sensitivity`
+  trace entries must be constructed with `emitter="hand_calc:<fixture>"`; all
+  non-fixture emitters pass `emitter=None`. Constructor validation rejects
+  duplicates, unknown identifier syntax, and any fixture emitter that appears in
+  its own `oracle_coverage` before emission, and a regression fixture covers
+  that self-reference path. `sensitivity`
   classifies trace values as public or private. Trace writers must set it
   explicitly for `source_input`, `user_provided`, and `heuristic_estimate`
   entries; reference rows default to public unless their catalog entry marks
@@ -255,7 +273,12 @@ Build:
   child with private ancestry or `derived_from_user_input=true` is not
   `sensitivity=private`. Downgrading such a value to `public` is allowed only
   through a dedicated audited declassification API that records an explicit
-  reason and has regression tests covering the redaction impact.
+  reason and has regression tests covering the redaction impact. The committed
+  audit artifact is `references/declassification-log.md` and may contain only
+  trace `display_path`, a non-sensitive justification slug, reviewer, and date;
+  full household-specific reasons stay in a gitignored User Layer audit file
+  referenced by local manifest fingerprint. A privacy fixture proves private
+  values and free-form household context cannot appear in the committed log.
   `derived_from_user_input` is true when a value directly or transitively
   depends on User Layer inputs rather than only when its own `source_kind` is
   `user_provided`; computed trace entries must be created through
@@ -289,15 +312,17 @@ Build:
   data-access bypass. Unrelated YAML usage for user config, fixtures, and
   planning metadata remains allowed through safe loaders and its own tests; only
   reference YAML access must go through `lib/reference_index.py`. Test fixtures
-  also install a runtime trap
-  that monkey-patches `open`, `io.open`, `Path.open`, `Path.read_text`, `os.open`,
-  and project-owned YAML loading wrappers so attempts to open a resolved
-  `data/reference/*.yml` path outside `lib/reference_index.py` or the exact
-  allowlist fail, catching common variable indirection and helper-module bypasses
-  that static analysis misses. The trap is defense-in-depth, not exhaustive:
-  vendored file-opening wrappers, pre-imported `open` bindings, and YAML parsing
-  of file objects opened before trap installation remain outside its guarantee and
-  are covered by static lint and code review. Node orchestration code is not
+  also install a narrow runtime trap based on Python `sys.addaudithook` `open`
+  events, filtered to resolved `data/reference/*.yml` paths and the exact
+  authorized caller paths. It fails unauthorized reference YAML opens without
+  monkey-patching `open`, `io.open`, `Path.open`, `Path.read_text`, `os.open`,
+  or stdlib internals, catching common variable indirection and helper-module
+  bypasses that static analysis misses. The trap is defense-in-depth, not
+  exhaustive: file descriptors opened before trap installation and native
+  extensions that bypass Python audit events remain outside its guarantee and
+  are covered by static lint and code review. A negative fixture proves
+  `tempfile`, `subprocess`, pytest collection, and unrelated YAML fixture reads
+  still work while the trap is active. Node orchestration code is not
   allowed to read reference YAML directly:
   `.mjs`/`.js` files must call the Python reference-index command/API for
   reference metadata, and CI rejects direct `fs` YAML reads, `yaml` package
@@ -319,9 +344,15 @@ Build:
   identifiers, schema versions, street addresses, zip codes, footnote markers,
   and fixed UI strings are exempt only when emitted through renderer-owned
   display-token APIs or wrapped in an explicit `<num-exempt kind="...">...</num-exempt>`
-  span whose `kind` is in a closed allowlist. CI tests the gate with committed
-  fixtures for each producing script and reports generated under a temporary test
-  directory; live `reports/*.md` remain User/Data Layer and stay out of CI.
+  span whose `kind` is in a closed allowlist and whose kind-specific structured
+  attributes validate the exemption. For example, `kind="footnote_marker"`
+  requires a `marker` attribute matching a known renderer-owned footnote table,
+  and `kind="schema_version"` requires a manifest schema field name and value.
+  The gate rejects any `<num-exempt>` token that matches money, percentage, or
+  ratio grammar unless that exact token shape is whitelisted for that exemption
+  kind and renderer. CI tests the gate with committed fixtures for each
+  producing script and reports generated under a temporary test directory; live
+  `reports/*.md` remain User/Data Layer and stay out of CI.
 - Refactor `scripts/refi_npv.py`, `scripts/amortize.py`,
   `scripts/arm_simulate.py`, and `scripts/stress_test.py` so every
   report-visible number is represented by a `TraceEntry` and emitted through
@@ -349,8 +380,11 @@ Build:
   inspection without decision-use blessing. When
   `manifest_schema_version >= 1` but `pre_emit_gate_passed` or `decision_mode`
   is missing or false, the tool exits with code `3` to signal a broken Phase
-  19+ producer that must be investigated. Both outcomes are distinct from
-  ordinary audit failures.
+  19+ producer that must be investigated. Ordinary audit failures, such as a
+  legacy report containing unblessed orphan numbers, exit with code `1`. The
+  complete exit-code contract is `0=ok`, `1=ordinary audit failure`,
+  `2=legacy/no-manifest/dev-mode-only inspection without decision blessing`,
+  and `3=broken Phase 19+ producer`.
 - A deterministic local report manifest containing code revision, listing hash,
   reference-data effective dates, and private-input fingerprints. Fingerprints
   for household/profile inputs are stored only in local private manifests or are
@@ -416,10 +450,17 @@ Build:
   Windows host fails with the same unsupported-platform message instead of
   reproducing a fingerprintless manifest.
   Losing the key makes historical private fingerprints incomparable. Rotation is
-  an explicit user action that retains old and new keys for manifest comparison
-  until the user runs an explicit `prune-old-keys` command; multi-machine
-  consistency is out of scope unless the user manually installs the same key on
-  each machine.
+  an explicit user action: `fingerprint.key` is always the current key, and
+  retained historical keys live under the same key-owned parent in
+  `keys/<UTC-basic-timestamp>-<old-key-sha256-prefix>.key`, for example
+  `keys/20260524T173000Z-1a2b3c4d5e6f.key`. The `keys/` directory uses the same
+  owner, mode, symlink, regular-file, `O_NOFOLLOW`, and repo-containment checks
+  as the active key parent. Manifest comparison reads the current key and all
+  retained keys whose metadata fingerprint can match the manifest key id.
+  `prune-old-keys` deletes only retained `keys/*.key` files older than the
+  user-specified retention window and never deletes `fingerprint.key` without a
+  separate rotate command; multi-machine consistency is out of scope unless the
+  user manually installs the same key set on each machine.
 - A hash-stability test for `lib/trace_canonical.py` with explicit buckets:
   equivalent cases include nested inputs, `Decimal("0.065")` and
   `Decimal("0.0650")`, Unicode canonical equivalents after NFC normalization,
@@ -583,19 +624,26 @@ Build:
   values or `legacy_free_text`, with `reason_text: str`, `severity: int`, and
   `precedence: int`. Structured reasons are stored in the
   `analyzed_listings.verdict_reasons` JSON field. The forward-only migration is
-  executed through `orchestration/db-write.mjs` under the existing lockfile and
-  runs idempotent `INSTALL json; LOAD json;` setup before the migration
-  transaction so DuckDB JSON functions are available consistently in local and
-  CI environments. It
-  adds `verdict_reasons JSON NOT NULL DEFAULT '[]' CHECK
-  (json_valid(verdict_reasons) AND json_type(verdict_reasons) = 'ARRAY')` and
-  `reason_taxonomy_version INTEGER NOT NULL DEFAULT 0` to `analyzed_listings`.
-  The same migration transaction runs `UPDATE analyzed_listings SET
-  verdict_reasons = '[]' WHERE verdict_reasons IS NULL`; existing rows remain
+  executed through `orchestration/db-write.mjs` under the existing lockfile.
+  Project DuckDB versions are pinned to a build with the JSON extension
+  available from the local installation; migration code runs `LOAD json` only
+  and never runs `INSTALL json`. If `LOAD json` fails,
+  the migration exits with an error naming the pinned DuckDB version and the
+  required local extension/cache path. To stay compatible with DuckDB `ALTER
+  TABLE` limitations, the migration first adds nullable/default-free
+  `verdict_reasons JSON` and `reason_taxonomy_version INTEGER` columns, backfills
+  every existing row to `verdict_reasons='[]'` and
+  `reason_taxonomy_version=0`, validates that no `NULL`, invalid JSON, or
+  non-array JSON value remains, then rebuilds and atomically swaps
+  `analyzed_listings` with a table that declares `verdict_reasons JSON NOT NULL
+  DEFAULT '[]' CHECK (json_valid(verdict_reasons) AND
+  json_type(verdict_reasons) = 'ARRAY')` and
+  `reason_taxonomy_version INTEGER NOT NULL DEFAULT 0`. Existing rows remain
   version `0`, and new structured rows write version `1`. Migration tests prove
-  the `ALTER` succeeds against existing rows and accept either zero rows updated
-  because DuckDB applied the default during `ALTER`, or N rows updated because a
-  future DuckDB version leaves them `NULL` until the explicit backfill.
+  the nullable-add/backfill/rebuild path succeeds against existing rows and that
+  the post-migration table contains zero `NULL` verdict-reason or taxonomy
+  values; they do not accept a branch where `verdict_reasons` remains `NULL`
+  after backfill.
   `db-write.mjs` asserts before INSERT/UPDATE that `verdict_reasons` is a JSON
   array literal and that
   `reason_taxonomy_version` is never explicitly `NULL`. Unit tests prove direct
@@ -739,9 +787,9 @@ Build:
   timestamp, and short snapshot hash. Before execution, replay refuses to proceed
   when the source worktree has modified, staged, deleted, renamed, copied, or
   unmerged tracked paths; ignores untracked files that are already gitignored;
-  warns but does not fail on untracked non-ignored files unless `--strict` is
-  passed; and prints the rationale for each tier so users do not need to stash
-  unrelated local work to preserve replay safety. Replay never
+  fails on untracked non-ignored files by default with the offending paths
+  printed; and allows them only when the user passes `--allow-untracked` after
+  reviewing that path list. Replay never
   writes embedded inputs to standard User Layer paths. Instead, replay
   materializes the embedded `user_layer_state` block into a repo-external
   temporary state directory and passes explicit config-path overrides to the
@@ -842,23 +890,30 @@ Build:
   override, treating snapshots as private whenever they contain embedded User
   Layer state. Onboarding refuses to write staging artifacts below the resolved
   repo root even when `$XDG_STATE_HOME` points there directly or through a
-  symlink unless the caller passes an explicit `--allow-in-repo-staging` flag.
-  When that flag is used, the audit
-  exits `0` only if the current shell also sets
-  `MORTGAGE_OPS_AUDIT_ACK_REPO_STAGING` to a true value accepted by
-  `lib/env_flags.py:is_truthy`; explicit false values and unset are treated as
-  no acknowledgement, and unparseable values produce the same strict env-flag
-  error used for decision/dev mode. It prints a structured warning block that
-  names `$XDG_STATE_HOME` as shell-controlled and that pre-commit treats as a
-  hard failure. Without the acknowledgement variable, the audit exits non-zero.
-  CI never sets `MORTGAGE_OPS_AUDIT_ACK_REPO_STAGING`. The
+  symlink unless the caller passes an explicit `--allow-in-repo-staging` flag
+  and a per-invocation acknowledgement. The acknowledgement is either an
+  interactive `y/N` confirmation on a TTY after the tool prints the resolved
+  repo root and staging path, or a `--repo-staging-token <token>` emitted by a
+  prior `--explain-risk` invocation for the same resolved repo root, staging
+  path, caller uid, and PID family and expiring after five minutes. Sticky
+  environment variables are not accepted as acknowledgement. It prints a
+  structured warning block that names `$XDG_STATE_HOME` as shell-controlled and
+  that pre-commit treats as a hard failure. Without a valid per-invocation
+  acknowledgement, the audit exits non-zero. CI refuses
+  `--allow-in-repo-staging` and never issues repo-staging tokens. The
   shareable-report mode depends on Phase 19 trace data: every `TraceEntry` with
   `source_kind=user_provided`,
   `derived_from_user_input=true`, or private `sensitivity` is treated as
   redactable, and `--share` succeeds only when each redactable entry is redacted
   or explicitly whitelisted by the user. Whitelists are per share invocation:
   users pass one or more `--whitelist <field_path>` arguments, or
-  `--whitelist-file <path>` pointing at a YAML file used only for that run. No
+  `--whitelist-file <path>` pointing at a YAML file used only for that run.
+  `<field_path>` must be an exact `TraceEntry.display_path` value present in the
+  trace index; globs, regexes, wildcards, empty strings, `*`, `?`, `..`, leading
+  slash, and trailing slash are rejected before rendering. A single share run may
+  whitelist at most 10 entries, and interactive runs require a confirmation that
+  lists every display path and source kind; non-interactive runs require an
+  explicit `--confirm-whitelist-file` whose contents hash to the listed paths. No
   persistent whitelist exists in committed files, household config, or user
   config. The redacted output records the whitelisted field paths in the share
   manifest so recipients can see which redactions were skipped.
