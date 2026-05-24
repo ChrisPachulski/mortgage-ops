@@ -175,7 +175,7 @@ Build:
   `not_applicable_allowed` allowlist. The reason must be non-empty, must still
   contain a concrete identifier accepted by the published grammar, and must
   explain the out-of-scope condition, for example
-  `NOT_APPLICABLE: no files under data/reference/*.yml are touched by #123`.
+  `NOT_APPLICABLE: data/reference/atr-qm-thresholds.yml is not touched by #123`.
   This bypasses only the filler blocklist for that sub-prompt and still fails
   when the reason is empty, placeholder-only, normalized filler, lacks a concrete
   identifier, or appears on a sub-prompt not allowlisted by the template. CI
@@ -253,8 +253,10 @@ Build:
   UTF-8 bytes, codepoint `sort_keys=True`, `separators=(",", ":")`, no trailing
   newline, explicit `None` handling as `["null", null]`, type-tagged
   dates/datetimes, NFC-normalized strings, and `Decimal` values converted
-  losslessly in `decimal.Context(prec=50, Emax=999, Emin=-999)` with traps for
-  invalid operation, overflow, division by zero, and invalid context. Decimals
+  losslessly in `decimal.Context(prec=50, Emax=80, Emin=-80)` with traps for
+  `InvalidOperation`, `Overflow`, `DivisionByZero`, `Inexact`, `Rounded`,
+  `Underflow`, and `Subnormal`; invalid context construction fails during
+  module import. Decimals
   whose normalized coefficient length after zero-collapse and insignificant
   trailing-zero stripping exceeds the canonical context precision, or whose
   adjusted exponent is outside the `Emin`/`Emax` bounds, are rejected instead
@@ -309,7 +311,9 @@ Build:
   context_fingerprint="<known-context-hash>")`. A concurrency regression spawns N
   threads that all perform project-context arithmetic inside one registry scope
   and asserts every minted token remains unique and validates successfully before
-  scope cleanup.
+  scope cleanup. A fuzz fixture runs standard fixed-rate and ARM amortization
+  scenarios through the tighter project context and proves legitimate household
+  money/rate intermediates stay inside the `Emax=80`/`Emin=-80` exponent bounds.
   Zero-like Decimals are values where `d.is_zero()` is true, regardless of sign
   or exponent, and they are serialized as `"0"` so legitimate arithmetic
   residuals such as `Decimal("-0E-2")` do not destabilize trace hashing. All
@@ -349,17 +353,22 @@ Build:
   Unicode codepoint order with no locale collation or case folding. Identifiers
   are validated at construction and normalized for storage/reporting so
   order-only differences cannot change coverage reporting; a mixed-case
-  regression fixture proves the ordering is deterministic. Computed values backed
-  by committed golden fixtures start with
-  `hand_calc:<fixture>`, Phase 22 appends third-party oracle identifiers, and
-  the list may be empty only for
+  regression fixture proves the ordering is deterministic. Identifiers must match
+  `^(hand_calc|external_oracle|engine_fixture|public_capture):[a-z0-9][a-z0-9_]*(/[a-z0-9_]+)?$`
+  and use only that closed prefix allowlist. Computed values backed by committed
+  golden fixtures start with `hand_calc:<fixture>`, Phase 22 third-party adapters
+  use `external_oracle:<oracle>/<case>` or `public_capture:<source>/<case>`, and
+  engine-emitted committed fixtures use `engine_fixture:<fixture>`. The list may
+  be empty only for
   `source_input`/`user_provided`/`heuristic_estimate`/`reference_row` values
   whose source kind documents why coverage is not applicable. Fixture-emitted
-  trace entries must be constructed with `emitter="hand_calc:<fixture>"`; all
-  non-fixture emitters pass `emitter=None`. Constructor validation rejects
-  duplicates, unknown identifier syntax, and any fixture emitter that appears in
-  its own `oracle_coverage` before emission, and a regression fixture covers
-  that self-reference path. `sensitivity`
+  and third-party-adapter-emitted trace entries must be constructed with
+  `emitter` equal to the emitting coverage identifier; ordinary engine runtime
+  entries pass `emitter=None`. Constructor validation rejects duplicates, unknown
+  identifier syntax, unknown prefixes, and any non-`None` emitter that appears in
+  its own `oracle_coverage` before emission, and regression fixtures cover
+  self-reference for both hand-calculation fixtures and third-party identifiers.
+  `sensitivity`
   classifies trace values as public or private. Trace writers must set it
   explicitly for `source_input`, `user_provided`, and `heuristic_estimate`
   entries; reference rows default to public unless their catalog entry marks
@@ -374,8 +383,14 @@ Build:
   `sensitivity=private`. Downgrading such a value to `public` is allowed only
   through `lib/trace_declassify.py:declassify(entry: TraceEntry,
   justification_slug: str, reviewer: str) -> TraceEntry`, which accepts only a
-  closed enum of non-sensitive justification slugs, requires a reviewer identity,
-  and has regression tests covering the redaction impact. Committed-log writes
+  closed enum of non-sensitive justification slugs defined in
+  `lib/trace_declassify.py`: `presentation_only`, `aggregate_threshold_safe`,
+  `non_household_reference_pass_through`, `cited_external_publication`, and
+  `synthetic_fixture_only`. Additions, removals, or semantic changes to that enum
+  require a `CHANGELOG.md` entry and two-maintainer CODEOWNERS review, and the AST
+  lint reads the module constant instead of accepting ad hoc string literals. The
+  API requires a reviewer identity and has regression tests covering the redaction
+  impact. Committed-log writes
   require a two-maintainer review trace, and an AST lint forbids importing the
   API outside allowlisted report/share orchestration modules. The committed
   audit artifact is `references/declassification-log.md` and may contain only
@@ -438,6 +453,12 @@ Build:
   reference-index registration API with an opaque token before opening reference
   YAML. Registration validates that both `Path(frame.f_code.co_filename).resolve(strict=False)`
   and the calling module's `__file__` resolve to the exact allowlisted realpath.
+  Because Python audit events do not pass a caller frame, the registration API
+  and audit hook walk frames from `sys._getframe(0)` upward. The first frame whose
+  `co_filename` resolves to a registered allowlisted realpath authorizes the
+  open, but any earlier frame whose resolved realpath is under `lib/`, `scripts/`,
+  `tests/`, or `orchestration/` and is not registered on the allowlist makes the
+  open unauthorized regardless of deeper registered frames.
   Frames with non-filesystem `co_filename` values such as `<frozen ...>`, zipped
   import paths, missing `__file__`, or mismatched symlink/module paths fail closed
   with a precise error naming the offending frame and module; they are not treated
@@ -449,12 +470,19 @@ Build:
   returns immediately for authorized callers, so `lib/reference_index.py` can
   create first-run or test fixture files such as `data/reference/test_*.yml`
   before those paths exist. For all other callers,
-  the hook converts with `os.fspath`, decodes bytes with `os.fsdecode`, resolves
-  with `Path(path).resolve(strict=False)`, and treats conversion or resolution
-  exceptions as "not a confirmed reference path" so unrelated file opens keep
-  their normal behavior. The hook raises only after the resolved path is
-  confirmed to be under `data/reference/*.yml`. Startup asserts the trap is
-  installed and aborts
+  the hook converts with `os.fspath`, decodes bytes with `os.fsdecode`, and first
+  applies a cheap string filter before any path resolution: if the candidate is
+  absolute and outside the repo root, or if neither the raw path nor its normalized
+  relative form can contain the `data/reference` component sequence, the hook
+  returns immediately. Only remaining candidates resolve with
+  `Path(path).resolve(strict=False)`. Resolution runs behind a thread-local
+  re-entrancy guard so audit events triggered while resolving or formatting errors
+  return without recursive resolution. Conversion or resolution exceptions are
+  treated as "not a confirmed reference path" so unrelated file opens keep their
+  normal behavior. The hook raises only after the resolved path is confirmed to be
+  under `data/reference/*.yml`. A startup benchmark fixture imports pandas and
+  duckdb with the trap installed and asserts the audit-hook overhead stays under
+  200 ms on the reference CI runner. Startup asserts the trap is installed and aborts
   decision-mode execution if the assertion fails. The trap catches Python-level
   `open`/`os.open`/`os.openat` audit events without monkey-patching `open`,
   `io.open`, `Path.open`, `Path.read_text`, `os.open`, or stdlib internals,
@@ -466,8 +494,11 @@ Build:
   reference YAML file. Additional fixtures cover `python -m` execution,
   symlinked `sys.path`, and a zipped/frozen-style non-filesystem frame, proving
   the hook either authorizes through registration or aborts with the precise
-  unsupported-layout error. Test fixtures also install the same trap during unit
-  and integration runs, and an end-to-end regression invokes the production CLI
+  unsupported-layout error. ThreadPoolExecutor, decorator-wrapped, async task,
+  and `functools.lru_cache` fixtures prove the first-authorizing-frame policy
+  rejects helper/wrapper frames that are not themselves allowlisted. Test fixtures
+  also install the same trap during unit and integration runs, and an end-to-end
+  regression invokes the production CLI
   with `python -m ... --decision-mode` under `strace -e openat,open` on Linux or
   `dtruss -t open` on macOS and asserts every reference-YAML open originates from
   a registered reference-index caller. The trap
@@ -559,8 +590,8 @@ Build:
   `manifest_schema_version: 1`, `decision_mode: false`, and
   `dev_mode_intentional: true`; `scripts/audit_reports.py` exits with code `2`
   for those manifests to signal explicitly non-decision/dev-mode inspection
-  without decision-use blessing. When no manifest is present, the tool also
-  exits with code `2` to signal genuine legacy inspection. When
+  without decision-use blessing. When no manifest is present, the tool exits with
+  code `4` to signal genuine legacy/no-manifest inspection. When
   `manifest_schema_version >= 1` and `decision_mode: true` but
   `pre_emit_gate_passed` is missing or false, when `decision_mode: false` lacks
   `dev_mode_intentional: true`, or when a manifest declares
@@ -568,8 +599,9 @@ Build:
   Phase 19+ producer that must be investigated.
   Ordinary audit failures, such as a legacy report containing unblessed orphan
   numbers, exit with code `1`. The complete exit-code contract is `0=ok`,
-  `1=ordinary audit failure`, `2=legacy/no-manifest/dev-mode-only inspection
-  without decision blessing`, and `3=broken Phase 19+ producer`.
+  `1=ordinary audit failure`, `2=intentional dev-mode inspection with a valid
+  manifest but without decision blessing`, `3=broken Phase 19+ producer`, and
+  `4=legacy/no-manifest inspection`.
 - A deterministic local report manifest containing code revision, listing hash,
   reference-data effective dates, and private-input fingerprints. Fingerprints
   for household/profile inputs are stored only in local private manifests or are
@@ -592,10 +624,14 @@ Build:
   `openat` with `O_DIRECTORY | O_NOFOLLOW` on every component rather than only
   on the final leaf. The opened `mortgage-ops` directory file descriptor is
   verified with `fstat` as a non-symlink directory owned by the current user with
-  mode `0700`, and the implementation re-resolves `/proc/self/fd/<fd>` where
-  available or an equivalent platform fd path before the key is touched; the
-  re-resolved directory must still equal the previously validated path and remain
-  outside the resolved repo root. The implementation never requires
+  mode `0700`. On Linux, the implementation re-resolves `/proc/self/fd/<fd>`
+  before the key is touched; the re-resolved directory must still equal the
+  previously validated path and remain outside the resolved repo root. On macOS,
+  the implementation uses `fcntl(fd, F_GETPATH)` for the same opened directory
+  descriptor instead of `/dev/fd/<fd>`, and applies the same equality and
+  repo-containment checks. Platform-gated fixtures cover both the Linux
+  `/proc/self/fd` path and the macOS `F_GETPATH` path. The implementation never
+  requires
   `$XDG_CONFIG_HOME` or `~/.config` itself to be `0700`. Key creation and reads
   use `os.open(..., dir_fd=parent_fd)` on basenames only.
   Creation writes a same-directory temporary file with a random suffix using
@@ -882,8 +918,11 @@ Build:
   `heuristic_estimate`, `tax_caveat`, `market_context`, `preference_mismatch`.
 - A `VerdictReason` Pydantic model whose `reason_kind` is one of the taxonomy
   values or `legacy_free_text`, with `reason_text: str`, `severity: int`, and
-  `precedence: int`. Structured reasons are stored in the
-  `analyzed_listings.verdict_reasons` JSON field. The forward-only migration is
+  `precedence: int`. Structured taxonomy reasons are stored in the
+  `analyzed_listings.verdict_reasons` JSON field. The `legacy_free_text` kind is
+  valid only in the separate `analyzed_listings.legacy_verdict_reasons` JSON
+  field used to preserve pre-Phase-21 rows; it is never written to
+  `verdict_reasons`. The forward-only migration is
   executed through `orchestration/db-write.mjs` under the existing lockfile.
   Project DuckDB versions are pinned to a build with the JSON extension
   available from the local installation; migration code runs `LOAD json` only
@@ -891,23 +930,34 @@ Build:
   the migration exits with an error naming the pinned DuckDB version and the
   required local extension/cache path. To stay compatible with DuckDB `ALTER
   TABLE` limitations, the migration first adds nullable/default-free
-  `verdict_reasons JSON` and `reason_taxonomy_version INTEGER` columns, backfills
-  every existing row to `verdict_reasons='[]'` and
-  `reason_taxonomy_version=0`, validates that no `NULL`, invalid JSON, or
-  non-array JSON value remains, then rebuilds `analyzed_listings__phase21_new`
-  with a table that declares `verdict_reasons JSON NOT NULL DEFAULT '[]' CHECK
-  (json_valid(verdict_reasons) AND json_type(verdict_reasons) = 'ARRAY')` and
+  `verdict_reasons JSON`, `legacy_verdict_reasons JSON`, and
+  `reason_taxonomy_version INTEGER` columns, backfills every existing row to
+  `verdict_reasons='[]'`, copies any pre-Phase-21 free-text reasons into
+  `legacy_verdict_reasons` as an array of `legacy_free_text` reason objects (or
+  `[]` when none exist), and sets `reason_taxonomy_version=0`. It validates that
+  no `NULL`, invalid JSON, or non-array JSON value remains in either reason
+  column, then rebuilds `analyzed_listings__phase21_new` with a table that
+  declares `verdict_reasons JSON NOT NULL DEFAULT '[]' CHECK
+  (json_valid(verdict_reasons) AND json_type(verdict_reasons) = 'ARRAY')`,
+  `legacy_verdict_reasons JSON NOT NULL DEFAULT '[]' CHECK
+  (json_valid(legacy_verdict_reasons) AND json_type(legacy_verdict_reasons) =
+  'ARRAY')`, and
   `reason_taxonomy_version INTEGER NOT NULL DEFAULT 0 CHECK
   (reason_taxonomy_version >= 0)`, plus a table-level CHECK enforcing
   `(reason_taxonomy_version = 0 AND json_array_length(verdict_reasons) = 0) OR
   (reason_taxonomy_version >= 1 AND json_array_length(verdict_reasons) > 0)`.
-  The constraint is structural and must not depend on DuckDB JSON-to-VARCHAR
-  serialization of `[]`. The old table is replaced
+  The version constraint applies only to `verdict_reasons`; legacy preservation
+  data may be present in `legacy_verdict_reasons` on version-0 rows and is ignored
+  for structured precedence. The constraint is structural and must not depend on
+  DuckDB JSON-to-VARCHAR serialization of `[]`. The old table is replaced
   through a two-phase migration journal, not an assumed table-swap primitive:
   before rename, the migration writes `phase21_rebuild_ready(old_table,
-  new_table)`; the transaction that drops or renames the old table and renames the
-  rebuilt table to `analyzed_listings` also writes `phase21_catalog_renamed`;
-  after validating the final schema and row counts, it writes `phase21_complete`.
+  new_table)`; the rename transaction uses
+  `ALTER TABLE analyzed_listings RENAME TO analyzed_listings__phase21_old` and
+  `ALTER TABLE analyzed_listings__phase21_new RENAME TO analyzed_listings`, then
+  writes `phase21_catalog_renamed`; after validating the final schema, row counts,
+  and legacy-reason parity, it writes `phase21_complete`. Only the
+  `phase21_complete` step may drop `analyzed_listings__phase21_old`.
   Existing rows remain version `0`, and new structured rows write version `1`.
   Any INSERT, UPDATE, or reanalysis write to `verdict_reasons` must atomically
   write the matching `reason_taxonomy_version`: legacy/no-reason rows write
@@ -916,8 +966,8 @@ Build:
   statement/transaction.
   Migration tests prove the nullable-add/backfill/rebuild path succeeds against
   existing rows and that the post-migration table contains zero `NULL`
-  verdict-reason or taxonomy values; they do not accept a branch where
-  `verdict_reasons` remains `NULL`
+  verdict-reason, legacy-verdict-reason, or taxonomy values; they do not accept a
+  branch where either reason column remains `NULL`
   after backfill. Intermediate recovery state lives only in the two-phase
   migration journal inside the same DuckDB file; the durable migration-version
   table is written only after final post-rename validation succeeds. Startup
@@ -936,15 +986,22 @@ Build:
   `phase21_rebuild_ready` with both old and new tables revalidates both and
   retries the rename transaction; `phase21_catalog_renamed` with
   `analyzed_listings` already on the constrained schema advances to final
-  validation; `phase21_catalog_renamed` with only the temp table present renames
-  it to `analyzed_listings` after validation; `phase21_complete` is accepted only
+  validation while keeping `analyzed_listings__phase21_old` intact;
+  `phase21_catalog_renamed` with only the temp table present renames it to
+  `analyzed_listings` after validation; `phase21-rollback` reverses the catalog
+  rename by dropping the constrained table and renaming
+  `analyzed_listings__phase21_old` back to `analyzed_listings` as long as
+  `phase21_complete` has not been written; `phase21_complete` is accepted only
   when the final constrained table and row count are present, otherwise it is
-  treated as corruption and aborts with manual-recovery instructions. The
+  treated as corruption and aborts with rollback instructions that name the old
+  table. The
   migration-version table records only the post-rename catalog state after final
   validation, not "step n complete" before the catalog is known. Regression tests
   inject a failure before the first journal write and between each later pair of
-  steps, including the old-plus-temp/no-journal state, and prove the next
-  invocation finishes with the final NOT NULL/CHECK-constrained table.
+  steps, including the old-plus-temp/no-journal state and a CHECK violation after
+  rename but before completion; they prove the next invocation either finishes with
+  the final NOT NULL/CHECK-constrained table or that `phase21-rollback` restores
+  the original table byte-for-byte.
   `db-write.mjs` is the only write path for `data/analyzed_listings.duckdb`.
   AST lint fails `duckdb.connect()` and direct `INSERT`/`UPDATE` calls against
   the analyzed-listings database outside the allowlisted migration and
@@ -956,7 +1013,7 @@ Build:
   explicitly `NULL` or inconsistent with the payload shape. Unit tests prove
   direct DB-layer inserts of `NULL`, invalid JSON, non-array JSON,
   `reason_taxonomy_version=NULL`, `reason_taxonomy_version=0` with a non-empty
-  structured reason array, and `reason_taxonomy_version=1` with `[]` fail,
+  `verdict_reasons` array, and `reason_taxonomy_version=1` with `[]` fail,
   including a non-array valid JSON literal that confirms the JSON
   extension-backed `json_type` check is active. Write-path fixtures prove a
   version-1 partial reason object missing required fields is rejected by
@@ -967,8 +1024,8 @@ Build:
   reanalysis regression starts
   with a migrated version-0 row, writes structured reasons, and proves the row
   advances to taxonomy version `1` in the same write.
-  `verdict_reasons` is always a JSON array, never `NULL`; absence of structured
-  reasons is represented as `[]`.
+  `verdict_reasons` and `legacy_verdict_reasons` are always JSON arrays, never
+  `NULL`; absence of structured or legacy reasons is represented as `[]`.
 - Reason severity and precedence rules so the top three reasons explain the
   verdict without burying the user in raw matrix output.
 - Gap-fill prompts that ask only for decision-critical missing fields, with
@@ -986,10 +1043,11 @@ Build:
   report manifest keeps the machine-readable stale marker as structured fields,
   and any XML-empty-element export uses the same validated values. `source` must
   match the reference filename grammar
-  `[A-Za-z][A-Za-z0-9_-]*(\.[A-Za-z0-9_-]+)*\.ya?ml`, the same basename grammar
+  `[A-Za-z0-9][A-Za-z0-9_-]*(\.[A-Za-z0-9_-]+)*\.ya?ml`, the same basename grammar
   enforced by the reference-index filename lint for new files under
   `data/reference/`. The lint rejects hidden-dot, parent-component-like, and
-  case-colliding basenames before they can appear in stale markers. If the cited
+  case-colliding basenames before they can appear in stale markers, and fixtures
+  include `2024-foo.yml`, `2026-1Q-mip.yml`, and `1099-int-thresholds.yml`. If the cited
   row cannot be identified precisely,
   counterfactual generation is suppressed with
   `counterfactual analysis suppressed: reference data is stale`.
@@ -1004,10 +1062,14 @@ Build:
   `[STALE: ...]` annotation remains present in rendered output.
 - Golden verdict fixtures for ambiguous cases, not just happy paths.
 - A backward-compatibility policy for pre-Phase-21 free-text reasons:
-  preserve them outside `TraceEntry.source_kind` as `reason_kind=legacy_free_text`
-  with `reason_taxonomy_version=0`, exclude them from precedence ranking, add
-  `reason_taxonomy_version` to `analyzed_listings`, and require Phase 23 snapshot
+  preserve them outside `TraceEntry.source_kind` in `legacy_verdict_reasons` as
+  `reason_kind=legacy_free_text` with `reason_taxonomy_version=0`, exclude them
+  from precedence ranking, add `reason_taxonomy_version` and
+  `legacy_verdict_reasons` to `analyzed_listings`, and require Phase 23 snapshot
   queries to verify the snapshot-pinned `reason_taxonomy_version` before reading
+  `verdict_reasons` or displaying legacy reasons. A round-trip migration fixture
+  starts from a pre-Phase-21 row with two free-text reasons and proves migration,
+  snapshot embedding, and replay preserve both reasons without writing them into
   `verdict_reasons`.
 
 Success criteria:
@@ -1077,9 +1139,10 @@ Build:
   version read by the report, and all User Layer inputs needed to reproduce the
   report without reading mutable local private files. Snapshots also embed the
   relevant `analyzed_listings` row or rows used by the report, including
-  `verdict_reasons` and listing notes when present, with per-row hashes and a
-  schema-versioned canonical JSON serialization so replay never depends on
-  mutable local DuckDB listing state. Embedded listing rows are never pickle,
+  `verdict_reasons`, `legacy_verdict_reasons`, and listing notes when present,
+  with per-row hashes and a schema-versioned canonical JSON serialization so
+  replay never depends on mutable local DuckDB listing state. Embedded listing
+  rows are never pickle,
   executable object formats, raw DuckDB COPY byte streams, or string-built SQL.
   Snapshot files are private Data/User Layer artifacts stored by default in a
   repo-external XDG state path: if `$XDG_STATE_HOME` is set, non-empty, and
@@ -1114,20 +1177,23 @@ Build:
   every snapshot: it validates the snapshot schema, pinned revision, reference
   data, and embedded input hashes but does not check out or run code. Execution
   requires explicit `--trusted --execute` for every snapshot and then refuses to
-  run unless the pinned revision is reachable from a signed release tag already
-  present locally or the snapshot carries a detached signature from a trusted
-  replay key registered in the repo-external local state trust store.
+  run unless the pinned revision is equal to the commit pointed at by a signed
+  release tag already present locally and verified against the configured trust
+  store, or the snapshot carries a detached signature over the snapshot manifest
+  from a trusted replay key registered in the repo-external local state trust
+  store.
   `mortgage-ops trust-key add <pubkey-file> --purpose snapshot-replay` writes
   that store with owner-only permissions, records key id, purpose, reviewer, and
   timestamp in an audit entry, and never mutates User Layer YAML. Reachability
   from mutable branches such as
-  `origin/main` is inspect-only unless the reachable commit or ref is signed by a
-  configured trusted key; no replay command fetches remote revisions
-  automatically. Trust means signed provenance from a configured key, not branch
-  reachability. The executable replay sequence is fixed: first verify signed-tag
-  reachability or the detached snapshot signature using only the current trusted
-  checkout and local metadata; second print the exact commit hash, author,
-  signature or signed-ref verification result, and diffstat from the signed base
+  `origin/main` is inspect-only unless the exact commit is the target of a signed
+  release tag verified by a configured trusted key; no replay command fetches
+  remote revisions automatically. Trust means signed provenance from a configured
+  key, not branch or graph reachability. The executable replay sequence is fixed:
+  first verify signed-tag object equality or the detached snapshot signature using
+  only the current trusted checkout and local metadata; second print the exact
+  commit hash, author, signature or signed-tag verification result, and diffstat
+  from the signed base
   and require either an interactive `y/N` confirmation or a detached signed replay
   pre-approval file. The pre-approval signature must cover the snapshot hash,
   pinned revision, trusted maintainer key id, replay command mode, and an expiry
@@ -1152,13 +1218,15 @@ Build:
   revisions without the markers, with junk or non-integer output, or whose
   supported ranges exclude the snapshot versions are non-replayable by design
   and abort with the incompatible schema/taxonomy non-zero exit before any
-  embedded state is materialized. Version-probe parsing reads stdout only and
-  requires stderr to be empty. The complete stdout byte stream must be ASCII and
-  match `^(0|[1-9][0-9]*)\n?$`; the parser may strip at most one trailing LF and
-  rejects leading/trailing spaces, `+1`, `-1`, `01`, `1.0`, multi-line output,
-  missing output, and strings such as `1 (build deadbeef)`. Regression fixtures
-  cover each rejected form, a pinned revision whose protocol probe exits 0 with
-  junk output, a pre-Phase-21 pinned revision without
+  embedded state is materialized. Version-probe parsing reads stdout only; stderr
+  is captured for diagnostics but does not affect parsing when stdout is valid.
+  The complete stdout byte stream must be ASCII and match
+  `^(0|[1-9][0-9]*)\n?$`; the parser may strip at most one trailing LF and rejects
+  leading/trailing spaces, `+1`, `-1`, `01`, `1.0`, multi-line output, missing
+  output, and strings such as `1 (build deadbeef)`. Regression fixtures cover each
+  rejected form, a pinned revision whose protocol probe exits 0 with junk output,
+  a pinned probe that writes a Python `DeprecationWarning` to stderr while printing
+  valid stdout, a pre-Phase-21 pinned revision without
   `verdict_reasons`/snapshot-schema compatibility support, and pinned code
   declaring `min=2 max=2` for a snapshot at v1; all must fail after the trust
   gate but before state materialization.
@@ -1209,9 +1277,9 @@ Build:
   DuckDB COPY payloads, and any implementation path that concatenates embedded
   row text into SQL; an injection fixture puts quotes and `DROP TABLE` text in
   listing notes and proves the notes round-trip as data. Before reading
-  `verdict_reasons`, replay verifies that the pinned code declares snapshot
-  schema compatibility for the snapshot's embedded listing-row serialization and
-  `min_supported_reason_taxonomy_version` and
+  `verdict_reasons` or `legacy_verdict_reasons`, replay verifies that the pinned
+  code declares snapshot schema compatibility for the snapshot's embedded
+  listing-row serialization and `min_supported_reason_taxonomy_version` and
   `max_supported_reason_taxonomy_version`, and that the snapshot-pinned
   `reason_taxonomy_version` falls inside that inclusive range; snapshots below
   the minimum or above the maximum abort non-zero. Fixtures cover supported v0,
@@ -1248,13 +1316,15 @@ Build:
   in the same directory, `fsync`s where supported, and publishes with atomic
   rename. Unparseable, truncated, or schema-invalid manifests are hard replay
   failures that surface the manifest path and remediation instead of being
-  treated as absent or deferred cleanup. Each replay startup uses a 100ms
-  foreground cleanup budget, prunes entries immediately when the recorded PID is
-  absent or the live process creation time/host identifier does not match the
-  sidecar, prunes stale replay worktrees older than 24 hours under the same
-  PID/host/process-creation-time check, writes surviving entries back under the
-  same lock-and-rename protocol, and exits the foreground pass once the budget is
-  exhausted. Process identity uses `psutil.Process(pid).create_time()` plus the
+  treated as absent or deferred cleanup. Each replay startup uses a 1000ms
+  foreground cleanup budget and performs at most one lockfile-mediated manifest
+  write: it reads the manifest once, evaluates stale entries in memory, prunes
+  entries when the recorded PID is absent or the live process creation time/host
+  identifier does not match the sidecar, prunes stale replay worktrees older than
+  24 hours under the same PID/host/process-creation-time check, writes surviving
+  entries back under the same lock-and-rename protocol only if the manifest
+  changed, and exits the foreground pass once the budget is exhausted. Process
+  identity uses `psutil.Process(pid).create_time()` plus the
   recorded host identifier; on platforms where `psutil` is unavailable or cannot
   return creation time, cleanup treats entries older than 24 hours as stale
   regardless of PID reuse and leaves younger matching-PID entries for explicit
@@ -1266,10 +1336,11 @@ Build:
   destructive replay safety flags. Remaining entries are left for the next replay
   startup or an explicit `replay-prune` maintenance command; replay still checks
   and refuses to reuse any stale path it is about to create. Regressions simulate
-  two
-  concurrent replay startups racing on manifest update through the Python replay
-  command and a Node process holding the same lockfile, and prove neither entry
-  is lost. PID reuse cannot keep a dead checkout or materialized private-state
+  two concurrent replay startups racing on manifest update through the Python
+  replay command and a Node process holding the same lockfile, and prove neither
+  entry is lost. A benchmark fixture asserts cleanup of 100 stale manifest entries
+  completes within the documented foreground budget on the reference CI runner.
+  PID reuse cannot keep a dead checkout or materialized private-state
   directory indefinitely. If
   the recorded process
   still matches, or if `git worktree add` or state-directory creation fails
@@ -1472,11 +1543,15 @@ Build:
   blockers.
 - A "local-first" setup guide for Codex/Claude maintainers: what agents may
   edit, what they may read, and what they must never commit.
-- Redaction support for sharing a report externally without household/private
-  fields. Redaction must not remove the exact visible markdown warning
-  `> DEV MODE - REFERENCE DATA IS STALE - NOT FOR DECISION USE` or the manifest
-  field `decision_mode: false` from markdown reports; a regression proves
-  redaction cannot strip either safety signal.
+- Redaction support for sharing a decision-mode report externally without
+  household/private fields. The share command refuses dev-mode/non-decision
+  reports before rendering when the manifest has `decision_mode: false`, when
+  `dev_mode_intentional: true`, or when the markdown contains the exact visible
+  warning `> DEV MODE - REFERENCE DATA IS STALE - NOT FOR DECISION USE`. Local
+  redaction previews that are not share artifacts must not remove that warning or
+  the manifest field `decision_mode: false`; regressions prove the warning cannot
+  be stripped locally and that external sharing of a dev-mode report with a
+  redact-visibility stale marker exits without emitting the reference basename.
 - Release artifacts that separate reusable System/Reference layers from
   private User/Data layers.
 
