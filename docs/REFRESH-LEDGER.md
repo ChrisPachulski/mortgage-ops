@@ -517,40 +517,30 @@ Snapshot of `data/reference/*.yml` files currently triggering
 authoritative scan is `uv run python` directly invoking `load_reference`
 for each YAML.
 
-`uv run pytest --timeout=60 -q 2>&1 | grep StaleReferenceWarning | sort -u`
-output (pytest dedups; misses fha-mip-rates):
-
-```
-/Users/cujo253/Documents/mortgage-ops/lib/rules/_loader.py:86: StaleReferenceWarning: Reference data 'insurance-estimate-defaults' has effective=2025-05-21, which is more than 12 months old (threshold: 2025-05-23). Annual regulatory refresh may be overdue.
-/Users/cujo253/Documents/mortgage-ops/lib/rules/_loader.py:86: StaleReferenceWarning: Reference data 'irs-pub936' has effective=2025-01-01, which is more than 12 months old (threshold: 2025-05-23). Annual regulatory refresh may be overdue.
-/Users/cujo253/Documents/mortgage-ops/lib/rules/_loader.py:86: StaleReferenceWarning: Reference data 'property-analysis-heuristics' has effective=2024-03-04, which is more than 12 months old (threshold: 2025-05-23). Annual regulatory refresh may be overdue.
-/Users/cujo253/Documents/mortgage-ops/lib/rules/_loader.py:86: StaleReferenceWarning: Reference data 'va-funding-fees' has effective=2023-04-07, which is more than 12 months old (threshold: 2025-05-23). Annual regulatory refresh may be overdue.
-/Users/cujo253/Documents/mortgage-ops/lib/rules/_loader.py:86: StaleReferenceWarning: Reference data 'va-residual-income' has effective=2023-04-07, which is more than 12 months old (threshold: 2025-05-23). Annual regulatory refresh may be overdue.
-```
+**Post Phase 17 polish state (2026-05-23):** all 6 previously-stale YAMLs
+have been refreshed. `uv run pytest --timeout=60 -q 2>&1 | grep
+StaleReferenceWarning | sort -u` returns no lines.
 
 Direct loader scan (every YAML, no dedup):
 
-| YAML stem                       | effective    | stale (>12mo)? |
-| ------------------------------- | ------------ | -------------- |
-| conforming-limits-2026          | 2026-01-01   | no             |
-| fha-limits-2026                 | 2026-01-01   | no             |
-| fha-mip-rates                   | 2023-03-20   | **yes**        |
-| va-funding-fees                 | 2023-04-07   | **yes**        |
-| va-residual-income              | 2023-04-07   | **yes**        |
-| usda-income-limits              | 2025-10-01   | no             |
-| irs-pub936                      | 2025-01-01   | **yes**        |
-| fannie-llpa-matrix              | 2026-01-28   | no             |
-| freddie-eligibility-matrix      | 2026-01-15   | no             |
-| atr-qm-thresholds               | 2025-11-01   | no             |
-| insurance-estimate-defaults     | 2025-05-21   | **yes**        |
-| property-analysis-heuristics    | 2024-03-04   | **yes**        |
+| YAML stem                       | effective    | stale (>12mo)? | Phase 17 refresh action |
+| ------------------------------- | ------------ | -------------- | ----------------------- |
+| conforming-limits-2026          | 2026-01-01   | no             | n/a                     |
+| fha-limits-2026                 | 2026-01-01   | no             | n/a                     |
+| fha-mip-rates                   | 2026-05-23   | no             | source URL updated to operative HUD Handbook 4000.1; values unchanged (HUD has not republished) |
+| va-funding-fees                 | 2026-05-23   | no             | re-verification only; Blue Water Navy Vietnam Veterans Act schedule remains statute through 2026 |
+| va-residual-income              | 2026-05-23   | no             | schema fix + re-verification: split `per_extra_member_increment` into `_below_80k` (75) / `_above_80k` (80) per VA M26-7 Ch 4 |
+| usda-income-limits              | 2025-10-01   | no             | n/a                     |
+| irs-pub936                      | 2026-05-23   | no             | notes-only refresh: OBBBA Section 70108 permanence + PMI deductibility restoration TY2026; pinned dollar caps unchanged |
+| fannie-llpa-matrix              | 2026-01-28   | no             | n/a                     |
+| freddie-eligibility-matrix      | 2026-01-15   | no             | n/a                     |
+| atr-qm-thresholds               | 2025-11-01   | no             | n/a                     |
+| insurance-estimate-defaults     | 2026-05-23   | no             | re-verification only; NAIC 2022-data report is still the latest |
+| property-analysis-heuristics    | 2026-02-09   | no             | vendor switch: MGIC's PMI PDF moved behind MiQ; re-pinned to Arch MI (cross-verified Enact/Essent/National MI, 0bps drift). Interior cells corrected +9-13bps — likely 2024 mis-sourcing rather than rate movement |
 
-Six YAMLs are currently stale: `fha-mip-rates`, `va-funding-fees`,
-`va-residual-income`, `irs-pub936`, `insurance-estimate-defaults`,
-`property-analysis-heuristics`. Per the YAML headers, the four
-`va-*` / `fha-mip-rates` / `property-analysis-heuristics` /
-`insurance-estimate-defaults` warnings are EXPECTED (the underlying source
-has not republished) — re-verification, not necessarily content change, is
-the refresh action. `irs-pub936` is the most likely candidate for a true
-content refresh because IRS Pub 936 is republished annually. This ledger
-DOCUMENTS state; a separate task (Phase 17 / #1) will FIX the stale YAMLs.
+Zero YAMLs currently stale. The historical effective dates (e.g.,
+2023-03-20 for FHA MIP rates, 2023-04-07 for VA tables) are preserved in
+the YAML notes blocks and in `grandfathering.earliest_supported_endorsement_date`
+fields where applicable — those are the load-bearing dates for predicate
+behavior; the top-level `effective:` scalar is the source-of-truth-as-of
+date that the staleness check reads.

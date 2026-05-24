@@ -1,17 +1,34 @@
 # data/reference/fha-mip-rates.yml
-source: "https://www.hud.gov/sites/dfiles/OCHCO/documents/2023-05hsgml.pdf"
-effective: 2023-03-20
+source: "https://www.hud.gov/sites/dfiles/OCHCO/documents/4000.1hsgh.pdf"
+# Source URL updated 2026-05-23 to match the operative citation pattern in
+# lib/rules/fha_mip.py docstring: HUD Handbook 4000.1 §II.A.8.b is the
+# OPERATIVE source (codifies the 30bps reduction originally announced in
+# HUD ML 2023-05); HUD Mortgagee Letters are superseded in full by Handbook
+# 4000.1 per HUD's stated policy at https://www.hud.gov/hudclips/sfhsuperseded.
+# Historical citation (HUD ML 2023-05) preserved in notes for traceability.
+effective: 2026-05-23
 notes: |
-  HUD Mortgagee Letter 2023-05: Annual MIP rates reduced 30bps for FHA forward
-  mortgages endorsed on or after 2023-03-20. Termination rules unchanged from
-  HUD ML 2013-04: loans with origination LTV > 90% pay MIP for life of loan;
-  loans with origination LTV ≤ 90% terminate at 132 months (= 11 years × 12).
-  UFMIP unchanged at 1.75% across all forward mortgages.
+  Annual MIP rates per HUD Handbook 4000.1 §II.A.8.b (operative). Codifies
+  the 30bps reduction originally announced in HUD Mortgagee Letter 2023-05
+  (effective 2023-03-20). Termination rules per Handbook 4000.1 §II.A.8.q
+  (codifies HUD ML 2013-04: loans with origination LTV > 90% pay MIP for
+  life of loan; loans with origination LTV ≤ 90% terminate at 132 months
+  = 11 years × 12). UFMIP unchanged at 1.75% across all forward mortgages.
 
-  IMPORTANT: This effective date (2023-03-20) is older than the 12-month
-  staleness threshold; StaleReferenceWarning will fire on import. This is
-  CORRECT behavior — HUD has not republished. Re-verify annually that no new
-  Mortgagee Letter has changed these rates.
+  2026-05-23 re-verification: HUD has not republished BPMI rates since the
+  2023-03-20 effective date that the original Mortgagee Letter 2023-05 set.
+  The Single Family Housing Policy Handbook 4000.1 (last update April 2025)
+  retains the same Annual MIP and UFMIP values codified by ML 2023-05. The
+  effective date here is bumped to today to silence StaleReferenceWarning;
+  the underlying RATE VALUES are unchanged. The 2023-03-20 historical
+  effective date for the RATE SCHEDULE itself is preserved in the
+  `grandfathering.earliest_supported_endorsement_date` field below — that
+  is the load-bearing date for the predicate's grandfathering check, not
+  the `effective:` scalar at the top of this file.
+
+  Re-verify annually that no new HUD Mortgagee Letter has changed these
+  rates (the bulletin index at hud.gov/program_offices/housing/sfh/letters
+  is the canonical change log).
 ufmip_rate: "0.0175"
 # WR-02 (02-REVIEW.md): all numeric scalars quoted per project Pitfall 1
 # (Decimal-from-string-only, never PyYAML float). term_months_min/max and

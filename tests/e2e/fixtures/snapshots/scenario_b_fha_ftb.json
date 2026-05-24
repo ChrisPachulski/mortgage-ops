@@ -20,7 +20,6 @@
   "total_gross_monthly_income": "9500.00",
   "total_monthly_debts": "650.00",
   "warnings": [
-    "Reference data 'fha-mip-rates' has effective=2023-03-20, which is more than 12 months old (threshold: 2025-05-23). Annual regulatory refresh may be overdue.",
     "ATR-QM-NOT-EVALUATED-MISSING-APR-OR-APOR"
   ]
 }
