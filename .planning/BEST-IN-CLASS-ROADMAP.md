@@ -76,8 +76,12 @@ Build:
   `oracle_coverage`.
 - Report-side citation footers generated from trace data, not manually composed
   strings.
-- A report parser/meta-test that fails on orphan numbers in `reports/*.md` and
-  expected report fixtures.
+- A report parser/meta-test that fails on orphan numbers in committed report
+  fixtures and in reports generated under a temporary test directory. Live
+  `reports/*.md` are User/Data Layer (gitignored per DATA_CONTRACT.md) and stay
+  out of CI; a separate opt-in `scripts/audit_reports.py` lets the user
+  validate their local reports on demand without making tests nondeterministic
+  across workstations.
 - A deterministic report manifest containing code revision, household/profile
   input hashes, listing hash, and reference-data effective dates.
 
