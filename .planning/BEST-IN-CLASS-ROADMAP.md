@@ -312,7 +312,12 @@ Build:
   also constructs, reads, or parses `data/reference/*.yml`; calls
   `yaml.safe_load` on bytes/text read from a reference `.yml` path in
   unauthorized code; or performs reference `.yml` globbing/reads without an
-  exact allowlist entry. The checker ignores module, class, and function
+  exact allowlist entry. The lint also fails unauthorized `subprocess.*` calls
+  whose argv contains `data/reference/` as a literal, f-string segment, or
+  joined path component; invokes reference-data shell tools such as `yq`, `yj`,
+  `shyaml`, or `jq` against constructed reference paths; or builds argv from
+  environment variables that are not explicitly allowlisted for reference-index
+  tooling. The checker ignores module, class, and function
   docstrings, and ignores triple-quoted explanatory strings inside blocks marked
   with `# noqa: REF-INDEX`; those exclusions are documented next to the lint
   rule so ordinary documentation can name `data/reference/` without becoming a
@@ -322,22 +327,31 @@ Build:
   startup for every report generator and analysis CLI imports
   `lib/reference_index.py` before loading rules or reports; that module installs
   one process-wide narrow runtime trap based on Python `sys.addaudithook` `open`
-  events, filtered to resolved `data/reference/*.yml` paths and the exact
+  events. For every candidate path from the audit event, the hook converts with
+  `os.fspath`, decodes bytes with `os.fsdecode`, resolves with
+  `Path(path).resolve(strict=True)`, and fails closed if resolution raises
+  before matching the resolved path against `data/reference/*.yml` and exact
   authorized caller paths. Startup asserts the trap is installed and aborts
   decision-mode execution if the assertion fails. It fails unauthorized reference
   YAML opens without
   monkey-patching `open`, `io.open`, `Path.open`, `Path.read_text`, `os.open`,
   or stdlib internals, catching common variable indirection and helper-module
-  bypasses that static analysis misses. Test fixtures also install the same trap
-  during unit and integration runs, and an end-to-end regression invokes the
-  production CLI with `python -m ... --decision-mode` to prove the hook is active
-  outside pytest. The trap is defense-in-depth, not
-  exhaustive: file descriptors opened before trap installation and native
-  extensions that bypass Python audit events remain outside its guarantee and
-  are covered by static lint and code review. A negative fixture proves
-  `tempfile`, `subprocess`, pytest collection, and unrelated YAML fixture reads
-  still work while the trap is active. Node orchestration code is not
-  allowed to read reference YAML directly:
+  bypasses that static analysis misses. Fixtures cover `..` components,
+  symlinks targeting `data/reference/`, case-variant paths on case-insensitive
+  filesystems, and bytes-vs-str path arguments. Test fixtures also install the
+  same trap during unit and integration runs, and an end-to-end regression
+  invokes the production CLI with `python -m ... --decision-mode` under
+  `strace -e openat,open` on Linux or `dtruss -t open` on macOS and asserts
+  every reference-YAML open originates from `lib/reference_index.py`. The trap
+  is defense-in-depth, not exhaustive: file descriptors opened before trap
+  installation, native extensions that bypass Python audit events, and
+  out-of-process reads through `subprocess.Popen` remain outside its guarantee
+  and are covered by static lint, the syscall-level regression, and code review.
+  Any out-of-process reference-data tooling must be exposed through an
+  authorized `lib/reference_index.py` CLI/API wrapper. A negative fixture proves
+  `tempfile`, unrelated subprocess calls, pytest collection, and unrelated YAML
+  fixture reads still work while the trap is active. Node orchestration code is
+  not allowed to read reference YAML directly:
   `.mjs`/`.js` files must call the Python reference-index command/API for
   reference metadata, and CI rejects direct `fs` YAML reads, `yaml` package
   imports, or `data/reference` path construction outside an explicit
@@ -414,12 +428,17 @@ Build:
   root must not be equal, and the key path must not resolve under the repo root,
   including through symlinked `$XDG_CONFIG_HOME` components. The loader never
   searches both locations or falls back silently after choosing a path. On POSIX,
-  the key-owned `mortgage-ops` parent directory is created and
-  then opened once with `O_DIRECTORY | O_NOFOLLOW`; the opened directory file
-  descriptor is verified with `fstat` as a non-symlink directory owned by the
-  current user with mode `0700` before the key is touched; the implementation
-  never requires `$XDG_CONFIG_HOME` or `~/.config` itself to be `0700`. Key
-  creation and reads use `os.open(..., dir_fd=parent_fd)` on basenames only.
+  after creating any missing owned directories, the loader opens the resolved
+  config path component-by-component from a trusted anchor directory using
+  `openat` with `O_DIRECTORY | O_NOFOLLOW` on every component rather than only
+  on the final leaf. The opened `mortgage-ops` directory file descriptor is
+  verified with `fstat` as a non-symlink directory owned by the current user with
+  mode `0700`, and the implementation re-resolves `/proc/self/fd/<fd>` where
+  available or an equivalent platform fd path before the key is touched; the
+  re-resolved directory must still equal the previously validated path and remain
+  outside the resolved repo root. The implementation never requires
+  `$XDG_CONFIG_HOME` or `~/.config` itself to be `0700`. Key creation and reads
+  use `os.open(..., dir_fd=parent_fd)` on basenames only.
   Creation writes a same-directory temporary file with a random suffix using
   `O_CREAT | O_EXCL | O_WRONLY | O_NOFOLLOW` and mode `0600`, writes all 32 bytes
   with a checked full-length write, `fsync`s the temporary key file, publishes it
@@ -552,6 +571,13 @@ Build:
   check requires a waiver only when a reference file is stale, defined as more
   than 12 months after its `effective` date. For stale files, absent, malformed,
   or expired waivers cause failure; non-stale files do not require waivers.
+  Waiver lint also rejects any entry whose `granted_by` is not in a committed
+  maintainer allowlist, whose duration exceeds 90 days, or whose long-duration
+  exception lacks two distinct authorized maintainers recorded in the waiver
+  metadata. CI emits a review-visible summary of every active waiver whenever
+  `data/reference/waivers.yml` is present or changed, including path, grantor,
+  expiry, and reason slug, so reviewers cannot miss newly added or extended
+  bypasses.
   Waiver paths are exact normalized POSIX relative file paths under
   `data/reference/`; globs, absolute paths, backslashes, `..` components,
   leading `./`, symlinks, and realpaths outside `data/reference/` are rejected.
@@ -700,8 +726,11 @@ Build:
   XML-empty-element form
   `<stale source="atr-qm-thresholds.yml" effective="2024-01-01"/>`; `source` must
   be XML-escaped and match the reference filename grammar
-  `[A-Za-z0-9_.-]+\.ya?ml`, the same basename character set accepted by the
-  reference-index `FILE_PATH` lexicon. If the cited row cannot be identified precisely,
+  `[A-Za-z][A-Za-z0-9_-]*(\.[A-Za-z0-9_-]+)*\.ya?ml`, the same basename grammar
+  enforced by the reference-index filename lint for new files under
+  `data/reference/`. The lint rejects hidden-dot, parent-component-like, and
+  case-colliding basenames before they can appear in stale markers. If the cited
+  row cannot be identified precisely,
   counterfactual generation is suppressed with
   `counterfactual analysis suppressed: reference data is stale`.
   Example report language:
@@ -789,12 +818,19 @@ Build:
   `verdict_reasons` and listing notes when present, with per-row hashes and a
   schema-versioned serialization so replay never depends on mutable local DuckDB
   listing state.
-  Snapshot files are private Data/User Layer artifacts stored only under
-  `reports/snapshots/private/` by default; that path is added to
-  `DATA_CONTRACT.md`, `.gitignore`, `.pre-commit-config.yaml`,
-  `scripts/hooks/block-user-layer.py`, and the Phase 24 privacy audit. Any
-  committed snapshot fixture must be synthetic or redacted and must not contain
-  real household income, debts, cash, preferences, or listing notes.
+  Snapshot files are private Data/User Layer artifacts stored by default in a
+  repo-external XDG state path: if `$XDG_STATE_HOME` is set, non-empty, and
+  absolute, use `$XDG_STATE_HOME/mortgage-ops/snapshots/private/`; if it is
+  unset or empty, use `~/.local/state/mortgage-ops/snapshots/private/`; if it is
+  relative, fail with a clear configuration error. Repo-local snapshot output is
+  allowed only when the caller passes an explicit output path plus
+  `--allow-in-repo-snapshot` and a per-run acknowledgement after the tool prints
+  the resolved repo root and snapshot path. Any repo-local private snapshot path
+  is added to `DATA_CONTRACT.md`, `.gitignore`, `.pre-commit-config.yaml`,
+  `scripts/hooks/block-user-layer.py`, and the Phase 24 privacy audit as
+  defense in depth, not as the privacy boundary. Any committed snapshot fixture
+  must be synthetic or redacted and must not contain real household income,
+  debts, cash, preferences, or listing notes.
   `scripts/replay_snapshot.py <snapshot.json>` is inspect-only by default for
   every snapshot: it validates the snapshot schema, pinned revision, reference
   data, and embedded input hashes but does not check out or run code. Execution
@@ -818,17 +854,20 @@ Build:
   clean source worktree because validation reads only the snapshot and local
   metadata, not mutable checkout files. Snapshots record
   `replay_protocol_version: 1`; the temporary checkout of the pinned code must
-  expose `--print-replay-protocol-version` and return a compatible integer
-  greater than or equal to the snapshot version. It must also expose
-  `--print-snapshot-schema-compat-version` and return an integer greater than or
-  equal to the snapshot's `snapshot_schema_version`; pinned revisions without the
-  marker, with junk or non-integer output, with an older replay protocol, or with
-  an older snapshot-schema compatibility version are non-replayable by design and
-  abort with the incompatible schema/taxonomy non-zero exit before any embedded
-  state is materialized. Regression fixtures cover a pinned revision whose
-  `--print-replay-protocol-version` exits 0 with junk output, and a pre-Phase-21
-  pinned revision without `verdict_reasons`/snapshot-schema compatibility support,
-  and both must fail after the trust gate but before state materialization.
+  expose `--print-replay-protocol-min-supported` and
+  `--print-replay-protocol-max-supported`, and the snapshot's
+  `replay_protocol_version` must fall inside that inclusive range. It must also
+  expose `--print-snapshot-schema-min-supported` and
+  `--print-snapshot-schema-max-supported`, and the snapshot's
+  `snapshot_schema_version` must fall inside that inclusive range. Pinned
+  revisions without the markers, with junk or non-integer output, or whose
+  supported ranges exclude the snapshot versions are non-replayable by design
+  and abort with the incompatible schema/taxonomy non-zero exit before any
+  embedded state is materialized. Regression fixtures cover a pinned revision
+  whose protocol probe exits 0 with junk output, a pre-Phase-21 pinned revision
+  without `verdict_reasons`/snapshot-schema compatibility support, and pinned
+  code declaring `min=2 max=2` for a snapshot at v1; all must fail after the
+  trust gate but before state materialization.
   Execution uses a unique temporary `git worktree add` checkout path containing
   the host identifier, PID, monotonic timestamp, and short snapshot hash. Before
   execution, replay refuses to proceed
@@ -840,13 +879,16 @@ Build:
   writes embedded inputs to standard User Layer paths. Instead, replay
   materializes the embedded `user_layer_state` block into a repo-external
   temporary state directory created in the same cleanup scope as the replay
-  worktree and passes explicit config-path overrides to the
-  pinned code. `user_layer_state` keys are a closed enum of allowed User Layer
-  relative paths such as `config/household.yml`, `config/profile.yml`, and
-  configured narrative preference files; replay rejects any unknown key, `..`
-  component, leading slash, `~`, Windows drive letter, absolute path, symlink, or
-  resolved realpath outside the temporary state directory before writing any
-  file. All YAML deserialization of snapshot-embedded `user_layer_state` uses
+  worktree and passes explicit config-path overrides to the pinned code.
+  `user_layer_state` keys are the fixed System Layer enum
+  `config/household.yml`, `config/profile.yml`, and
+  `config/narrative_preferences.yml`; replay never expands this enum from live
+  user config or snapshot-embedded config. Replay rejects any unknown key, `..`
+  component, leading slash, `~`, Windows drive letter, absolute path, symlink,
+  or resolved realpath outside the temporary state directory before writing any
+  file. A regression fixture where a snapshot tries to register a new narrative
+  preference path during replay must fail before materialization. All YAML
+  deserialization of snapshot-embedded `user_layer_state` uses
   `yaml.safe_load` exclusively on already schema-bounded values; `yaml.load`,
   `yaml.full_load`, and custom-object constructors are forbidden anywhere
   snapshot-derived bytes flow. A regression fixture with a
@@ -863,21 +905,28 @@ Build:
   `max_supported_reason_taxonomy_version`, and that the snapshot-pinned
   `reason_taxonomy_version` falls inside that inclusive range; snapshots below
   the minimum or above the maximum abort non-zero. Fixtures cover supported v0,
-  supported v1, below-minimum, and above-maximum taxonomy versions. Replay removes
-  the temporary checkout with `git worktree remove --force` and removes the
-  temporary state directory in `try/finally` and `SIGTERM`/`SIGINT`/`SIGHUP`
-  handlers. Temporary User Layer materialization cleanup best-effort overwrites
+  supported v1, below-minimum, and above-maximum taxonomy versions. Replay
+  creates the materialized User Layer state through a unique
+  `tempfile.TemporaryDirectory` under the repo-external replay-state root,
+  registers it with `atexit`, and removes the temporary checkout with
+  `git worktree remove --force` plus the temporary state directory in
+  `try/finally` and `SIGTERM`/`SIGINT`/`SIGHUP` handlers. Temporary User Layer
+  materialization cleanup best-effort overwrites
   regular files before unlinking where the platform permits, then unlinks files
-  and directories even after replay exceptions. Each replay worktree and
-  temporary state directory records PID,
+  and directories even after replay exceptions. Because `SIGKILL`, process
+  crashes, OOM kills, and hard power loss can bypass in-process cleanup, every
+  CLI startup, for every subcommand, scans
+  `$XDG_STATE_HOME/mortgage-ops/replay-state/` or the fallback
+  `~/.local/state/mortgage-ops/replay-state/` and prunes temporary state
+  directories whose sidecar process is no longer alive, regardless of age. Each
+  replay worktree and temporary state directory records PID,
   process creation time, host identifier, wall-clock UTC creation timestamp,
-  optional monotonic timestamp, and snapshot hash in a sidecar file. Each replay
-  invocation uses the wall-clock UTC timestamp for the 24-hour stale-worktree
-  decision and uses the monotonic timestamp only for in-process ordering or
-  diagnostics. It prunes stale replay worktrees and replay state directories
-  older than 24 hours only when
-  the recorded PID is absent or the live process creation time/host identifier
-  does not match the sidecar, so PID reuse cannot keep a dead checkout or
+  optional monotonic timestamp, and snapshot hash in a sidecar file. Each CLI
+  startup uses the monotonic timestamp only for in-process ordering or
+  diagnostics, prunes replay state directories immediately when the recorded PID
+  is absent or the live process creation time/host identifier does not match the
+  sidecar, and prunes stale replay worktrees older than 24 hours under the same
+  PID/host/process-creation-time check. PID reuse cannot keep a dead checkout or
   materialized private-state directory indefinitely. If the recorded process
   still matches, or if `git worktree add` or state-directory creation fails
   because a stale path still exists, replay reports the path, recorded host and
@@ -897,9 +946,11 @@ Success criteria:
   `snapshot_schema_version`, and `reason_taxonomy_version` reproduce
   bit-identical results or exits non-zero with the missing prerequisite or
   incompatible schema/taxonomy version.
-- Snapshot privacy tests prove real snapshot output lands only in ignored
-  private paths, synthetic/redacted fixtures are the only committed snapshots,
-  and the pre-commit hook plus privacy audit block repo-local private snapshots.
+- Snapshot privacy tests prove real snapshot output defaults to the repo-external
+  XDG state path, repo-local output requires `--allow-in-repo-snapshot` plus
+  per-run acknowledgement, synthetic/redacted fixtures are the only committed
+  snapshots, and the pre-commit hook plus privacy audit block unacknowledged
+  repo-local private snapshots.
 - Ergonomics stay report/CLI/skill based; no complex UI unless repeated real
   use proves it would reduce decision risk.
 
@@ -944,21 +995,19 @@ Build:
   `$XDG_STATE_HOME=""` falls back to `~/.local/state`,
   `$XDG_STATE_HOME="relative/dir"` fails before path expansion, and
   `$XDG_STATE_HOME` is a symlink to a directory inside the repo. The audit also
-  covers `reports/snapshots/private/` and any configured snapshot output
-  override, treating snapshots as private whenever they contain embedded User
-  Layer state. Onboarding refuses to write staging artifacts below the resolved
-  repo root even when `$XDG_STATE_HOME` points there directly or through a
-  symlink unless the caller passes an explicit `--allow-in-repo-staging` flag
-  and a per-invocation acknowledgement. The acknowledgement is either an
-  interactive `y/N` confirmation on a TTY after the tool prints the resolved
-  repo root and staging path, or a `--repo-staging-token <token>` emitted by a
-  prior `--explain-risk` invocation for the same resolved repo root, staging
-  path, caller uid, and PID family and expiring after five minutes. Sticky
-  environment variables are not accepted as acknowledgement. It prints a
-  structured warning block that names `$XDG_STATE_HOME` as shell-controlled and
-  that pre-commit treats as a hard failure. Without a valid per-invocation
-  acknowledgement, the audit exits non-zero. CI refuses
-  `--allow-in-repo-staging` and never issues repo-staging tokens. The
+  verifies default snapshot output resolves outside the repo and covers any
+  configured repo-local snapshot output override, treating snapshots as private
+  whenever they contain embedded User Layer state. Onboarding refuses to write
+  staging artifacts below the resolved repo root even when `$XDG_STATE_HOME`
+  points there directly or through a symlink unless the caller passes an
+  explicit `--allow-in-repo-staging` flag and a per-invocation acknowledgement.
+  The acknowledgement is an interactive `y/N` confirmation on a TTY after the
+  tool prints the resolved repo root and staging path. Non-interactive token,
+  environment-variable, and config-file acknowledgements are not accepted. It
+  prints a structured warning block that names `$XDG_STATE_HOME` as
+  shell-controlled and that pre-commit treats as a hard failure. Without a valid
+  per-invocation acknowledgement, the audit exits non-zero. CI refuses
+  `--allow-in-repo-staging`. The
   shareable-report mode depends on Phase 19 trace data: every `TraceEntry` with
   `source_kind=user_provided`,
   `derived_from_user_input=true`, or private `sensitivity` is treated as
@@ -969,19 +1018,25 @@ Build:
   `<field_path>` must be an exact `TraceEntry.display_path` value present in the
   trace index; globs, regexes, wildcards, empty strings, `*`, `?`, `..`, leading
   slash, and trailing slash are rejected before rendering. Whitelisting is
-  audited per snapshot/report hash through a repo-external private ledger in the
-  same XDG state location as other local private state; no persistent whitelist
-  exists in committed files, household config, or user config. Before rendering,
-  share mode unions the requested whitelist with prior ledger entries for the
-  same snapshot/report hash and enforces a cumulative maximum of 10 whitelisted
-  display paths. Interactive runs require a confirmation that lists every display
-  path and source kind being newly added plus the cumulative ledger set;
-  non-interactive runs require an explicit `--confirm-whitelist-file`. That file
-  contains the SHA-256 digest of a deterministic canonical whitelist form:
+  audited per snapshot/report hash through a repo-external private append-only
+  ledger in the same XDG state location as other local private state. Ledger
+  entries are HMAC-signed with the local fingerprint key, and ledger loss or
+  tamper never expands the current whitelist because the ledger is audit-only:
+  share mode never unions prior entries into the current whitelist, and no
+  persistent whitelist exists in committed files, household config, or user
+  config. Every share invocation must explicitly name every field revealed in
+  that output. Interactive runs require a line-by-line confirmation that lists
+  every requested display path, source kind, and any prior ledger disclosures
+  for comparison only; non-interactive runs require an explicit
+  `--confirm-whitelist-file`. That file contains the SHA-256 digest of a
+  deterministic canonical whitelist form for the current invocation:
   UTF-8 without BOM, LF line endings, sorted unique display paths, one path per
-  line, and a final trailing newline. The same SHA-256 digest and canonicalized
-  whitelisted field paths are recorded in the share manifest so recipients can
-  verify which redactions were skipped and detect post-hoc expansion.
+  line, and a final trailing newline. Privacy regressions cover repeated shares
+  of the same snapshot to different audiences and prove a field disclosed in one
+  share is redacted again unless it is explicitly whitelisted in the later run.
+  The same SHA-256 digest and canonicalized whitelisted field paths are recorded
+  in the share manifest so recipients can verify which redactions were skipped
+  and detect post-hoc expansion.
 - A "household assumptions" report section that lets users see exactly which
   personal assumptions affected a verdict.
 
@@ -990,7 +1045,8 @@ Success criteria:
 - A new household can run setup, answer guided questions, copy generated
   templates into private config, and produce a report without editing source
   code.
-- All private state stays in gitignored User Layer paths by default.
+- Private state stays in repo-external XDG paths or gitignored User Layer paths by
+  default, with repo-local private artifacts requiring explicit acknowledgement.
 - Codex can evolve schemas with migration templates; Claude can ask for missing
   values without guessing or writing config.
 
@@ -1013,8 +1069,10 @@ Build:
 - A "local-first" setup guide for Codex/Claude maintainers: what agents may
   edit, what they may read, and what they must never commit.
 - Redaction support for sharing a report externally without household/private
-  fields. Redaction must not remove the `decision_mode: false` dev-mode banner
-  from markdown reports.
+  fields. Redaction must not remove the exact visible markdown warning
+  `> DEV MODE - REFERENCE DATA IS STALE - NOT FOR DECISION USE` or the manifest
+  field `decision_mode: false` from markdown reports; a regression proves
+  redaction cannot strip either safety signal.
 - Release artifacts that separate reusable System/Reference layers from
   private User/Data layers.
 
