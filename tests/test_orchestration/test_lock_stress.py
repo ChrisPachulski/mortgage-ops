@@ -25,11 +25,15 @@ Scenarios:
      (``STALE_THRESHOLD`` shortened to 200ms for test speed).
   3. stale_acquired_at_overwrite — pre-write a JSON lock with ``acquired_at``
      beyond ``STALE_THRESHOLD``; ``with_cache_lock`` acquires immediately.
-  4. exclusive_acquire_correctness — 6 subprocesses contend; each appends
-     its (enter, exit) interval to a witness file. Parent asserts no two
-     intervals overlap. (Process-level, not thread-level: the production
-     contract is a CROSS-PROCESS mutex — same-process threads share PID and
-     the CAS read-back can spuriously verify.)
+  4. exclusive_acquire_correctness — ``N_PROCS`` subprocesses contend (4 by
+     default); each appends its (enter, exit) interval to a witness file.
+     Parent asserts no two intervals overlap. (Process-level, not
+     thread-level: the production contract is a CROSS-PROCESS mutex —
+     same-process threads share PID and the CAS read-back can spuriously
+     verify.) Hold + proc count were tuned down (was 6 x 5ms, now 4 x 20ms)
+     to match the documented "poor-man's CAS" contract — orchestration/
+     lockfile.mjs:8 explicitly disclaims behavior under adversarial millisecond
+     contention.
   5. db_path_override_keeps_lock_at_lock_dir — variant of the existing
      ``test_write_acquires_data_lock`` that exercises a db_path far outside
      ``LOCK_DIR`` (different filesystem subtree) and asserts the spy still
