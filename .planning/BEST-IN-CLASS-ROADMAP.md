@@ -2,11 +2,15 @@
 
 ## Positioning
 
-`mortgage-ops` should be best-in-class for one narrow job: helping the
-Pachulski household avoid bad housing and mortgage decisions. It should not be
-cutting edge in the general software sense. For this domain, "cutting edge"
-usually means more model discretion, more live integrations, more scraping
-fragility, and more maintenance burden. The target is unusual trustworthiness.
+`mortgage-ops` should be best-in-class for one narrow job: giving a household a
+private, personalized underwriting workbench that helps it avoid bad housing
+and mortgage decisions. The Pachulski household is the first concrete user, not
+the limiting product boundary.
+
+It should not be cutting edge in the general software sense. For this domain,
+"cutting edge" usually means more model discretion, more live integrations,
+more scraping fragility, and more maintenance burden. The target is unusual
+trustworthiness plus repeatable personalization.
 
 Upstream filter for all future work:
 
@@ -14,6 +18,26 @@ Upstream filter for all future work:
 
 If yes, the work is likely strategic. If it only makes the project feel more
 advanced, skip it.
+
+## Shareable Thesis
+
+The shareable product is not a generic mortgage calculator and not a public
+underwriting oracle. The shareable product is the ability for any household to
+stand up its own local, private, auditable underwriting workbench:
+
+- Personal assumptions live in a User Layer, never in committed system code.
+- Household-specific preferences become configuration and profile inputs, not
+  forks of the engine.
+- The rules, calculators, traceability, and report contracts are reusable.
+- Codex maintains the repo and reference data; Claude guides the household
+  through inputs, gap-fill, and narration.
+- The default distribution must make personalization safe without leaking
+  private financial data or turning the tool into compliance software.
+
+That means public/shareable work should improve the personalization substrate:
+schemas, onboarding, examples, privacy boundaries, traceability, and agent
+maintenance. It should not flatten the tool into a one-size-fits-all web
+calculator.
 
 ## Operating Model
 
@@ -41,6 +65,7 @@ This means the best investments are boring, explicit, and checkable.
 | Property verdict quality | Buying the wrong property or dismissing a good one | GO / WATCH / NO-GO reasons are specific, ranked, and tied to household constraints. |
 | Oracle mesh | Silent calc drift | Each commodity calc family has independent cross-source coverage where conventions match. |
 | Decision ergonomics | Tool not used when it matters | Saved listings, assumptions, and comparisons make the right decision easier than ad hoc spreadsheeting. |
+| Personalization substrate | Other households cannot safely adapt it | Household-specific assumptions are schema-driven, private-by-default, and easy to inspect. |
 | Low-maintenance agent ops | Future agents degrade trust accidentally | Contributor rules, tests, and docs make the safe path the easy path. |
 
 ## Success Metrics
@@ -58,6 +83,8 @@ These are the steady-state quality bars.
   oracle, or a documented reason external parity is impossible.
 - Property reports are reproducible from persisted listing, household/profile
   inputs, reference-data versions, and code revision.
+- A new household can initialize private config from templates without editing
+  committed code or exposing private data.
 - New features pass the six-figure-mistake filter before planning begins.
 - Claude/Codex can run the maintenance playbook without writing User Layer
   files or inventing numbers.
@@ -197,7 +224,65 @@ Success criteria:
 - Ergonomics stay report/CLI/skill based; no complex UI unless repeated real
   use proves it would reduce decision risk.
 
-### Phase 24: Agent Maintenance Hardening
+### Phase 24: Personalization Substrate
+
+**Goal:** Make the workbench shareable by making personalization private,
+schema-driven, and easy for another household to adopt.
+
+Build:
+
+- A first-run onboarding flow that creates User Layer files from templates:
+  `config/household.yml`, `config/profile.yml`, and optional narrative
+  preferences, without committing private values.
+- Strict schemas and validation messages for household income, debts, cash,
+  applicants, credit assumptions, location, risk preferences, tax assumptions,
+  and preferred loan programs.
+- Example household profiles that are synthetic but realistic enough for tests,
+  demos, and documentation.
+- A migration/versioning mechanism for User Layer config so future schema
+  changes do not strand existing households.
+- A privacy audit command that proves no User Layer paths are staged, committed,
+  or embedded in shareable reports unless explicitly redacted.
+- A "household assumptions" report section that lets users see exactly which
+  personal assumptions affected a verdict.
+
+Success criteria:
+
+- A new household can run setup, answer guided questions, and produce a report
+  without editing source code.
+- All private state stays in gitignored User Layer paths by default.
+- Codex can evolve schemas with migrations; Claude can ask for missing values
+  without guessing or writing config unprompted.
+
+### Phase 25: Shareable Distribution and Demo Path
+
+**Goal:** Package the project so other households can understand and adopt the
+personalized workbench safely.
+
+Build:
+
+- A public-facing README path that explains: personal decision support, not
+  lender underwriting, not legal/tax advice, not regulated disclosures.
+- A synthetic demo dataset and fixtures that exercise property mode end-to-end
+  with no real household data.
+- A `bootstrap` or `doctor` command that checks Python/Node/uv dependencies,
+  missing config, stale references, and optional oracle availability.
+- A "local-first" setup guide for Codex/Claude maintainers: what agents may
+  edit, what they may read, and what they must never commit.
+- Redaction support for sharing a report externally without household/private
+  fields.
+- Release artifacts that separate reusable System/Reference layers from
+  private User/Data layers.
+
+Success criteria:
+
+- A technically capable household can install and run the workbench locally
+  using only synthetic examples before adding private data.
+- Public docs make the personalization thesis obvious: users bring their own
+  household assumptions; the project gives them a trusted decision structure.
+- No public artifact contains Pachulski-private values.
+
+### Phase 26: Agent Maintenance Hardening
 
 **Goal:** Make safe maintenance the default path for Codex and Claude.
 
@@ -232,7 +317,11 @@ reason to revisit them:
 - Live scraping sophistication for its own sake.
 - New generic mortgage math primitives when an oracle or maintained package can
   cover the need.
-- Complex frontend/UI work.
+- One-size-fits-all mortgage-calculator UX that removes household
+  personalization.
+- Cloud-hosted multi-tenant storage of household financial data.
+- Complex frontend/UI work unless it materially improves safe household setup,
+  comparison, or repeated decision use.
 - Zestimate-style valuation models.
 - School, commute, walkability, or lifestyle scoring unless a real purchase
   decision depends on it.
@@ -249,7 +338,9 @@ property documentation. Then proceed in this order:
 3. Phase 21 Verdict Quality and Ambiguity Control.
 4. Phase 22 Oracle Mesh.
 5. Phase 23 Decision Ergonomics.
-6. Phase 24 Agent Maintenance Hardening.
+6. Phase 24 Personalization Substrate.
+7. Phase 25 Shareable Distribution and Demo Path.
+8. Phase 26 Agent Maintenance Hardening.
 
 This order intentionally puts auditability before usability improvements. A
 slicker report is not valuable until its numbers and rules are easy to defend.

@@ -1,7 +1,7 @@
 <!-- GSD:project-start source:PROJECT.md -->
 ## Project
 
-**mortgage-ops** — Private underwriting workbench for the Pachulski household. Sibling to `career-ops` and `card-ops`. Combines deterministic mortgage math, citation-backed eligibility predicates, household state, property ingestion, and report generation into reproducible GO / WATCH / NO-GO decisions.
+**mortgage-ops** — Private, personalizable underwriting workbench for household mortgage decisions. The Pachulski household is the first concrete user, not the product boundary. Sibling to `career-ops` and `card-ops`. Combines deterministic mortgage math, citation-backed eligibility predicates, household state, property ingestion, and report generation into reproducible GO / WATCH / NO-GO decisions.
 
 **Core Value:** Auditable household decisions first. Every dollar figure that exits this system must be traceable to a tested, deterministic Python function or cited reference row. The LLM frontend is a router and narrator — it never owns numbers.
 
@@ -46,6 +46,7 @@ See `.planning/research/STACK.md` for full verdict matrix.
 
 **Workbench scope:**
 - This is not a generic mortgage calculator. New work should improve household underwriting decisions: rules coverage, reference refreshes, property ingestion, verdict synthesis, report traceability, or comparative-oracle confidence.
+- Shareability means making the personalization substrate reusable for other households while keeping their private assumptions in User Layer config. Do not flatten the project into generic defaults.
 - Upstream filter: would this reduce the chance of making a six-figure housing mistake? If yes, it is likely strategic. If it only makes the project feel more advanced, skip it.
 - Post-v1.1 strategic roadmap lives at `.planning/BEST-IN-CLASS-ROADMAP.md`; use it before proposing new phases or major feature work.
 - Generic new calc primitives are soft-frozen. Before adding HELOC, second liens, interest-only periods, prepayment penalties, or similar math, check whether MortgageModeler, pyloan, or another maintained package can supply the result or an oracle with acceptable precision and conventions.
