@@ -241,6 +241,15 @@ class IncomeShockRequest(_CommonStressFields):
     reductions: list[IncomeReduction] = Field(min_length=1, max_length=MAX_STRESS_SCENARIOS)
     dti_threshold: Rate  # D-04: REQUIRED; no module default
 
+    @model_validator(mode="after")
+    def _reductions_unique(self) -> IncomeShockRequest:
+        duplicates = sorted(
+            {reduction for reduction in self.reductions if self.reductions.count(reduction) > 1}
+        )
+        if duplicates:
+            raise ValueError(f"income-shock reductions must be unique; duplicates: {duplicates}")
+        return self
+
 
 class ArmResetRequest(_CommonStressFields):
     """STRS-03 + ROADMAP SC-3: simulate index-path scenarios for an ARM.
@@ -257,6 +266,14 @@ class ArmResetRequest(_CommonStressFields):
     mode: Literal["arm-reset"] = "arm-reset"
     base_arm_request: ARMRequest
     paths: list[RatePath] = Field(min_length=1, max_length=MAX_STRESS_SCENARIOS)
+
+    @model_validator(mode="after")
+    def _path_names_unique(self) -> ArmResetRequest:
+        labels = [path.name for path in self.paths]
+        duplicates = sorted({label for label in labels if labels.count(label) > 1})
+        if duplicates:
+            raise ValueError(f"arm-reset path names must be unique; duplicates: {duplicates}")
+        return self
 
 
 StressRequest = Annotated[
@@ -461,6 +478,7 @@ def _synthesize_index_path(
     term_months: int,
     base_index: Rate,
     path: RatePath,
+    warnings: list[str] | None = None,
 ) -> list[IndexPathEntry]:
     """08-RESEARCH §4.2 algorithm. Returns one IndexPathEntry per reset trigger.
 
@@ -503,7 +521,12 @@ def _synthesize_index_path(
     out: list[IndexPathEntry] = []
     for i, t in enumerate(triggers):
         if i < half:
-            v = _non_negative_index(base_index - Decimal(drop) / Decimal("10000"))
+            raw = base_index - Decimal(drop) / Decimal("10000")
+            if raw < Decimal("0") and warnings is not None:
+                code = f"FALL_PATH_CLAMPED_BASE_INDEX_{base_index}_DROP_BPS_{drop}"
+                if code not in warnings:
+                    warnings.append(code)
+            v = _non_negative_index(raw)
         else:
             v = _non_negative_index(base_index + Decimal(rise) / Decimal("10000"))
         out.append(IndexPathEntry(period=t, value=v))
@@ -529,12 +552,14 @@ def arm_path(
         raise ValueError(f"arm-reset path names must be unique; duplicates: {duplicate_labels}")
 
     rows: list[StressRow] = []
+    violations: list[str] = []
     for path in paths:
         index_path = _synthesize_index_path(
             base_arm_request.arm_terms,
             base_arm_request.loan.term_months,
             base_arm_request.assumed_index_rate,
             path,
+            violations,
         )
         syn = base_arm_request.model_copy(update={"index_path": index_path})
         schedule = build_arm_schedule(syn)
@@ -568,7 +593,7 @@ def arm_path(
         worst_case_label=worst_label,
         # Per D-02-05: arm-reset parallel-shift dominance invariant noted for
         # Phase 11+; v1 ships empty.
-        stress_invariant_violations=[],
+        stress_invariant_violations=violations,
     )
     return rows, summary
 

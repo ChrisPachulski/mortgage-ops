@@ -27,6 +27,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import sys
 import time
 import warnings
 from contextlib import contextmanager
@@ -69,6 +70,27 @@ returned as ``None`` from ``_load_cache`` (falling through to the fetcher path
 per CR-01 — see ``get_cached_or_fetch``). Defending in ``_load_cache`` keeps
 ``is_fresh`` simple and matches the "shape-validate on read" pattern in
 ``_read_lock``."""
+
+
+def _durable_fsync(fd: int) -> None:
+    """Flush a file descriptor using Darwin F_FULLFSYNC when available.
+
+    APFS/HFS+ need ``F_FULLFSYNC`` for disk durability; other platforms use
+    ``os.fsync``. If the Darwin-specific call is unavailable or rejected, the
+    ordinary fsync fallback still preserves the atomic-replace discipline.
+    """
+    if sys.platform == "darwin":
+        try:
+            import fcntl
+
+            full_fsync = fcntl.F_FULLFSYNC
+        except (AttributeError, ImportError):
+            pass
+        else:
+            with contextlib.suppress(OSError):
+                fcntl.fcntl(fd, full_fsync)
+                return
+    os.fsync(fd)
 
 
 # ---------------------------------------------------------------------------
@@ -195,7 +217,7 @@ def _write_lock_exclusive(lock_path: Path, lock: dict[str, Any]) -> bool:
             fd = None
             json.dump(lock, fh, indent=2)
             fh.flush()
-            os.fsync(fh.fileno())
+            _durable_fsync(fh.fileno())
     except OSError:
         with contextlib.suppress(FileNotFoundError):
             lock_path.unlink()
@@ -434,11 +456,11 @@ def _save_cache(
             with os.fdopen(fd, "w", encoding="utf-8") as fh:
                 fh.write(json.dumps(payload, indent=2))
                 fh.flush()
-                os.fsync(fh.fileno())
+                _durable_fsync(fh.fileno())
             os.replace(tmp_path, path)
             dir_fd = os.open(path.parent, os.O_RDONLY)
             try:
-                os.fsync(dir_fd)
+                _durable_fsync(dir_fd)
             finally:
                 os.close(dir_fd)
         finally:

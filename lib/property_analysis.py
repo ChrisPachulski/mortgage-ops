@@ -790,47 +790,57 @@ def _build_program_result(
     # Step 11 — affordability eligibility (B-2: VA residual data is required)
     eligible: bool
     blocker_reasons: list[str]
-    if program == "VA30":
+    forward_request = _build_affordability_forward_request(
+        program=program,
+        down_payment_pct=dp_pct,
+        listing=listing,
+        household=household,
+        annual_rate=annual_rate,
+        monthly_tax=monthly_tax,
+        monthly_insurance=monthly_insurance,
+        monthly_hoa=monthly_hoa,
+        monthly_mi=monthly_mi,
+        ltv=ltv,
+    )
+    try:
+        response = affordability_evaluate(forward_request)
+    except NotImplementedError as exc:
+        # FHA / VA loan_amount above the county ceiling raises here (per
+        # lib/rules/loan_type.py L135). D-14-MATRIX-02 mandates explicit
+        # ineligible rows with populated numerics; mark the cell ineligible
+        # and surface a stable blocker code rather than propagating the crash.
         eligible = False
-        blocker_reasons = ["VA-RESIDUAL-NOT-SUPPLIED"]
-    else:
-        forward_request = _build_affordability_forward_request(
-            program=program,
-            down_payment_pct=dp_pct,
-            listing=listing,
-            household=household,
-            annual_rate=annual_rate,
-            monthly_tax=monthly_tax,
-            monthly_insurance=monthly_insurance,
-            monthly_hoa=monthly_hoa,
-            monthly_mi=monthly_mi,
-            ltv=ltv,
-        )
-        try:
-            response = affordability_evaluate(forward_request)
-        except NotImplementedError as exc:
-            # FHA / VA loan_amount above the county ceiling raises here (per
-            # lib/rules/loan_type.py L135). D-14-MATRIX-02 mandates explicit
-            # ineligible rows with populated numerics; mark the cell ineligible
-            # and surface a stable blocker code rather than propagating the crash.
-            eligible = False
-            if program == "FHA30":
-                blocker_reasons = [f"HUD-LIMIT-CEILING-EXCEEDED: {exc}"]
-            elif program == "VA30":
-                blocker_reasons = [f"VA-LIMIT-CEILING-EXCEEDED: {exc}"]
-            else:
-                blocker_reasons = [f"LOAN-TYPE-CLASSIFY-NOT-IMPLEMENTED: {exc}"]
+        if program == "FHA30":
+            blocker_reasons = [f"HUD-LIMIT-CEILING-EXCEEDED: {exc}"]
+        elif program == "VA30":
+            blocker_reasons = [f"VA-LIMIT-CEILING-EXCEEDED: {exc}"]
         else:
-            if response.blocked:
-                eligible = False
-                # PATTERNS.md L437-442 — read VERBATIM, never reformat.
-                blocker_reasons = [response.blocked_by] if response.blocked_by is not None else []
-            elif cash_to_close > household.liquid_reserves:
-                eligible = False
-                blocker_reasons = ["CASH-TO-CLOSE-RESERVES"]
-            else:
-                eligible = True
-                blocker_reasons = []
+            blocker_reasons = [f"LOAN-TYPE-CLASSIFY-NOT-IMPLEMENTED: {exc}"]
+    else:
+        if response.blocked:
+            eligible = False
+            # PATTERNS.md L437-442 — read VERBATIM, never reformat.
+            blocker_reasons = [response.blocked_by] if response.blocked_by is not None else []
+        elif cash_to_close > household.liquid_reserves:
+            eligible = False
+            blocker_reasons = ["CASH-TO-CLOSE-RESERVES"]
+        else:
+            eligible = True
+            blocker_reasons = []
+
+    if program == "VA30":
+        if dti_back > _DTI_CEILING_BY_PROGRAM[program] and "DTI-CAP-VA" not in blocker_reasons:
+            eligible = False
+            blocker_reasons.append("DTI-CAP-VA")
+        if (
+            cash_to_close > household.liquid_reserves
+            and "CASH-TO-CLOSE-RESERVES" not in blocker_reasons
+        ):
+            eligible = False
+            blocker_reasons.append("CASH-TO-CLOSE-RESERVES")
+        if "VA-RESIDUAL-NOT-SUPPLIED" not in blocker_reasons:
+            eligible = False
+            blocker_reasons.append("VA-RESIDUAL-NOT-SUPPLIED")
 
     # Step 12 — assemble ProgramResult with all numerics populated
     # regardless of eligibility (D-14-MATRIX-02).
@@ -905,8 +915,10 @@ def _eligible_cells_at_preferred_dp(
     matrix: DownPaymentMatrix,
     preferred_dp: Decimal,
 ) -> list[ProgramResult]:
-    """Return the subset of matrix.cells where down_payment_pct == preferred_dp
-    AND eligible is True (D-14-STRESS-01 + D-14-REFI-01 + D-14-POINTS-01).
+    """Return preferred-DP cells eligible for auxiliary stress/refi/points blocks.
+
+    VA rows blocked only by missing residual-income data are included for
+    diagnostics while remaining ineligible for verdict synthesis.
 
     ``preferred_dp`` is compared via numeric equality after quantize_rate; the
     Phase-14 Household ships ``preferred_down_payment_pct`` as a Rate which is
@@ -914,7 +926,15 @@ def _eligible_cells_at_preferred_dp(
     time, so we normalize both sides to be safe.
     """
     target = quantize_rate(preferred_dp)
-    return [c for c in matrix.cells if c.down_payment_pct == target and c.eligible]
+    return [
+        c
+        for c in matrix.cells
+        if c.down_payment_pct == target
+        and (
+            c.eligible
+            or (c.program == "VA30" and c.blocker_reasons == ["VA-RESIDUAL-NOT-SUPPLIED"])
+        )
+    ]
 
 
 def _construct_affordability_request_for_cell(

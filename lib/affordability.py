@@ -464,17 +464,12 @@ class _CommonRequestFields(BaseModel):
 def _validate_common(req: _CommonRequestFields) -> Any:
     """Cross-field validators applied to both ForwardModeRequest + ReverseModeRequest.
 
-    - VA-only fields required when target_loan_type=='va' (RESEARCH Open Q#7)
+    - VA residual fields are evaluated when supplied; missing residual inputs
+      become a hard blocker after ordinary affordability diagnostics run.
     - apr/apor must be both-or-neither (RESEARCH §"ATR/QM Gating")
     - monthly_pmi required when target_loan_type=='conventional' AND origination
       LTV > LTV_REQUEST_ELIGIBLE (0.80) — RESEARCH Open Q#1; predicate has no rate
     """
-    # VA conditional
-    if req.target_loan_type == "va" and req.household.va is None:
-        raise ValueError(
-            "household.va block is required when target_loan_type=='va' "
-            "(RESEARCH Open Question #7; D-15 + lib.rules.va_residual_income.evaluate)"
-        )
     # apr / apor symmetry
     if (req.apr is None) != (req.apor is None):
         raise ValueError(
@@ -1314,11 +1309,20 @@ def _evaluate_blockers(
     new_blocked_by: str | None = None
 
     # Compute the LTV used for downstream checks (fraction; NOT percentage points).
-    if response.mode == "forward":
+    if isinstance(request, ForwardModeRequest):
         ltv_fraction = response.ltv  # already computed in evaluate_forward
         cltv_fraction = response.cltv
         dti_back = response.dti_back
         financed_loan = response.financed_loan_amount or response.loan_amount
+        if request.target_loan_type == "fha":
+            ltv_fraction = quantize_rate(_compute_ltv(request.loan_amount, request.property_value))
+            cltv_fraction = quantize_rate(
+                _compute_cltv(
+                    request.loan_amount,
+                    request.junior_liens,
+                    request.property_value,
+                )
+            )
     else:  # reverse
         ltv_fraction = response.assumed_ltv_pct
         # Reverse mode does NOT compute CLTV (no junior-lien semantics with no
@@ -1411,22 +1415,23 @@ def _evaluate_blockers(
 
         # 6. VA residual income (target=='va' only)
         if new_blocked_by is None and target == "va" and financed_loan is not None:
-            # _validate_common already enforced va is not None when target=='va'.
             va = request.household.va
-            assert va is not None  # validator pre-condition
-            va_result = va_residual_evaluate(
-                region=va.region,
-                family_size=va.family_size,
-                loan_amount=financed_loan,
-                actual_residual_income=va.actual_residual_income,
-            )
-            if va_result.status == "fail":
-                # READ VERBATIM (Phase 2 D-11 STABLE format; DO NOT
-                # format-shadow). The predicate's stable citation format is
-                # documented at lib/rules/va_residual_income.py L115; Phase 4
-                # reads it through unchanged via the .binding_rule_citation
-                # attribute below — never constructs the string here.
-                new_blocked_by = va_result.binding_rule_citation
+            if va is None:
+                new_blocked_by = "VA-RESIDUAL-NOT-SUPPLIED"
+            else:
+                va_result = va_residual_evaluate(
+                    region=va.region,
+                    family_size=va.family_size,
+                    loan_amount=financed_loan,
+                    actual_residual_income=va.actual_residual_income,
+                )
+                if va_result.status == "fail":
+                    # READ VERBATIM (Phase 2 D-11 STABLE format; DO NOT
+                    # format-shadow). The predicate's stable citation format is
+                    # documented at lib/rules/va_residual_income.py L115; Phase 4
+                    # reads it through unchanged via the .binding_rule_citation
+                    # attribute below — never constructs the string here.
+                    new_blocked_by = va_result.binding_rule_citation
 
         # Capture stale warnings emitted by all the predicate calls above.
         for w in captured:

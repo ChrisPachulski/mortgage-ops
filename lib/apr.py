@@ -290,10 +290,12 @@ def _unit_period_equation(
             adv_sum += a.amount * (one + f * i) * _decimal_pow(one + i, -t)
         pmt_sum = Decimal("0")
         for p in payments:
+            discount = _decimal_pow(one + i, -Decimal(p.starting_unit_period))
+            step_discount = one / (one + i)
             for k in range(p.periods):
-                s = Decimal(p.starting_unit_period + k)
                 g = p.unit_period_fraction if k == 0 else Decimal("0")
-                pmt_sum += p.amount * (one + g * i) * _decimal_pow(one + i, -s)
+                pmt_sum += p.amount * (one + g * i) * discount
+                discount *= step_discount
         return adv_sum - pmt_sum
 
 
@@ -323,12 +325,16 @@ def _derivative(
             adv_d += term1 - term2
         pmt_d = Decimal("0")
         for p in payments:
+            discount = _decimal_pow(one + i, -Decimal(p.starting_unit_period))
+            step_discount = one / (one + i)
             for k in range(p.periods):
                 s = Decimal(p.starting_unit_period + k)
                 g = p.unit_period_fraction if k == 0 else Decimal("0")
-                term1 = p.amount * g * _decimal_pow(one + i, -s)
-                term2 = p.amount * (one + g * i) * s * _decimal_pow(one + i, -s - one)
+                next_discount = discount * step_discount
+                term1 = p.amount * g * discount
+                term2 = p.amount * (one + g * i) * s * next_discount
                 pmt_d += term1 - term2
+                discount = next_discount
         return adv_d - pmt_d
 
 
@@ -784,6 +790,7 @@ def solve_apr(request: APRRequest) -> APRResponse:
             else:
                 raise APRConvergenceError(iterations=MAX_ITER, last_residual=abs(f_val), last_i=i)
 
+            f_val = _unit_period_equation(request.advance_schedule, payments_with_odd, i)
             estimated_apr = quantize_rate(i * Decimal(request.unit_periods_per_year))
             if estimated_apr < Decimal("0") or estimated_apr > Decimal("1"):
                 raise APRConvergenceError(iterations=iterations, last_residual=abs(f_val), last_i=i)
