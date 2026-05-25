@@ -200,6 +200,7 @@ from lib.rules.loan_type import (
     classify as loan_type_classify,
 )
 from lib.rules.types import County, LoanType, Region  # Pydantic resolves at runtime
+from lib.rules.usda import average_scheduled_annual_balance
 from lib.rules.usda import evaluate as usda_evaluate
 from lib.rules.va_residual_income import evaluate as va_residual_evaluate
 
@@ -240,8 +241,8 @@ TargetLoanType = Literal["conventional", "fha", "va", "usda", "jumbo"]
 """Caller-facing loan-type literal — distinct from the 8-value
 lib.rules.types.LoanType which is the predicate-side return type."""
 
-# USDA annual guarantee fee rate (per lib.rules.usda compute formula
-# guarantee_fee_annual = loan_amount * 0.0035; RESEARCH §"lib/rules/usda.py").
+# USDA annual guarantee fee rate (per lib.rules.usda compute basis
+# guarantee_fee_annual = average scheduled balance * 0.0035; RESEARCH §"lib/rules/usda.py").
 # Sourced directly here (not via predicate call) for Phase 4 PITI composition,
 # because USDA predicate's evaluate(...) is consulted by Plan 04-04 for blocker
 # precedence; the rate scalar is statutory/contractual and stable.
@@ -727,7 +728,7 @@ def _compute_monthly_mi(
       conventional + LTV<=0.80 -> Decimal("0.00")
       fha -> fha_mip_compute(loan, property_value, endorsement_date); convert annual to monthly
       va -> Decimal("0.00") (funding fee financed into principal at script boundary; not in PITI)
-      usda -> quantize_cents((loan_amount * USDA_ANNUAL_FEE_RATE) / 12)
+      usda -> quantize_cents((average scheduled balance * USDA_ANNUAL_FEE_RATE) / 12)
       jumbo -> Decimal("0.00") (caller responsible for jumbo-side MI if any)
 
     Per RESEARCH §A.2/A.3 + Open Q#1.
@@ -761,9 +762,13 @@ def _compute_monthly_mi(
         return Decimal("0.00"), Decimal("0")
 
     if target_loan_type == "usda":
-        # RESEARCH §"lib/rules/usda.py": guarantee_fee_annual = loan * 0.0035
+        annual_fee_basis = average_scheduled_annual_balance(
+            loan_amount=financed_loan_amount,
+            annual_rate=annual_rate,
+            term_months=term_months,
+        )
         return (
-            quantize_cents((financed_loan_amount * USDA_ANNUAL_FEE_RATE) / Decimal("12")),
+            quantize_cents((annual_fee_basis * USDA_ANNUAL_FEE_RATE) / Decimal("12")),
             Decimal("0"),
         )
 
@@ -1362,6 +1367,8 @@ def _evaluate_blockers(
                 household_size=household_size,
                 county=county,
                 loan_amount=financed_loan,
+                annual_rate=request.annual_rate,
+                term_months=request.term_months,
             )
             if not usda_result.income_eligible:
                 new_blocked_by = BLOCKED_BY_USDA_INCOME_TEMPLATE.format(

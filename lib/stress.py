@@ -64,7 +64,7 @@ from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from lib.affordability import AffordabilityRequest
+from lib.affordability import ForwardModeRequest
 from lib.affordability import (
     evaluate as affordability_evaluate,
 )
@@ -237,7 +237,7 @@ class IncomeShockRequest(_CommonStressFields):
     """
 
     mode: Literal["income-shock"] = "income-shock"
-    base_request: AffordabilityRequest
+    base_request: ForwardModeRequest
     reductions: list[IncomeReduction] = Field(min_length=1, max_length=MAX_STRESS_SCENARIOS)
     dti_threshold: Rate  # D-04: REQUIRED; no module default
 
@@ -407,7 +407,7 @@ def rate_shock(
 
 
 def income_shock(
-    base_request: AffordabilityRequest,
+    base_request: ForwardModeRequest,
     reductions: Sequence[Rate],
     dti_threshold: Rate,
 ) -> tuple[list[StressRow], ScenarioSummary]:

@@ -4,7 +4,7 @@ Citation: 7 CFR Part 3555 — USDA Rural Development Single Family Housing
 Guaranteed Loan Program (SFH GLP). Income limit = 115% of area median income
 (AMI), with separate caps for 1-4-person and 5-8-person households. Per-household
 8% uplift for each person above 8. Guarantee fee per 7 CFR §3555.107: 1.0%
-upfront + 0.35% annual on average outstanding balance.
+upfront + 0.35% annual on average scheduled outstanding balance.
 Source URL: https://eligibility.sc.egov.usda.gov/eligibility/incomeEligibilityAction.do
 Effective: 2025-10-01
 
@@ -13,7 +13,9 @@ What this predicate decides:
     income_eligible: bool — household_income <= applicable USDA income limit
     applicable_income_limit: Decimal — the income cap that was applied
     guarantee_fee_upfront: Decimal — 1.0% of loan_amount, quantized to cents
-    guarantee_fee_annual: Decimal — 0.35% of loan_amount, quantized to cents
+    guarantee_fee_annual: Decimal — 0.35% of average scheduled outstanding balance,
+                                  quantized to cents
+    guarantee_fee_annual_basis: Decimal — balance basis used for the annual fee
 
 Inputs:
     household_income: Decimal (annual household income, positive)
@@ -21,6 +23,12 @@ Inputs:
     county: County (Pydantic v2 model from lib.rules.types — state_fips +
                     county_fips + name; required, never None)
     loan_amount: Decimal (positive loan principal in dollars)
+    annual_rate: optional Decimal rate used with term_months to compute the
+                 first-year average scheduled outstanding balance
+    term_months: optional positive loan term used with annual_rate
+    average_annual_outstanding_balance: optional caller-supplied scheduled
+                                        balance basis; overrides annual_rate /
+                                        term_months when provided
 
 Outputs:
     USDAEligibilityResult (Pydantic v2 frozen+strict+extra=forbid).
@@ -59,11 +67,14 @@ Edge cases:
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from lib.amortize import build_schedule
+from lib.models import Loan
 from lib.money import quantize_cents
 from lib.rules._loader import load_reference
 
@@ -80,6 +91,7 @@ class USDAEligibilityResult(BaseModel):
     applicable_income_limit: Decimal = Field(strict=True, ge=Decimal("0"))
     guarantee_fee_upfront: Decimal = Field(strict=True, ge=Decimal("0"))
     guarantee_fee_annual: Decimal = Field(strict=True, ge=Decimal("0"))
+    guarantee_fee_annual_basis: Decimal = Field(strict=True, ge=Decimal("0"))
 
 
 def evaluate(
@@ -87,6 +99,9 @@ def evaluate(
     household_size: int,
     county: County,
     loan_amount: Decimal,
+    annual_rate: Decimal | None = None,
+    term_months: int | None = None,
+    average_annual_outstanding_balance: Decimal | None = None,
 ) -> USDAEligibilityResult:
     """Evaluate USDA SFH GLP eligibility + compute guarantee fees per 7 CFR Part 3555.
 
@@ -99,6 +114,15 @@ def evaluate(
         raise ValueError(f"household_size must be positive, got {household_size}")
     if loan_amount <= 0:
         raise ValueError(f"loan_amount must be positive, got {loan_amount}")
+    if average_annual_outstanding_balance is not None and average_annual_outstanding_balance <= 0:
+        raise ValueError(
+            "average_annual_outstanding_balance must be positive, "
+            f"got {average_annual_outstanding_balance}"
+        )
+    if (annual_rate is None) != (term_months is None):
+        raise ValueError("annual_rate and term_months must be supplied together")
+    if term_months is not None and term_months <= 0:
+        raise ValueError(f"term_months must be positive, got {term_months}")
 
     ref = load_reference("usda-income-limits")
     applicable_limit = _income_limit_for(ref, county, household_size)
@@ -106,12 +130,45 @@ def evaluate(
     upfront_pct = Decimal(ref["guarantee_fee"]["upfront_pct"])
     annual_pct = Decimal(ref["guarantee_fee"]["annual_pct"])
 
+    annual_fee_basis = (
+        quantize_cents(average_annual_outstanding_balance)
+        if average_annual_outstanding_balance is not None
+        else average_scheduled_annual_balance(
+            loan_amount=loan_amount,
+            annual_rate=annual_rate,
+            term_months=term_months,
+        )
+    )
+
     return USDAEligibilityResult(
         income_eligible=household_income <= applicable_limit,
         applicable_income_limit=applicable_limit,
         guarantee_fee_upfront=quantize_cents(loan_amount * upfront_pct),
-        guarantee_fee_annual=quantize_cents(loan_amount * annual_pct),
+        guarantee_fee_annual=quantize_cents(annual_fee_basis * annual_pct),
+        guarantee_fee_annual_basis=annual_fee_basis,
     )
+
+
+def average_scheduled_annual_balance(
+    loan_amount: Decimal,
+    annual_rate: Decimal | None,
+    term_months: int | None,
+) -> Decimal:
+    """Compute the first-year average scheduled outstanding balance for USDA fees."""
+    if annual_rate is None or term_months is None:
+        return quantize_cents(loan_amount)
+    loan = Loan(
+        principal=quantize_cents(loan_amount),
+        annual_rate=annual_rate,
+        term_months=term_months,
+        origination_date=date(2000, 1, 1),
+        loan_type="usda",
+    )
+    payments = build_schedule(loan).payments[: min(12, term_months)]
+    if not payments:
+        return quantize_cents(loan_amount)
+    balance_sum = sum((payment.balance for payment in payments), Decimal("0.00"))
+    return quantize_cents(balance_sum / Decimal(len(payments)))
 
 
 def _income_limit_for(

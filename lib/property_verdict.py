@@ -222,7 +222,7 @@ def synthesize(
     # -----------------------------------------------------------------------
     if not non_fha_eligible:
         fha_cells = [c for c in eligible_at_preferred if c.program == "FHA30"]
-        if fha_cells:
+        if fha_cells and fha_cells[0].monthly_mi > _MIP_BURDEN_THRESHOLD:
             return Verdict(
                 level="WATCH",
                 headline_reason=(f"FHA-only path with monthly MIP {fha_cells[0].monthly_mi}"),
