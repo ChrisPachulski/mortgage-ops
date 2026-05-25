@@ -3,8 +3,8 @@
 Single source of truth for FRED cache reads/writes. Mirrors:
   - ``lib.rules._loader.StaleReferenceWarning`` — staleness warning idiom (here at 7d,
     not 12mo)
-  - ``orchestration/lockfile.mjs`` — Python port of the read-back-verify CAS lockfile
-    (60s stale recovery, JSON-content ``acquired_at`` NOT mtime, NOT O_EXCL per D-01-01)
+  - ``orchestration/lockfile.mjs`` — same lockfile shape and stale-recovery timing,
+    with Python-side atomic creation to avoid partial lock reads
 
 Strict ``<`` TTL boundary per D-12-LIVE02-01 + RESEARCH §Pitfall 2:
   - 6d 23h 59m old → fresh (no refetch)
@@ -116,8 +116,13 @@ def is_fresh(entry: dict[str, Any]) -> bool:
     ``fetched_at`` MUST be an ISO-8601 string with ``Z`` suffix or ``+00:00``
     offset.
     """
-    fetched_at_str: str = entry["fetched_at"]
-    fetched_at = datetime.fromisoformat(fetched_at_str.replace("Z", "+00:00"))
+    fetched_at_str = entry.get("fetched_at")
+    if not isinstance(fetched_at_str, str):
+        return False
+    try:
+        fetched_at = datetime.fromisoformat(fetched_at_str.replace("Z", "+00:00"))
+    except ValueError:
+        return False
     age = _now_utc() - fetched_at
     return age < CACHE_TTL
 
@@ -156,8 +161,10 @@ def _read_lock(lock_path: Path) -> dict[str, Any] | None:
     if not lock_path.exists():
         return None
     try:
-        result: dict[str, Any] = json.loads(lock_path.read_text())
+        result: Any = json.loads(lock_path.read_text())
     except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(result, dict):
         return None
     return result
 
@@ -174,6 +181,31 @@ def _is_lock_stale(lock: dict[str, Any] | None) -> bool:
     return age_ms > STALE_THRESHOLD.total_seconds() * 1000
 
 
+def _write_lock_exclusive(lock_path: Path, lock: dict[str, Any]) -> bool:
+    """Create ``lock_path`` only if absent and write the JSON lock body."""
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    fd: int | None = None
+    try:
+        fd = os.open(lock_path, flags, 0o644)
+    except FileExistsError:
+        return False
+
+    try:
+        with os.fdopen(fd, "w") as fh:
+            fd = None
+            json.dump(lock, fh, indent=2)
+            fh.flush()
+            os.fsync(fh.fileno())
+    except OSError:
+        with contextlib.suppress(FileNotFoundError):
+            lock_path.unlink()
+        raise
+    finally:
+        if fd is not None:
+            os.close(fd)
+    return True
+
+
 def _acquire_lock(
     cache_dir: Path,
     *,
@@ -181,7 +213,7 @@ def _acquire_lock(
     reason: str = "",
     lock_filename: str = LOCK_FILENAME,
 ) -> dict[str, Any]:
-    """Mirror ``orchestration/lockfile.mjs:acquireLock`` — read-back-and-verify CAS.
+    """Acquire the lockfile with atomic create plus stale-lock recovery.
 
     Returns the lock JSON if acquired; raises ``FredCacheLockError`` on timeout.
 
@@ -189,8 +221,8 @@ def _acquire_lock(
     The DuckDB writer (``lib.property_persistence.write_listing``) passes
     ``.lock`` instead so it serializes against ``orchestration/lockfile.mjs``
     (the Node writer's ``data/.lock``). Both filename choices preserve the
-    same read-back-verify CAS / 60s stale recovery / 100ms poll semantics —
-    only the file basename changes.
+    same 60s stale recovery / 100ms poll semantics; only the file basename
+    changes.
     """
     cache_dir.mkdir(parents=True, exist_ok=True)
     lock_path = cache_dir / lock_filename
@@ -204,19 +236,13 @@ def _acquire_lock(
                 "acquired_at": _now_ms(),
                 "reason": reason,
             }
+            if existing is not None and _is_lock_stale(existing):
+                with contextlib.suppress(FileNotFoundError):
+                    lock_path.unlink()
             try:
-                # flag='w' equivalent (NOT O_EXCL — per lockfile.mjs:12 header rationale).
-                lock_path.write_text(json.dumps(my_lock, indent=2))
-                # Read-back-verify CAS.
-                read_back = _read_lock(lock_path)
-                if (
-                    read_back is not None
-                    and read_back.get("pid") == my_lock["pid"]
-                    and read_back.get("acquired_at") == my_lock["acquired_at"]
-                ):
+                if _write_lock_exclusive(lock_path, my_lock):
                     return my_lock
             except OSError:
-                # Race: another process wrote between read and write. Retry.
                 pass
         time.sleep(POLL_INTERVAL)
 
@@ -265,8 +291,8 @@ def with_cache_lock(
     ``lock_filename`` defaults to ``.fred-cache.lock`` so FRED-cache callers
     are unchanged. ``lib.property_persistence.write_listing`` overrides this
     to ``.lock`` to share the Node writer's mutex
-    (``orchestration/lockfile.mjs:LOCK_PATH = data/.lock``). The CAS /
-    stale-recovery / poll semantics are identical regardless of filename.
+    (``orchestration/lockfile.mjs:LOCK_PATH = data/.lock``). Stale-recovery /
+    poll semantics are identical regardless of filename.
 
     Raises:
         FredCacheLockError: if acquisition times out.
@@ -302,16 +328,25 @@ def _load_cache(series_id: str, cache_dir: Path = CACHE_DIR) -> dict[str, Any] |
         payload = json.loads(path.read_text())
     except (OSError, json.JSONDecodeError):
         return None
+    if not isinstance(payload, dict):
+        return None
     if payload.get("schema_version") != SCHEMA_VERSION:
         return None
     entries = payload.get("entries", {})
+    if not isinstance(entries, dict):
+        return None
     entry = entries.get(series_id)
     # CR-01: shape-validate before returning. A malformed entry (missing
     # ``fetched_at`` or ``value``) used to raise ``KeyError`` deep inside
     # ``is_fresh`` → traceback out of ``fred_cli.py:main()`` → non-zero exit,
     # breaking D-12-LIVE02-01 + Pitfall 1 (always-exit-0 envelope contract).
     # Returning ``None`` here falls through to the fetcher refetch path.
-    if isinstance(entry, dict) and all(k in entry for k in REQUIRED_ENTRY_FIELDS):
+    if (
+        isinstance(entry, dict)
+        and all(k in entry for k in REQUIRED_ENTRY_FIELDS)
+        and isinstance(entry.get("fetched_at"), str)
+        and (entry.get("value") is None or isinstance(entry.get("value"), str))
+    ):
         result: dict[str, Any] = entry
         return result
     return None

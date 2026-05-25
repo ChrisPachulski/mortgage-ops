@@ -21,8 +21,12 @@ from __future__ import annotations
 import os
 from typing import Any, Final
 
+from lib.property_block_detector import NEXT_DATA_RE
+
 SONNET_MODEL: Final[str] = "claude-sonnet-4-6"
 SONNET_MAX_TOKENS: Final[int] = 4096
+HTML_PROMPT_WINDOW_CHARS: Final[int] = 200_000
+NEXT_DATA_PREFIX_CONTEXT_CHARS: Final[int] = 10_000
 
 # Module-level injection seam for the Anthropic client constructor.
 # Tests monkeypatch this attribute directly (e.g.,
@@ -94,7 +98,7 @@ def extract_listing(html: str, source_url: str) -> dict[str, object] | None:
             messages=[
                 {
                     "role": "user",
-                    "content": EXTRACTION_PROMPT.format(html=html[:200_000]),
+                    "content": EXTRACTION_PROMPT.format(html=_html_prompt_window(html)),
                 }
             ],
             # output_format omitted intentionally: the prompt instructs Sonnet
@@ -111,21 +115,34 @@ def extract_listing(html: str, source_url: str) -> dict[str, object] | None:
     return _parse_json_with_prose_tolerance(raw)
 
 
+def _html_prompt_window(html: str) -> str:
+    if len(html) <= HTML_PROMPT_WINDOW_CHARS:
+        return html
+    match = NEXT_DATA_RE.search(html)
+    if match is None:
+        return html[:HTML_PROMPT_WINDOW_CHARS]
+    start = max(0, match.start() - NEXT_DATA_PREFIX_CONTEXT_CHARS)
+    end = start + HTML_PROMPT_WINDOW_CHARS
+    if end > len(html):
+        end = len(html)
+        start = max(0, end - HTML_PROMPT_WINDOW_CHARS)
+    return html[start:end]
+
+
 def _parse_json_with_prose_tolerance(raw: str) -> dict[str, object] | None:
     """Strip any prose prefix and return the first brace-balanced JSON object.
 
     Pitfall 18: Sonnet occasionally prepends prose ("Here is the data:...")
-    despite the "JSON ONLY" rule in the prompt. A single regex first-brace
-    match handles the common case; if json.loads fails we return None.
+    despite the "JSON ONLY" rule in the prompt. Decode from the first opening
+    brace and let JSONDecoder stop at the end of that object.
     """
     import json
-    import re
 
-    match = re.search(r"\{.*\}", raw, re.DOTALL)
-    if match is None:
+    first_brace = raw.find("{")
+    if first_brace < 0:
         return None
     try:
-        result = json.loads(match.group(0))
+        result, _ = json.JSONDecoder().raw_decode(raw[first_brace:])
     except json.JSONDecodeError:
         return None
     return result if isinstance(result, dict) else None

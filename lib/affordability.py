@@ -1034,6 +1034,23 @@ def evaluate_reverse(request: ReverseModeRequest) -> AffordabilityResponse:
     max_pi_plus_mi = max_piti - (
         escrow.property_tax_monthly + escrow.insurance_monthly + escrow.hoa_monthly
     )
+    no_budget_blocker = BLOCKED_BY_DTI_CAP_TEMPLATE.format(
+        LOAN_TYPE=request.target_loan_type.upper()
+    )
+    if max_pi_plus_mi <= Decimal("0"):
+        return AffordabilityResponse(
+            mode="reverse",
+            loan_type=None,
+            blocked=True,
+            blocked_by=no_budget_blocker,
+            warnings=[],
+            total_gross_monthly_income=quantize_cents(total_gross_monthly_income),
+            total_monthly_debts=quantize_cents(sum_monthly_debts),
+            max_loan_amount=Decimal("0.00"),
+            implied_pi=Decimal("0.00"),
+            assumed_ltv_pct=request.target_ltv_pct,
+            assumed_monthly_mi=Decimal("0.00"),
+        )
 
     # 4-11: capture staleness warnings across the predicate pipeline (D-11)
     captured_warnings: list[str] = []
@@ -1073,6 +1090,23 @@ def evaluate_reverse(request: ReverseModeRequest) -> AffordabilityResponse:
 
         # 7. max_PI (D-08 step 4)
         max_pi = max_pi_plus_mi - assumed_monthly_mi
+        if max_pi <= Decimal("0"):
+            for w in captured:
+                if issubclass(w.category, StaleReferenceWarning):
+                    captured_warnings.append(str(w.message))
+            return AffordabilityResponse(
+                mode="reverse",
+                loan_type=None,
+                blocked=True,
+                blocked_by=no_budget_blocker,
+                warnings=captured_warnings,
+                total_gross_monthly_income=quantize_cents(total_gross_monthly_income),
+                total_monthly_debts=quantize_cents(sum_monthly_debts),
+                max_loan_amount=Decimal("0.00"),
+                implied_pi=Decimal("0.00"),
+                assumed_ltv_pct=request.target_ltv_pct,
+                assumed_monthly_mi=quantize_cents(assumed_monthly_mi),
+            )
 
         # 8. Final npf.pv solve (D-08 step 5; RESEARCH §"numpy-financial npf.pv
         #    Conventions"). pmt=-max_pi per cash-flow convention; fv=0 per

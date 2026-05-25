@@ -50,7 +50,7 @@ import os
 import sys
 import time
 import uuid
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -546,7 +546,7 @@ def _active_handlers(
 
 
 def _detach(logger: logging.Logger, handlers: list[logging.Handler]) -> None:
-    """Remove + close every handler in ``handlers`` from ``logger``.
+    """Remove + close every handler/filter from ``logger``.
 
     Closing the file handler flushes any buffered records so the JSONL
     file is consistent on disk before the context manager returns. This
@@ -564,3 +564,7 @@ def _detach(logger: logging.Logger, handlers: list[logging.Handler]) -> None:
             # exception is intentionally swallowed; the run is already
             # over.
             pass
+    for f in list(logger.filters):
+        with suppress(Exception):
+            logger.removeFilter(f)
+    logging.Logger.manager.loggerDict.pop(logger.name, None)

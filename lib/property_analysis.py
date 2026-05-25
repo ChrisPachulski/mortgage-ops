@@ -543,6 +543,8 @@ def _todays_rate_per_program(program: str) -> Decimal:
             ) from exc
 
     raw = Decimal(str(entry["value"]))
+    if raw > Decimal("1"):
+        raw = raw / Decimal("100")
     return quantize_rate(raw + delta)
 
 
@@ -773,9 +775,10 @@ def _build_program_result(
     # would silently misclassify cells (false-positive WATCH on FHA, false-
     # negative GO on VA). Look up the program-specific value here so matrix
     # eligibility matches the stress-block ceiling used by Plan 14-03.
+    dti_ceiling = _DTI_CEILING_BY_PROGRAM[program]
     forward_request = ForwardModeRequest(
         household=affordability_household,
-        max_dti=_DTI_CEILING_BY_PROGRAM[program],
+        max_dti=dti_ceiling,
         target_loan_type=target_loan_type,
         term_months=term_months,
         annual_rate=annual_rate,
@@ -800,7 +803,10 @@ def _build_program_result(
         else:
             blocker_reasons = [f"LOAN-TYPE-CLASSIFY-NOT-IMPLEMENTED: {exc}"]
     else:
-        if response.blocked:
+        if program == "VA30" and dti_back > dti_ceiling:
+            eligible = False
+            blocker_reasons = ["DTI-CAP-VA"]
+        elif response.blocked:
             eligible = False
             # PATTERNS.md L437-442 — read VERBATIM, never reformat.
             blocker_reasons = [response.blocked_by] if response.blocked_by is not None else []
@@ -1031,22 +1037,19 @@ def _stress_row_from_rate_shock(
 def _stress_row_from_income_shock(
     cell: ProgramResult,
     upstream_row: UpstreamStressRow,
-    _household: Household,
+    household: Household,
     ceiling: Decimal,
 ) -> StressRow:
     """Convert lib.stress.StressRow (income-shock) into Phase 14 StressRow.
 
     Income shock does NOT change PITI (per lib/stress.py L131 + RESEARCH L322 —
-    upstream row has ``monthly_pi=None`` for income-shock). The stressed DTI is
-    read directly from the upstream engine's ``dti_back`` (the affordability
-    engine recomputed it under the shocked income).
+    upstream row has ``monthly_pi=None`` for income-shock). Recompute DTI from
+    the matrix cell's own PITI so financed FHA/VA amounts stay aligned with the
+    displayed cell economics.
     """
-    upstream_dti = upstream_row.dti_back
-    # Defensive: when the upstream affordability engine returns dti_back=None
-    # (rare — happens only on validation pre-blocks), fall back to a Decimal("0")
-    # sentinel so Phase 14's StressRow.stressed_dti_back (Rate, ge=0 le=1) stays
-    # populated. Mirrors Plan 14-02 D-14-MATRIX-02 numeric-population doctrine.
-    stressed_dti = upstream_dti if upstream_dti is not None else Decimal("0.000000")
+    _ = upstream_row
+    shocked_income = household.monthly_income * (Decimal("1") - _INCOME_SHOCK_REDUCTION)
+    stressed_dti = quantize_rate((cell.piti + household.monthly_obligations) / shocked_income)
     breaches = stressed_dti > ceiling
     blocker_reasons = [_STRESS_INCOME_SHOCK_CODE] if breaches else []
     return StressRow(

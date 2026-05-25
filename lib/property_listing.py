@@ -14,9 +14,10 @@ CONTEXT.md specifics §3 — wrappers on non-money fields would be over-engineer
 
 from __future__ import annotations
 
-from datetime import date, datetime  # noqa: TC003  # Pydantic resolves annotations at runtime
+from datetime import UTC, date, datetime  # Pydantic resolves annotations at runtime
 from decimal import Decimal
 from typing import Annotated, Literal
+from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, field_serializer, field_validator
 
@@ -85,6 +86,16 @@ class PropertyListing(BaseModel):
     zpid: Annotated[str, Field(pattern=r"^\d+$")]
     fetched_at: datetime
 
+    @field_validator("source_url")
+    @classmethod
+    def _source_url_http_url(cls, v: str) -> str:
+        parsed = urlparse(v)
+        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+            raise ValueError("source_url must be an http(s) URL with a host")
+        if any(ch.isspace() or ch in '<>"[]()' for ch in v):
+            raise ValueError("source_url contains characters unsafe for markdown output")
+        return v
+
     @field_validator("price")
     @classmethod
     def _price_strictly_positive(cls, v: Decimal) -> Decimal:
@@ -104,6 +115,13 @@ class PropertyListing(BaseModel):
         if (v * 2) % 1 != 0:
             raise ValueError(f"baths must be 0.5 increments; got {v}")
         return v
+
+    @field_validator("fetched_at")
+    @classmethod
+    def _fetched_at_timezone_aware(cls, v: datetime) -> datetime:
+        if v.tzinfo is None or v.utcoffset() is None:
+            raise ValueError("fetched_at must be timezone-aware")
+        return v.astimezone(UTC)
 
     @field_serializer("baths")
     def _serialize_baths(self, v: Decimal | None) -> str | None:

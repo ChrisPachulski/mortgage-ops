@@ -160,7 +160,11 @@ import numpy_financial as npf
 from dateutil.relativedelta import relativedelta
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from lib.models import Loan, Money  # noqa: TC001  # Pydantic resolves field annotations at runtime
+from lib.models import (  # noqa: TC001  # Pydantic resolves field annotations at runtime
+    Loan,
+    Money,
+    Rate,
+)
 from lib.money import MONEY_CONTEXT, quantize_cents, quantize_rate
 
 
@@ -516,7 +520,7 @@ class APRRequest(BaseModel):
             "0 = no odd period (Reg Z §1026.17(c)(4); long case only in v1)."
         ),
     )
-    disclosed_apr: Money | None = Field(
+    disclosed_apr: Rate | None = Field(
         default=None,
         description=(
             "Optional lender-disclosed APR; when set, APRResponse.tolerance_check "

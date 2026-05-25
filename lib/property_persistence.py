@@ -30,6 +30,7 @@ Pitfall mitigations:
 from __future__ import annotations
 
 import hashlib
+import json
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
@@ -176,7 +177,10 @@ def read_latest_for_zpid(zpid: str, db_path: Path = DB_PATH) -> PropertyListing 
     if not db_path.exists():
         return None
 
-    con = duckdb.connect(str(db_path), read_only=True)
+    try:
+        con = duckdb.connect(str(db_path), read_only=True)
+    except (duckdb.Error, OSError):
+        return None
     try:
         try:
             row = con.execute(
@@ -184,7 +188,7 @@ def read_latest_for_zpid(zpid: str, db_path: Path = DB_PATH) -> PropertyListing 
                 "ORDER BY analyzed_at DESC LIMIT 1",
                 [zpid],
             ).fetchone()
-        except duckdb.CatalogException:
+        except duckdb.Error:
             # §Pitfall 14: read-only conn cannot run DDL; treat missing-table as no rows
             return None
     finally:
@@ -193,9 +197,11 @@ def read_latest_for_zpid(zpid: str, db_path: Path = DB_PATH) -> PropertyListing 
     if row is None:
         return None
 
-    try:
-        from lib.property_listing import PropertyListing
+    from pydantic import ValidationError
 
+    from lib.property_listing import PropertyListing
+
+    try:
         return PropertyListing.model_validate_json(row[0])
-    except Exception:
+    except (ValidationError, json.JSONDecodeError, KeyError, TypeError):
         return None

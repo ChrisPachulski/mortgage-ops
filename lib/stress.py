@@ -388,9 +388,10 @@ def income_shock(
         response = affordability_evaluate(shocked)
         dti_back = response.dti_back  # Rate | None
         breaches = (dti_back is not None) and (dti_back > dti_threshold)
+        percent = (reduction * Decimal("100")).normalize()
         rows.append(
             StressRow(
-                label=f"-{int(reduction * 100)}%",
+                label=f"-{percent:f}%",
                 dti_back=dti_back,
                 breaches_threshold=breaches,
                 blocked_by=response.blocked_by,
