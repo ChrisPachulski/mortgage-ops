@@ -224,7 +224,13 @@ def _try_remove_stale_lock(lock_path: Path, stale_lock: dict[str, Any]) -> bool:
         "reason": f"stale recovery for {lock_path.name}",
     }
     if not _write_lock_exclusive(guard_path, guard):
-        return False
+        existing_guard = _read_lock(guard_path)
+        if not _is_lock_stale(existing_guard):
+            return False
+        with contextlib.suppress(FileNotFoundError):
+            guard_path.unlink()
+        if not _write_lock_exclusive(guard_path, guard):
+            return False
     try:
         current = _read_lock(lock_path)
         if not (_is_lock_stale(current) and _lock_token_matches(current, stale_lock)):
@@ -375,7 +381,7 @@ def _load_cache(series_id: str, cache_dir: Path = CACHE_DIR) -> dict[str, Any] |
         isinstance(entry, dict)
         and all(k in entry for k in REQUIRED_ENTRY_FIELDS)
         and isinstance(entry.get("fetched_at"), str)
-        and (entry.get("value") is None or isinstance(entry.get("value"), str))
+        and isinstance(entry.get("value"), str)
     ):
         result: dict[str, Any] = entry
         return result
@@ -392,7 +398,13 @@ def _save_cache(
     path = _cache_path(series_id, cache_dir)
     with with_cache_lock(cache_dir, reason=f"write {series_id}"):
         payload = {"schema_version": SCHEMA_VERSION, "entries": {series_id: entry}}
-        path.write_text(json.dumps(payload, indent=2))
+        tmp_path = path.with_suffix(path.suffix + ".tmp")
+        try:
+            tmp_path.write_text(json.dumps(payload, indent=2))
+            os.replace(tmp_path, path)
+        finally:
+            with contextlib.suppress(FileNotFoundError):
+                tmp_path.unlink()
 
 
 def get_cached_or_fetch(

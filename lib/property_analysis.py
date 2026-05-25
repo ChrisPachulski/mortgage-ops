@@ -547,6 +547,11 @@ def _todays_rate_per_program(program: str) -> Decimal:
                 f"scripts/fred_cli.py get {series_id} --latest to refresh"
             ) from exc
 
+    if entry.get("value") is None:
+        raise ValueError(
+            f"FRED cache for {series_id} has value=None; run "
+            f"scripts/fred_cli.py get {series_id} --latest to refresh"
+        )
     raw = Decimal(str(entry["value"]))
     if raw > Decimal("1"):
         raw = raw / Decimal("100")
@@ -610,6 +615,74 @@ def _affordability_target_loan_type(
     if program == "VA30":
         return "va"
     raise ValueError(f"unrecognized program: {program!r}")
+
+
+def _build_affordability_forward_request(
+    *,
+    program: str,
+    down_payment_pct: Decimal,
+    listing: PropertyListing,
+    household: Household,
+    annual_rate: Decimal,
+    monthly_tax: Decimal,
+    monthly_insurance: Decimal,
+    monthly_hoa: Decimal,
+    monthly_mi: Decimal,
+    ltv: Decimal,
+) -> ForwardModeRequest:
+    price = quantize_cents(listing.price)
+    base_loan_amount = quantize_cents(price - quantize_cents(price * down_payment_pct))
+    target_loan_type = _affordability_target_loan_type(program)
+    term_months = (
+        DEFAULT_CONFORMING_15_TERM_MONTHS if program == "Conv15" else DEFAULT_CONFORMING_TERM_MONTHS
+    )
+
+    va_inputs: VAInputs | None = None
+    if program == "VA30":
+        va_inputs = VAInputs(
+            region="northeast",
+            family_size=2,
+            actual_residual_income=quantize_cents(household.monthly_income * Decimal("0.5")),
+        )
+
+    affordability_household = AffordabilityHousehold(
+        location=LocationFIPS(
+            state_fips=household.state_fips,
+            county_fips=household.county_fips,
+            county_name=household.county_name,
+            state=household.state_fips,
+        ),
+        applicants=[
+            Applicant(
+                name="primary",
+                gross_monthly_income=household.monthly_income,
+                credit_score=household.fico,
+            )
+        ],
+        size=1,
+        monthly_debts=MonthlyDebts(other=household.monthly_obligations),
+        escrow=EscrowInputs(
+            property_tax_monthly=monthly_tax,
+            insurance_monthly=monthly_insurance,
+            hoa_monthly=monthly_hoa,
+        ),
+        va=va_inputs,
+    )
+
+    monthly_pmi_for_request: Money | None = None
+    if target_loan_type == "conventional" and ltv > Decimal("0.80"):
+        monthly_pmi_for_request = monthly_mi
+
+    return ForwardModeRequest(
+        household=affordability_household,
+        max_dti=_DTI_CEILING_BY_PROGRAM[program],
+        target_loan_type=target_loan_type,
+        term_months=term_months,
+        annual_rate=annual_rate,
+        loan_amount=base_loan_amount,
+        property_value=price,
+        monthly_pmi=monthly_pmi_for_request,
+    )
 
 
 def _build_program_result(
@@ -727,70 +800,23 @@ def _build_program_result(
         base_loan_amount, down_payment, ufmip_not_financed=Decimal("0")
     )
 
-    # Step 11 — affordability eligibility (B-2: VA-aware request construction)
-    target_loan_type = _affordability_target_loan_type(program)
-    va_inputs: VAInputs | None = None
     if program == "VA30":
-        va_inputs = VAInputs(
-            region="northeast",
-            family_size=2,
-            actual_residual_income=quantize_cents(household.monthly_income * Decimal("0.5")),
-        )
         eligible_reasons.append("VA-RESIDUAL-SYNTHESIZED-V1")
 
-    # Map the Phase-14 single-applicant snapshot into Phase-4's multi-applicant
-    # AffordabilityHousehold shape. Per W-5 the monthly_obligations collapse to
-    # the "other" bucket of MonthlyDebts; per the LocationFIPS contract
-    # (lib/affordability.py L347-351) state is a 2-char display field — we use
-    # household.state_fips (always 2 chars) since Phase 14 Household does not
-    # carry a state abbreviation.
-    affordability_household = AffordabilityHousehold(
-        location=LocationFIPS(
-            state_fips=household.state_fips,
-            county_fips=household.county_fips,
-            county_name=household.county_name,
-            state=household.state_fips,
-        ),
-        applicants=[
-            Applicant(
-                name="primary",
-                gross_monthly_income=household.monthly_income,
-                credit_score=household.fico,
-            )
-        ],
-        size=1,
-        monthly_debts=MonthlyDebts(other=household.monthly_obligations),
-        escrow=EscrowInputs(
-            property_tax_monthly=monthly_tax,
-            insurance_monthly=monthly_insurance,
-            hoa_monthly=monthly_hoa,
-        ),
-        va=va_inputs,
-    )
-
-    # monthly_pmi conditional: Phase 4 _validate_common requires it for
-    # conventional + LTV > 0.80 (RESEARCH Open Q#1). Pass the cell's monthly_mi
-    # for those cells; None otherwise.
-    monthly_pmi_for_request: Money | None = None
-    if target_loan_type == "conventional" and ltv > Decimal("0.80"):
-        monthly_pmi_for_request = monthly_mi
-
-    # Per-program DTI ceiling (B-5): FHA/VA/Jumbo differ from Conventional's
-    # 0.50 (see _DTI_CEILING_BY_PROGRAM). Hardcoding 0.50 for every program
-    # would silently misclassify cells (false-positive WATCH on FHA, false-
-    # negative GO on VA). Look up the program-specific value here so matrix
-    # eligibility matches the stress-block ceiling used by Plan 14-03.
-    dti_ceiling = _DTI_CEILING_BY_PROGRAM[program]
-    forward_request = ForwardModeRequest(
-        household=affordability_household,
-        max_dti=dti_ceiling,
-        target_loan_type=target_loan_type,
-        term_months=term_months,
+    # Step 11 — affordability eligibility (B-2: VA-aware request construction)
+    forward_request = _build_affordability_forward_request(
+        program=program,
+        down_payment_pct=dp_pct,
+        listing=listing,
+        household=household,
         annual_rate=annual_rate,
-        loan_amount=base_loan_amount,
-        property_value=price,
-        monthly_pmi=monthly_pmi_for_request,
+        monthly_tax=monthly_tax,
+        monthly_insurance=monthly_insurance,
+        monthly_hoa=monthly_hoa,
+        monthly_mi=monthly_mi,
+        ltv=ltv,
     )
+    dti_ceiling = _DTI_CEILING_BY_PROGRAM[program]
     eligible: bool
     blocker_reasons: list[str]
     try:
@@ -815,6 +841,9 @@ def _build_program_result(
             eligible = False
             # PATTERNS.md L437-442 — read VERBATIM, never reformat.
             blocker_reasons = [response.blocked_by] if response.blocked_by is not None else []
+        elif cash_to_close > household.liquid_reserves:
+            eligible = False
+            blocker_reasons = ["CASH-TO-CLOSE-RESERVES"]
         else:
             eligible = True
             blocker_reasons = []
@@ -908,78 +937,20 @@ def _construct_affordability_request_for_cell(
     cell: ProgramResult,
     listing: PropertyListing,
     household: Household,
-    profile: Profile,
     annual_rate: Decimal,
 ) -> ForwardModeRequest:
-    """Reconstruct the Phase-4 ForwardModeRequest used by lib.affordability.evaluate
-    for this cell. Mirrors the construction in Plan 14-02 ``_build_program_result``
-    steps 11-12 (including the B-2 VA-synthesis branch).
-
-    Acceptable v1.1 duplication of the request-build logic — surfacing the
-    request directly on ProgramResult is a v1.2 option. Any change to Plan
-    14-02's request construction MUST be mirrored here (loud warning per the
-    plan's <action> note).
-    """
-    price = quantize_cents(listing.price)
-    base_loan_amount = quantize_cents(price - quantize_cents(price * cell.down_payment_pct))
-    target_loan_type = _affordability_target_loan_type(cell.program)
-    term_months = (
-        DEFAULT_CONFORMING_15_TERM_MONTHS
-        if cell.program == "Conv15"
-        else DEFAULT_CONFORMING_TERM_MONTHS
-    )
-
-    va_inputs: VAInputs | None = None
-    if cell.program == "VA30":
-        va_inputs = VAInputs(
-            region="northeast",
-            family_size=2,
-            actual_residual_income=quantize_cents(household.monthly_income * Decimal("0.5")),
-        )
-
-    affordability_household = AffordabilityHousehold(
-        location=LocationFIPS(
-            state_fips=household.state_fips,
-            county_fips=household.county_fips,
-            county_name=household.county_name,
-            state=household.state_fips,
-        ),
-        applicants=[
-            Applicant(
-                name="primary",
-                gross_monthly_income=household.monthly_income,
-                credit_score=household.fico,
-            )
-        ],
-        size=1,
-        monthly_debts=MonthlyDebts(other=household.monthly_obligations),
-        escrow=EscrowInputs(
-            property_tax_monthly=cell.monthly_tax,
-            insurance_monthly=cell.monthly_insurance,
-            hoa_monthly=cell.monthly_hoa,
-        ),
-        va=va_inputs,
-    )
-
-    monthly_pmi_for_request: Money | None = None
-    if target_loan_type == "conventional" and cell.ltv > Decimal("0.80"):
-        monthly_pmi_for_request = cell.monthly_mi
-
-    # Use the eligible cell's per-program DTI ceiling as max_dti so the
-    # affordability engine doesn't pre-block the income-shock baseline at a
-    # tighter threshold than the stress logic uses (B-5 consistency). The
-    # max_dti is REQUIRED per Phase 4 D-12.
-    max_dti = _DTI_CEILING_BY_PROGRAM[cell.program]
-
-    return ForwardModeRequest(
-        household=affordability_household,
-        max_dti=max_dti,
-        target_loan_type=target_loan_type,
-        term_months=term_months,
+    """Reconstruct the Phase-4 ForwardModeRequest used by lib.affordability.evaluate."""
+    return _build_affordability_forward_request(
+        program=cell.program,
+        down_payment_pct=cell.down_payment_pct,
+        listing=listing,
+        household=household,
         annual_rate=annual_rate,
-        loan_amount=base_loan_amount,
-        property_value=price,
-        monthly_pmi=monthly_pmi_for_request,
+        monthly_tax=cell.monthly_tax,
+        monthly_insurance=cell.monthly_insurance,
+        monthly_hoa=cell.monthly_hoa,
+        monthly_mi=cell.monthly_mi,
+        ltv=cell.ltv,
     )
 
 
@@ -1164,14 +1135,23 @@ def _build_stress_block(
                 scenario_label=f"{cell.program}+200bps",
             )
         )
-        upstream_rate_row = next(r for r in rate_resp.rows if r.label == str(shocked_rate))
+        shocked_rate_label = str(shocked_rate)
+        upstream_rate_row = next(
+            (r for r in rate_resp.rows if r.label == shocked_rate_label),
+            None,
+        )
+        if upstream_rate_row is None:
+            raise ValueError(
+                f"rate-shock row {shocked_rate_label!r} missing from upstream rows "
+                f"{[r.label for r in rate_resp.rows]!r}"
+            )
         rows.append(_stress_row_from_rate_shock(cell, upstream_rate_row, household, ceiling))
 
         # ============================================================
         # 2. Income shock -30% — IncomeShockRequest (verified L192-205)
         # ============================================================
         base_request = _construct_affordability_request_for_cell(
-            cell, listing, household, profile, current_rate
+            cell, listing, household, current_rate
         )
         income_resp = stress_evaluate(
             IncomeShockRequest(
@@ -1189,10 +1169,7 @@ def _build_stress_block(
         # 3. ARM reset — ArmResetRequest (verified L208-223; Conv30 only)
         # ============================================================
         if cell.program == "Conv30":
-            arm_index_rate = todays_rates.get(
-                "Conv30-ARM-5-1",
-                quantize_rate(current_rate - Decimal("0.0025")),
-            )
+            arm_index_rate = todays_rates["Conv30-ARM-5-1"]
             arm_req = ARMRequest(
                 loan=cell_loan,  # field is `loan`, NOT `base_loan`
                 arm_terms=_CONV_5_1_ARM_TERMS,

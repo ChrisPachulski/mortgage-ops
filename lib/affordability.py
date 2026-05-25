@@ -481,6 +481,10 @@ def _validate_common(req: _CommonRequestFields) -> Any:
             "apr and apor must both be supplied or both be omitted "
             "(RESEARCH §'ATR/QM Gating'; reject half-supplied fabrication)"
         )
+    if isinstance(req, ForwardModeRequest) and req.property_value <= Decimal("0"):
+        raise ValueError("property_value must be > 0")
+    if isinstance(req, ReverseModeRequest) and req.target_ltv_pct <= Decimal("0"):
+        raise ValueError("target_ltv_pct must be > 0")
     # monthly_pmi conditional (conventional + LTV > 0.80)
     if req.target_loan_type == "conventional":
         if isinstance(req, ForwardModeRequest):
@@ -647,6 +651,8 @@ def _compute_dti(
     ratios stay at full Decimal precision for the round-trip closure tolerance
     in D-09).
     """
+    if total_gross_monthly_income <= Decimal("0"):
+        raise ValueError("total_gross_monthly_income must be > 0")
     front = piti / total_gross_monthly_income
     back = (piti + sum_monthly_debts) / total_gross_monthly_income
     return front, back
@@ -1133,7 +1139,22 @@ def evaluate_reverse(request: ReverseModeRequest) -> AffordabilityResponse:
         # RESEARCH pseudocode is pinned by the round-trip closure assertion
         # (D-09; SC-2: forward(reverse(req)).loan_amount == reverse.max_loan_amount
         # exactly).
-        max_loan_amount = quantize_cents(raw_pv)
+        dti_limited_loan_amount = quantize_cents(raw_pv)
+        max_loan_amount = dti_limited_loan_amount
+        if request.target_ltv_pct < Decimal("1"):
+            down_payment_limited_loan_amount = quantize_cents(
+                request.down_payment
+                * request.target_ltv_pct
+                / (Decimal("1") - request.target_ltv_pct)
+            )
+            if down_payment_limited_loan_amount < max_loan_amount:
+                max_loan_amount = down_payment_limited_loan_amount
+                max_pi = quantize_cents(
+                    max_pi * max_loan_amount / dti_limited_loan_amount
+                    if dti_limited_loan_amount > Decimal("0")
+                    else Decimal("0")
+                )
+                captured_warnings.append("DOWN-PAYMENT-CASH-BINDING")
 
         # 10. Derive property_value for downstream classify call (NOT surfaced
         #     on response — reverse mode commits to LTV, not a specific property).

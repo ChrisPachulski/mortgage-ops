@@ -169,8 +169,7 @@ def _classify_va(loan_amount: Decimal, county: County | None, unit_count: int) -
 
 
 def _county_limit(ref: dict[str, Any], county: County, unit_key: str, baseline: Decimal) -> Decimal:
-    """Return county-specific limit, falling back to baseline if county is not
-    in the high-cost subset.
+    """Return county-specific limit for an above-baseline conventional / VA loan.
 
     BL-04 contract (02-REVIEW.md): the conforming-limits-2026.yml
     high_cost_counties entries currently ship only `one_unit` keys. The runtime
@@ -190,7 +189,12 @@ def _county_limit(ref: dict[str, Any], county: County, unit_key: str, baseline: 
     for entry in ref["limits"]["high_cost_counties"]:
         if entry["state_fips"] == county.state_fips and entry["county_fips"] == county.county_fips:
             return Decimal(entry[unit_key])
-    return baseline
+    raise MissingCountyDataError(
+        f"FHFA county ({county.state_fips}/{county.county_fips} {county.name!r}) not "
+        f"in shipped high-cost subset; cannot determine conforming ceiling. Add the county "
+        f"to data/reference/conforming-limits-2026.yml or pass a loan amount at or below "
+        f"the baseline {baseline}."
+    )
 
 
 def _county_limit_fha(

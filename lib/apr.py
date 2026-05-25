@@ -532,14 +532,22 @@ class APRRequest(BaseModel):
     @model_validator(mode="after")
     def _advance_schedule_has_t0_advance(self) -> APRRequest:
         """D-06: advance_schedule MUST have at least one entry at t=0 with f=0."""
-        if not any(
-            a.unit_period_offset == 0 and a.unit_period_fraction == Decimal("0")
+        t0_advances = [
+            a
             for a in self.advance_schedule
-        ):
+            if a.unit_period_offset == 0 and a.unit_period_fraction == Decimal("0")
+        ]
+        if not t0_advances:
             raise ValueError(
                 "advance_schedule MUST contain at least one advance at "
                 "unit_period_offset=0 (Reg Z Appendix J §(b)(2))"
             )
+        if len(self.advance_schedule) == 1:
+            expected_amount_financed = self.loan.principal - self.finance_charges
+            if t0_advances[0].amount != expected_amount_financed:
+                raise ValueError(
+                    "single-disbursement advance amount must equal loan.principal - finance_charges"
+                )
         return self
 
     @model_validator(mode="after")
@@ -777,6 +785,8 @@ def solve_apr(request: APRRequest) -> APRResponse:
                 raise APRConvergenceError(iterations=MAX_ITER, last_residual=abs(f_val), last_i=i)
 
             estimated_apr = quantize_rate(i * Decimal(request.unit_periods_per_year))
+            if estimated_apr < Decimal("0") or estimated_apr > Decimal("1"):
+                raise APRConvergenceError(iterations=iterations, last_residual=abs(f_val), last_i=i)
             final_residual_quantized = quantize_cents(abs(f_val))
 
     apr_pct_str = f"{estimated_apr * Decimal('100'):.4f}"
