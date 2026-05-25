@@ -511,6 +511,11 @@ def arm_path(
     reset trigger so the ARMRequest alignment-validator passes
     (lib/arm.py:107-145).
     """
+    labels = [path.name for path in paths]
+    duplicate_labels = sorted({label for label in labels if labels.count(label) > 1})
+    if duplicate_labels:
+        raise ValueError(f"arm-reset path names must be unique; duplicates: {duplicate_labels}")
+
     rows: list[StressRow] = []
     for path in paths:
         index_path = _synthesize_index_path(
@@ -522,7 +527,7 @@ def arm_path(
         syn = base_arm_request.model_copy(update={"index_path": index_path})
         schedule = build_arm_schedule(syn)
         highest_rate = max(
-            (e.new_rate for e in schedule.reset_events),
+            (p.rate_in_effect for p in schedule.payments),
             default=base_arm_request.loan.annual_rate,
         )
         max_payment = max(

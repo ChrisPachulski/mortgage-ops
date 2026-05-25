@@ -243,6 +243,33 @@ def _try_remove_stale_lock(lock_path: Path, stale_lock: dict[str, Any]) -> bool:
             guard_path.unlink()
 
 
+def _try_remove_unreadable_lock(lock_path: Path) -> bool:
+    """Remove an existing unreadable lock only while holding a local recovery guard."""
+    guard_path = lock_path.with_name(f"{lock_path.name}.stale-recovery")
+    guard = {
+        "pid": os.getpid(),
+        "acquired_at": _now_ms(),
+        "reason": f"unreadable lock recovery for {lock_path.name}",
+    }
+    if not _write_lock_exclusive(guard_path, guard):
+        existing_guard = _read_lock(guard_path)
+        if not _is_lock_stale(existing_guard):
+            return False
+        with contextlib.suppress(FileNotFoundError):
+            guard_path.unlink()
+        if not _write_lock_exclusive(guard_path, guard):
+            return False
+    try:
+        if not lock_path.exists() or _read_lock(lock_path) is not None:
+            return False
+        with contextlib.suppress(FileNotFoundError):
+            lock_path.unlink()
+        return True
+    finally:
+        with contextlib.suppress(FileNotFoundError):
+            guard_path.unlink()
+
+
 def _acquire_lock(
     cache_dir: Path,
     *,
@@ -267,6 +294,9 @@ def _acquire_lock(
 
     while _now_ms() < deadline_ms:
         existing = _read_lock(lock_path)
+        lock_exists = lock_path.exists()
+        if existing is None and lock_exists:
+            _try_remove_unreadable_lock(lock_path)
         if existing is None or _is_lock_stale(existing):
             my_lock: dict[str, Any] = {
                 "pid": os.getpid(),

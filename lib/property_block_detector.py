@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import re
 from typing import Final, Literal
+from urllib.parse import urlparse
 
 BlockError = Literal[
     "http_403",
@@ -85,5 +86,12 @@ def extract_zpid(url: str) -> str | None:
         zillow.com/b/{zpid}_zpid/
     Trailing slash, query string, fragment, and http/https scheme variants all work.
     """
-    match = ZPID_RE.search(url)
+    try:
+        parsed = urlparse(url)
+        host = parsed.hostname.lower().rstrip(".") if parsed.hostname else ""
+    except ValueError:
+        return None
+    if host != "zillow.com" and not host.endswith(".zillow.com"):
+        return None
+    match = ZPID_RE.search(parsed.path)
     return match.group(1) if match else None
