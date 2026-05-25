@@ -439,6 +439,16 @@ class Household(BaseModel):
     va: VAInputs | None = None
     current_housing_payment: Money = Decimal("0.00")
 
+    @model_validator(mode="after")
+    def _applicant_income_strictly_positive(self) -> Household:
+        total_income = sum(
+            (applicant.gross_monthly_income for applicant in self.applicants),
+            start=Decimal("0.00"),
+        )
+        if total_income <= Decimal("0.00"):
+            raise ValueError("sum(applicants.gross_monthly_income) must be > 0")
+        return self
+
 
 # ---------------------------------------------------------------------------
 # AffordabilityRequest discriminated union (D-14)
@@ -656,6 +666,8 @@ def _compute_dti(
 
 def _compute_ltv(loan_amount: Decimal, property_value: Decimal) -> Decimal:
     """LTV = loan_amount / property_value (AFFD-02). Decimal precision preserved."""
+    if property_value <= Decimal("0"):
+        raise ValueError("property_value must be > 0")
     return loan_amount / property_value
 
 
@@ -669,6 +681,8 @@ def _compute_cltv(
     v1 uses list[Money] (sum) per CONTEXT.md Claude's discretion. Empty junior_liens
     reduces CLTV to LTV.
     """
+    if property_value <= Decimal("0"):
+        raise ValueError("property_value must be > 0")
     total = loan_amount + sum(junior_liens, start=Decimal("0"))
     return total / property_value
 
@@ -716,6 +730,7 @@ def _compute_monthly_mi(
     term_months: int,
     monthly_pmi: Decimal | None,
     endorsement_date: date,
+    fha_annual_mip_pct: Decimal | None = None,
 ) -> tuple[Decimal, Decimal]:
     """Compute (monthly_mi, ufmip_or_zero) for the given target_loan_type.
 
@@ -742,6 +757,11 @@ def _compute_monthly_mi(
         return Decimal("0.00"), Decimal("0")
 
     if target_loan_type == "fha":
+        if fha_annual_mip_pct is not None:
+            monthly_mip = quantize_cents(
+                (financed_loan_amount * fha_annual_mip_pct) / Decimal("12")
+            )
+            return monthly_mip, Decimal("0")
         # RESEARCH §A.3: fha_mip.compute(loan, property_value, endorsement_date)
         # NOT the CONTEXT.md D-02 (loan_amount, ltv_pct, term_months) signature.
         loan = _build_loan_for_amortization(
@@ -892,6 +912,9 @@ def evaluate_forward(request: ForwardModeRequest) -> AffordabilityResponse:
             term_months=request.term_months,
             monthly_pmi=request.monthly_pmi,
             endorsement_date=endorsement_date,
+            fha_annual_mip_pct=(
+                pre_mip.annual_mip_pct if request.target_loan_type == "fha" else None
+            ),
         )
 
         # Collect StaleReferenceWarning strings (D-11 propagation)
@@ -1300,6 +1323,11 @@ def _evaluate_blockers(
       - HPA-PMI-REQUIRED (when conventional + LTV > 0.80)
       - ATR-QM-NOT-EVALUATED-MISSING-APR-OR-APOR (when one or both missing)
 
+    Loan-amount convention: FHA LTV/CLTV ceilings use the base loan amount
+    supplied by the request because collateral coverage is measured before
+    financed UFMIP. ATR/QM and USDA affordability checks use the financed loan
+    amount because payment cost and price thresholds include financed UFMIP.
+
     Returns a new AffordabilityResponse with updated blocked / blocked_by /
     warnings (Pydantic frozen — uses model_copy(update=...)).
     """
@@ -1315,15 +1343,16 @@ def _evaluate_blockers(
 
     # Compute the LTV used for downstream checks (fraction; NOT percentage points).
     if isinstance(request, ForwardModeRequest):
+        base_loan_amount = request.loan_amount
         ltv_fraction = response.ltv  # already computed in evaluate_forward
         cltv_fraction = response.cltv
         dti_back = response.dti_back
         financed_loan = response.financed_loan_amount or response.loan_amount
         if request.target_loan_type == "fha":
-            ltv_fraction = quantize_rate(_compute_ltv(request.loan_amount, request.property_value))
+            ltv_fraction = quantize_rate(_compute_ltv(base_loan_amount, request.property_value))
             cltv_fraction = quantize_rate(
                 _compute_cltv(
-                    request.loan_amount,
+                    base_loan_amount,
                     request.junior_liens,
                     request.property_value,
                 )

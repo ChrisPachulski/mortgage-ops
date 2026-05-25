@@ -1,9 +1,9 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
   "id": "condo_with_hoa_seattle",
-  "source": "Plan 14-06 hand-calc; King County WA condo @ $475,000 with $9,500/mo household at 5% DP → Conv30 eligible at 95% LTV with PMI, Conv15 blocked by DTI, FHA30 blocked by LTV ceiling; verdict cascade Level 3 STRESS-INCOME-SHOCK",
+  "source": "Plan 14-06 hand-calc; King County WA condo @ $475,000 with $9,500/mo household at 5% DP → Conv30 eligible at 95% LTV with PMI, Conv15 blocked by DTI, FHA30 eligible under base-loan FHA LTV; verdict cascade Level 3 STRESS-INCOME-SHOCK",
   "rounding": "ROUND_HALF_UP",
-  "notes": "Cascade level 3 (WATCH STRESS-INCOME-SHOCK) per lib.property_verdict.synthesize: at preferred 5% DP only Conv30 is eligible (Conv15 fails DTI-CAP-CONVENTIONAL because 5.8%/15yr P&I + $450 HOA pushes piti+obligations/income > 0.50; FHA30 fails LTV-CEILING-FHA because UFMIP-financed LTV = 0.966625 exceeds the conforming FHA-floor LTV ceiling). The single eligible cell (Conv30 @ 5%) then fails the -30% income shock: stressed DTI = (4075.91 + 300) / (9500 × 0.70) = 0.658032 > Conv30 ceiling 0.50 → VERDICT_WATCH_STRESS_INCOME_FAIL fires before any GO-default branch can reach. Hand-calc anchors via lib.amortize.build_schedule: Conv30 @ 6.5%/30yr on $451,250 principal (95% LTV financed) → monthly_pi=$2852.21; Conv15 @ 5.8%/15yr on $451,250 → monthly_pi=$3759.32; FHA30 @ 6.5%/30yr on financed principal (base $451,250 + UFMIP 1.75% = $459,146.88 — see engine output below) → monthly_pi=$2902.12 + monthly_mi=$191.31. PMI applies on Conv: monthly_mi = 451250 × 0.0075/12 = $282.03 (PMI-RATE-ESTIMATED-0.0075 per Pitfall 1). PITI Conv30 = 2852.21 + 416.67 + 75.00 + 450.00 + 282.03 = $4075.91 (per Pitfall 6 quantize-once). Hand-calc cascade trace: Level 1 fail (>=1 cell eligible somewhere); Level 2 fail (eligible-at-preferred=[Conv30] non-empty); Level 3 hit: Conv30 income-shock breach (stressed DTI 0.658032 > ceiling 0.50). Verdict pinned to WATCH.",
+  "notes": "Cascade level 3 (WATCH STRESS-INCOME-SHOCK) per lib.property_verdict.synthesize: at preferred 5% DP Conv30 and FHA30 are eligible (Conv15 fails DTI-CAP-CONVENTIONAL because 5.8%/15yr P&I + $450 HOA pushes piti+obligations/income > 0.50; FHA30 uses base-loan LTV 0.950000 for the ceiling while financed UFMIP remains in payment math). Both eligible cells fail the -30% income shock: Conv30 stressed DTI = (4075.91 + 300) / (9500 × 0.70) = 0.658032 > Conv30 ceiling 0.50; FHA30 stressed DTI = (4035.10 + 300) / (9500 × 0.70) = 0.651895 > FHA ceiling 0.57 → VERDICT_WATCH_STRESS_INCOME_FAIL fires before any GO-default branch can reach. Hand-calc anchors via lib.amortize.build_schedule: Conv30 @ 6.5%/30yr on $451,250 principal (95% LTV financed) → monthly_pi=$2852.21; Conv15 @ 5.8%/15yr on $451,250 → monthly_pi=$3759.32; FHA30 @ 6.5%/30yr on financed principal (base $451,250 + UFMIP 1.75% = $459,146.88 — see engine output below) → monthly_pi=$2902.12 + monthly_mi=$191.31. PMI applies on Conv: monthly_mi = 451250 × 0.0075/12 = $282.03 (PMI-RATE-ESTIMATED-0.0075 per Pitfall 1). PITI Conv30 = 2852.21 + 416.67 + 75.00 + 450.00 + 282.03 = $4075.91 (per Pitfall 6 quantize-once). Hand-calc cascade trace: Level 1 fail (>=1 cell eligible somewhere); Level 2 fail (eligible-at-preferred=[Conv30,FHA30] non-empty); Level 3 hit: Conv30 and FHA30 income-shock breaches. Verdict pinned to WATCH.",
   "_meta": {
     "citation": "ANLZ-01 + ANLZ-02 + ANLZ-03 + VERD-01: covers HOA-into-PITI threading (ANLZ-02 numeric population), PMI-RATE-ESTIMATED soft signal surfacing at LTV>0.80 (ANLZ-03 eligible_reasons), and VERDICT_WATCH_STRESS_INCOME_FAIL cascade Level 3 branch (VERD-01 D-14-VERDICT-02 falsifiable income-shock predicate).",
     "engine_version": "Phase 14 Plan 14-06",
@@ -49,12 +49,18 @@
   "expected_response": {
     "verdict": {
       "level": "WATCH",
-      "headline_reason": "Income-shock stress breaches DTI ceiling for 1 eligible program(s)",
+      "headline_reason": "Income-shock stress breaches DTI ceiling for 2 eligible program(s)",
       "reasons": [
         {
           "predicate_code": "STRESS-INCOME-SHOCK",
           "computed_value": "0.658032",
           "program": "Conv30",
+          "dp_pct": null
+        },
+        {
+          "predicate_code": "STRESS-INCOME-SHOCK",
+          "computed_value": "0.651895",
+          "program": "FHA30",
           "dp_pct": null
         }
       ]
@@ -107,8 +113,8 @@
           "piti": "4035.10",
           "dti_back": "0.456326",
           "ltv": "0.966625",
-          "eligible": false,
-          "blocker_reasons": ["LTV-CEILING-FHA"],
+          "eligible": true,
+          "blocker_reasons": [],
           "eligible_reasons": []
         }
       ]
@@ -116,10 +122,12 @@
     "tax": {
       "qualified_loan_limit": "750000.00",
       "over_750k_cap_per_program": {
-        "Conv30": false
+        "Conv30": false,
+        "FHA30": false
       },
       "first_year_interest_per_program": {
-        "Conv30": "29182.75"
+        "Conv30": "29182.75",
+        "FHA30": "29693.45"
       },
       "filing_status": "mfj"
     },

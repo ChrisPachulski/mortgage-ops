@@ -29,6 +29,7 @@ SONNET_MAX_TOKENS: Final[int] = 4096
 HTML_PROMPT_WINDOW_CHARS: Final[int] = 200_000
 NEXT_DATA_PREFIX_CONTEXT_CHARS: Final[int] = 10_000
 MONEY_CENTS: Final[Decimal] = Decimal("0.01")
+PROPERTY_RECORD_MAX_DEPTH: Final[int] = 64
 FREE_TEXT_KEY_PARTS: Final[tuple[str, ...]] = (
     "agent",
     "attribution",
@@ -136,7 +137,7 @@ def extract_listing(html: str, source_url: str) -> dict[str, object] | None:
         return None
     if not _model_output_matches_deterministic(result, deterministic, source_url):
         return None
-    return result
+    return _merge_deterministic_fields(result, deterministic)
 
 
 def _extract_listing_from_next_data(html: str) -> dict[str, object] | None:
@@ -200,17 +201,24 @@ def _next_data_text(html: str) -> str | None:
     return html[match.end() : end]
 
 
-def _find_property_record(node: Any) -> dict[str, Any] | None:
+def _find_property_record(
+    node: Any,
+    *,
+    max_depth: int = PROPERTY_RECORD_MAX_DEPTH,
+    _depth: int = 0,
+) -> dict[str, Any] | None:
+    if _depth > max_depth:
+        return None
     if isinstance(node, dict):
         if "zpid" in node and any(k in node for k in ("price", "zipcode", "propertyTypeDimension")):
             return node
         for value in node.values():
-            found = _find_property_record(value)
+            found = _find_property_record(value, max_depth=max_depth, _depth=_depth + 1)
             if found is not None:
                 return found
     elif isinstance(node, list):
         for value in node:
-            found = _find_property_record(value)
+            found = _find_property_record(value, max_depth=max_depth, _depth=_depth + 1)
             if found is not None:
                 return found
     return None
@@ -264,10 +272,12 @@ def _model_output_matches_deterministic(
         return False
     if deterministic is None:
         return _has_required_fields(result)
-    if not _has_required_fields(result):
+    merged = _merge_deterministic_fields(result, deterministic)
+    if not _has_required_fields(merged):
         return False
-    for key in ("zpid", "price", "zip", "property_type"):
-        expected = deterministic.get(key)
+    for key, expected in deterministic.items():
+        if expected is None:
+            continue
         actual = result.get(key)
         if (
             expected is not None
@@ -278,8 +288,28 @@ def _model_output_matches_deterministic(
     return True
 
 
+def _merge_deterministic_fields(
+    result: dict[str, object],
+    deterministic: dict[str, object] | None,
+) -> dict[str, object]:
+    if deterministic is None:
+        return result
+    merged = dict(result)
+    for key, value in deterministic.items():
+        if value is not None:
+            merged[key] = value
+    return merged
+
+
 def _same_extracted_value(key: str, actual: object, expected: object) -> bool:
-    if key == "price":
+    if key in {
+        "price",
+        "baths",
+        "tax_annual",
+        "hoa_monthly",
+        "insurance_estimate_annual",
+        "zestimate",
+    }:
         actual_decimal = _decimal_value(actual)
         expected_decimal = _decimal_value(expected)
         return (

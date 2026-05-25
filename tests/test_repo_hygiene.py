@@ -7,9 +7,10 @@ pytest collects it as a real test module and breaks the suite. The
 belt-and-suspenders, scoped to the directories pytest actually collects from
 (source + tests).
 
-Generated/ephemeral directories (``data/cache/``, ``data/logs/``, ``reports/``,
-``__pycache__/``, etc.) are intentionally excluded — duplicates there are
-filesystem noise, not a correctness risk, and shouldn't fail CI.
+Generated/ephemeral directories (``.codex-loop/``, ``data/cache/``,
+``data/logs/``, ``reports/``, ``__pycache__/``, etc.) are intentionally
+excluded — duplicates there are filesystem noise, not a correctness risk, and
+shouldn't fail CI.
 """
 
 from __future__ import annotations
@@ -28,6 +29,7 @@ _FINDER_DUP_RE = re.compile(r" (?:\d+|copy)\.[A-Za-z0-9]+$")
 # data layers (DATA_CONTRACT.md), and (d) report/log/eval output trees.
 _SKIP_DIR_NAMES: frozenset[str] = frozenset(
     {
+        ".codex-loop",
         ".git",
         ".venv",
         "node_modules",

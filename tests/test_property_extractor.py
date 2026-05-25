@@ -179,10 +179,18 @@ def test_extract_listing_returns_dict_on_clean_json(monkeypatch: pytest.MonkeyPa
 
 def test_extract_listing_strips_prose_prefix(monkeypatch: pytest.MonkeyPatch) -> None:
     """Pitfall 18: prose prefix -> first-brace regex extractor still finds JSON."""
-    raw = 'Here is the data:\n\n{"price": "625000.00", "zip": "94110", "property_type": "SFH"}'
+    raw = (
+        "Here is the data:\n\n"
+        '{"zpid": "1", "price": "625000.00", "zip": "94110", "property_type": "SFH"}'
+    )
     _install_fake_anthropic(monkeypatch, response=_FakeResponse(raw))
     result = property_extractor.extract_listing("<html>", "https://zillow.com/.../1_zpid/")
-    assert result == {"price": "625000.00", "zip": "94110", "property_type": "SFH"}
+    assert result == {
+        "zpid": "1",
+        "price": "625000.00",
+        "zip": "94110",
+        "property_type": "SFH",
+    }
 
 
 # ---------- Mocked failure modes (all -> None per D-13-MODEL-01) ----------

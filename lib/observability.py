@@ -420,7 +420,6 @@ def observe(cli: str, inputs: dict[str, Any]) -> Iterator[RunContext]:
     input_hash = sha256_json(inputs)
 
     log_root = _resolve_log_dir() / cli
-    log_root.mkdir(parents=True, exist_ok=True)
     log_path = log_root / f"{run_id}.jsonl"
 
     # Build a dedicated logger per run so handlers are scoped + easy to
@@ -432,10 +431,13 @@ def observe(cli: str, inputs: dict[str, Any]) -> Iterator[RunContext]:
     logger.propagate = False
 
     formatter = _JSONFormatter()
-    # File handler — durable per-run record. ``delay=False`` opens the
-    # file immediately so the run is visible even if the process dies
-    # before any explicit log call (mkdir already happened above).
-    file_handler = logging.FileHandler(str(log_path), mode="w", encoding="utf-8")
+    try:
+        log_root.mkdir(parents=True, exist_ok=True)
+        file_handler: logging.Handler = logging.FileHandler(
+            str(log_path), mode="w", encoding="utf-8"
+        )
+    except OSError:
+        file_handler = logging.NullHandler()
     file_handler.setLevel(logging.DEBUG)
     file_handler.setFormatter(formatter)
     # Warning counter — reads emit calls; never emits itself.

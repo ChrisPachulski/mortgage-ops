@@ -444,10 +444,9 @@ class PaymentScheduleEntry(BaseModel):
 
     The unit-period equation evaluates each payment Pₖ at
     `starting_unit_period + (k-1) + unit_period_fraction` for
-    k = 1..periods. unit_period_fraction handles long odd first periods
-    per Reg Z §1026.17(c)(4); v1 cross-validates only f ∈ [0, 1) (long
-    cases), but the type surface accepts f=0 (regular case) which is the
-    default.
+    k = 1..periods. unit_period_fraction handles odd first periods per
+    Reg Z §1026.17(c)(4): negative values represent short first periods,
+    positive values represent long first periods, and zero is regular.
     """
 
     model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
@@ -463,9 +462,9 @@ class PaymentScheduleEntry(BaseModel):
     amount: Money
     unit_period_fraction: Decimal = Field(
         default=Decimal("0"),
-        ge=Decimal("0"),
+        ge=Decimal("-1"),
         lt=Decimal("1"),
-        description="Fractional unit period in [0, 1) for odd first period (long case only in v1)",
+        description="Fractional unit period in [-1, 1) for odd first period",
     )
 
 

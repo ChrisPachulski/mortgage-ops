@@ -68,7 +68,7 @@ from datetime import (  # Pydantic resolves annotations at runtime
     UTC,
     datetime,
 )
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -107,6 +107,7 @@ from lib.property_listing import (  # noqa: TC001  # Pydantic resolves annotatio
 from lib.refinance import RateAndTermRefiRequest
 from lib.refinance import evaluate as refi_evaluate
 from lib.rules.fha_mip import compute as fha_mip_compute
+from lib.rules.insurance import fips_to_usps
 from lib.rules.irs_pub936 import qualified_loan_limit as pub936_qualified_loan_limit
 from lib.rules.loan_type import MissingCountyDataError
 from lib.rules.loan_type import classify as classify_loan_type
@@ -301,9 +302,11 @@ class ProgramResult(BaseModel):
 class DownPaymentMatrix(BaseModel):
     """The full program x DP fan-out (D-14-MATRIX-01).
 
-    cell count = len(programs_present) x len(down_payment_pcts) = 24 in the
-    non-jumbo case (3 base programs + VA optional, 6 DPs) or 30 when jumbo
-    triggers (D-14-MATRIX-03).
+    cell count = len(programs_present) x len(down_payment_pcts): 3 base
+    programs, plus VA when eligible, plus Jumbo when classification triggers,
+    times the 6 standard DPs or 7 when _matrix_down_payment_pcts adds a
+    preferred DP outside the standard ladder. Possible totals are 18, 21, 24,
+    27, 28, 30, and 35.
     """
 
     model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
@@ -541,12 +544,18 @@ def _todays_rate_per_program(program: str) -> Decimal:
                 f"scripts/fred_cli.py get {series_id} --latest to refresh"
             ) from exc
 
-    if entry.get("value") is None:
+    if entry.get("value") in (None, ""):
         raise ValueError(
-            f"FRED cache for {series_id} has value=None; run "
+            f"FRED cache for {series_id} has no usable value; run "
             f"scripts/fred_cli.py get {series_id} --latest to refresh"
         )
-    raw = Decimal(str(entry["value"]))
+    try:
+        raw = Decimal(str(entry["value"]))
+    except (InvalidOperation, ValueError) as exc:
+        raise ValueError(
+            f"FRED cache for {series_id} has an unparseable value; run "
+            f"scripts/fred_cli.py get {series_id} --latest to refresh"
+        ) from exc
     if raw > Decimal("1"):
         raw = raw / Decimal("100")
     return quantize_rate(raw + delta)
@@ -636,7 +645,7 @@ def _build_affordability_forward_request(
             state_fips=household.state_fips,
             county_fips=household.county_fips,
             county_name=household.county_name,
-            state=household.state_fips,
+            state=fips_to_usps(household.state_fips),
         ),
         applicants=[
             Applicant(
@@ -868,16 +877,19 @@ def _build_matrix(
     household: Household,
     profile: Profile,
     todays_rates: dict[str, Decimal],
+    programs: list[str] | None = None,
+    program_warnings: list[str] | None = None,
 ) -> tuple[DownPaymentMatrix, list[str]]:
     """Fan out across programs x DPs to produce the full DownPaymentMatrix
     (D-14-MATRIX-01) plus a list of matrix-assembly warnings.
 
     ``todays_rates`` is a dict keyed by program name (Conv30, Conv15, FHA30,
     VA30, Jumbo30) — caller obtains via ``_todays_rate_per_program`` per
-    D-14-REFI-02. Matrix carries len(programs) * 6 cells (24 in the base
-    case, 30 when jumbo triggers).
+    D-14-REFI-02. Matrix carries len(programs) times the DP ladder, which may
+    include the user's preferred DP when it is outside the standard ladder.
     """
-    programs, warnings = _determine_programs(listing, household, profile)
+    if programs is None or program_warnings is None:
+        programs, program_warnings = _determine_programs(listing, household, profile)
     down_payment_pcts = _matrix_down_payment_pcts(household.preferred_down_payment_pct)
     cells: list[ProgramResult] = []
     for program in programs:
@@ -889,7 +901,7 @@ def _build_matrix(
         programs_present=programs,
         down_payment_pcts=down_payment_pcts,
     )
-    return matrix, warnings
+    return matrix, program_warnings
 
 
 def _matrix_down_payment_pcts(preferred_dp: Decimal) -> list[Decimal]:
@@ -1450,9 +1462,8 @@ def analyze(
          ``_todays_rate_per_program``); when callers pass explicit
          ``fred_mortgage_30us`` / ``fred_mortgage_15us`` overrides the FRED
          cache is bypassed entirely (test-injection path).
-      3. Determine programs (Conv30/Conv15/FHA30 always; VA30 if
-         ``profile.va_eligible``; Jumbo30 if classify == "jumbo").
-      4. Build matrix (DownPaymentMatrix with 18, 24, or 30 cells).
+      3. Resolve todays rates for Conv30/Conv15/FHA30/VA30/Jumbo30/ARM.
+      4. Build matrix from the already-resolved programs.
       5. Build auxiliary blocks at preferred DP (StressBlock, RefiBlock,
          PointsBlock, TaxBlock).
       6. Synthesize verdict (``lib.property_verdict.synthesize``).
@@ -1473,11 +1484,9 @@ def analyze(
 
     warnings: list[str] = []
 
-    # Step 1 + 3 — programs are recomputed inside _build_matrix; here we
-    # eagerly call _determine_programs solely to surface its MissingCountyDataError
-    # warning into the top-level AnalysisReport.warnings. The matrix carries
-    # programs_present, so we discard the program list itself.
-    _programs, prog_warnings = _determine_programs(listing, household, profile)
+    # Step 1 — determine programs once and pass them through the pipeline so
+    # warnings reflect exactly one classification attempt.
+    programs, prog_warnings = _determine_programs(listing, household, profile)
     warnings.extend(prog_warnings)
 
     # Step 2 — resolve today's rates (FRED-or-override)
@@ -1501,9 +1510,15 @@ def analyze(
         "Conv30-ARM-5-1": quantize_rate(rate_30 - Decimal("0.0025")),  # D-14-REFI-02
     }
 
-    # Step 4 — matrix fan-out (24 cells base; +6 if jumbo; -6 if not VA-eligible)
-    matrix, matrix_warnings = _build_matrix(listing, household, profile, todays_rates)
-    warnings.extend(matrix_warnings)
+    # Step 4 — matrix fan-out.
+    matrix, _matrix_warnings = _build_matrix(
+        listing,
+        household,
+        profile,
+        todays_rates,
+        programs=programs,
+        program_warnings=prog_warnings,
+    )
 
     # Surface PMI-RATE-ESTIMATED whenever any cell carried the placeholder.
     if any("PMI-RATE-ESTIMATED" in r for c in matrix.cells for r in c.eligible_reasons):

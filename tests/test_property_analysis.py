@@ -260,7 +260,7 @@ def _make_clean_household(**overrides: Any) -> Household:
         "monthly_income": Decimal("12000.00"),
         "monthly_obligations": Decimal("400.00"),
         "fico": 740,
-        "liquid_reserves": Decimal("100000.00"),
+        "liquid_reserves": Decimal("200000.00"),
         "state_fips": "53",
         "county_fips": "033",
         "county_name": "King",
@@ -560,8 +560,8 @@ def test_va_cell_constructs_valid_affordability_request() -> None:
     profile = _make_clean_profile(va_eligible=True)
     listing = _make_clean_listing()
     cell = _build_program_result("VA30", Decimal("0.05"), listing, household, profile, _TEST_RATE)
-    # No exception raised; cell has both reason tags.
-    assert "VA-RESIDUAL-SYNTHESIZED-V1" in cell.eligible_reasons
+    # No exception raised; Phase 14 marks missing VA residual inputs explicitly.
+    assert "VA-RESIDUAL-NOT-SUPPLIED" in cell.blocker_reasons
     assert "VA-FUNDING-FEE-FINANCED" in cell.eligible_reasons
 
 
@@ -910,11 +910,21 @@ def test_points_fha_va_warning_note() -> None:
     listing = _make_clean_listing()
     todays_rates = _make_test_rates()
     matrix, _ = _build_matrix(listing, household, profile, todays_rates)
+    auxiliary_programs_at_preferred_dp = {
+        c.program
+        for c in matrix.cells
+        if c.down_payment_pct == Decimal("0.200000")
+        and (
+            c.eligible
+            or (c.program == "VA30" and c.blocker_reasons == ["VA-RESIDUAL-NOT-SUPPLIED"])
+        )
+    }
+    assert {"FHA30", "VA30"}.issubset(auxiliary_programs_at_preferred_dp)
     points = _build_points_block(matrix, household, todays_rates)
 
     fha_rows = [r for r in points.rows if r.program == "FHA30"]
     va_rows = [r for r in points.rows if r.program == "VA30"]
-    # The clean fixture has both FHA30 and VA30 eligible at 20% DP.
+    # The clean fixture has FHA30 eligible and VA30 available for residual-input diagnostics at 20% DP.
     assert fha_rows, "expected at least one FHA30 points row"
     assert va_rows, "expected at least one VA30 points row"
     for r in fha_rows + va_rows:

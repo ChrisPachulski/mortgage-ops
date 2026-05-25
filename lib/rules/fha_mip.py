@@ -21,7 +21,8 @@ What this predicate decides:
   at which annual MIP terminates (or "life_of_loan" sentinel).
 
 Inputs:
-    loan: Loan (Phase-1 model — provides principal, term_months, annual_rate)
+    loan: Loan (Phase-1 model — principal is the unfinanced base mortgage
+                amount; do not include financed UFMIP in this value)
     original_property_value: Decimal (appraised value at origination, used for LTV)
     endorsement_date: date (FHA case endorsement date — pre-2023-03-20 rates
                             are deferred to v2; predicate raises

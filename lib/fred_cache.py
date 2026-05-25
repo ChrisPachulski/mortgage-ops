@@ -32,6 +32,7 @@ import time
 import warnings
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
 
@@ -70,6 +71,16 @@ returned as ``None`` from ``_load_cache`` (falling through to the fetcher path
 per CR-01 — see ``get_cached_or_fetch``). Defending in ``_load_cache`` keeps
 ``is_fresh`` simple and matches the "shape-validate on read" pattern in
 ``_read_lock``."""
+
+
+def _is_decimal_string(value: Any) -> bool:
+    if not isinstance(value, str) or value == "":
+        return False
+    try:
+        Decimal(value)
+    except (InvalidOperation, ValueError):
+        return False
+    return True
 
 
 def _durable_fsync(fd: int) -> None:
@@ -433,7 +444,7 @@ def _load_cache(series_id: str, cache_dir: Path = CACHE_DIR) -> dict[str, Any] |
         isinstance(entry, dict)
         and all(k in entry for k in REQUIRED_ENTRY_FIELDS)
         and isinstance(entry.get("fetched_at"), str)
-        and isinstance(entry.get("value"), str)
+        and _is_decimal_string(entry.get("value"))
     ):
         result: dict[str, Any] = entry
         return result
@@ -447,6 +458,8 @@ def _save_cache(
 ) -> None:
     """Write a single-series cache file under ``with_cache_lock``.
     ``schema_version`` is pinned."""
+    if not _is_decimal_string(entry.get("value")):
+        raise ValueError("FRED cache entries require a non-empty Decimal string value")
     path = _cache_path(series_id, cache_dir)
     with with_cache_lock(cache_dir, reason=f"write {series_id}"):
         payload = {"schema_version": SCHEMA_VERSION, "entries": {series_id: entry}}
@@ -518,6 +531,6 @@ def get_cached_or_fetch(
 
     new_entry = fetcher(series_id)
     # Only write through if the fetch produced a real value (not an error envelope).
-    if isinstance(new_entry, dict) and new_entry.get("value") is not None:
+    if isinstance(new_entry, dict) and _is_decimal_string(new_entry.get("value")):
         _save_cache(series_id, new_entry, cache_dir)
     return new_entry

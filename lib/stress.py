@@ -136,6 +136,14 @@ class RatePath(BaseModel):
             raise ValueError(
                 f"params for {self.name!r} must be {sorted(required)}; {'; '.join(details)}"
             )
+        if self.name == "parallel-shift" and self.params["shift_bps"] < 0:
+            raise ValueError("parallel-shift requires shift_bps >= 0")
+        if self.name == "gradual-rise" and self.params["step_bps"] <= 0:
+            raise ValueError("gradual-rise requires step_bps > 0")
+        if self.name == "fall-then-rise" and (
+            self.params["drop_bps"] <= 0 or self.params["rise_bps"] <= 0
+        ):
+            raise ValueError("fall-then-rise requires drop_bps > 0 and rise_bps > 0")
         return self
 
 

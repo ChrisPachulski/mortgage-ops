@@ -327,13 +327,17 @@ def test_request_discriminates_on_mode_field_via_json() -> None:
     assert request.mode == "forward"
 
 
-def test_va_target_loan_type_requires_va_block() -> None:
-    """Test 8: target_loan_type=='va' without household.va raises ValidationError."""
+def test_va_target_loan_type_allows_missing_va_block() -> None:
+    """Test 8: target_loan_type=='va' without household.va validates.
+
+    Missing VA residual inputs are represented as an eligibility blocker during
+    evaluation so callers can still receive ordinary affordability diagnostics.
+    """
     kwargs = _valid_forward_request_kwargs()
     kwargs["target_loan_type"] = "va"
-    with pytest.raises(ValidationError) as exc:
-        ForwardModeRequest(**kwargs)  # type: ignore[arg-type]
-    assert "va" in str(exc.value).lower()
+    request = ForwardModeRequest(**kwargs)  # type: ignore[arg-type]
+    assert request.target_loan_type == "va"
+    assert request.household.va is None
 
 
 def test_conventional_above_80_ltv_requires_monthly_pmi() -> None:
