@@ -62,7 +62,7 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import TYPE_CHECKING, Annotated, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from lib.affordability import AffordabilityRequest
 from lib.affordability import (
@@ -79,12 +79,19 @@ from lib.arm import (
 from lib.models import (  # noqa: TC001  # Pydantic resolves field annotations at runtime
     Loan,
     Money,
+    NonNegativeRatio,
     Rate,
 )
 from lib.money import quantize_cents, quantize_rate
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+
+
+IncomeReduction = Annotated[
+    Decimal,
+    Field(strict=True, max_digits=7, decimal_places=6, ge=Decimal("0"), lt=Decimal("1")),
+]
 
 # ---------------------------------------------------------------------------
 # Leaf models
@@ -107,6 +114,28 @@ class RatePath(BaseModel):
     model_config = ConfigDict(strict=True, frozen=True, extra="forbid")
     name: Literal["parallel-shift", "gradual-rise", "fall-then-rise"]
     params: dict[str, int]
+
+    @model_validator(mode="after")
+    def _params_match_name(self) -> RatePath:
+        required_by_name: dict[str, set[str]] = {
+            "parallel-shift": {"shift_bps"},
+            "gradual-rise": {"step_bps"},
+            "fall-then-rise": {"drop_bps", "rise_bps"},
+        }
+        required = required_by_name[self.name]
+        actual = set(self.params)
+        if actual != required:
+            missing = sorted(required - actual)
+            extra = sorted(actual - required)
+            details: list[str] = []
+            if missing:
+                details.append(f"missing keys: {', '.join(missing)}")
+            if extra:
+                details.append(f"extra keys: {', '.join(extra)}")
+            raise ValueError(
+                f"params for {self.name!r} must be {sorted(required)}; {'; '.join(details)}"
+            )
+        return self
 
 
 class StressRow(BaseModel):
@@ -132,7 +161,7 @@ class StressRow(BaseModel):
     total_interest: Money | None = None  # rate-shock + arm-reset
     delta_vs_baseline_monthly: Money | None = None  # rate-shock
     delta_vs_baseline_pct: Rate | None = None  # rate-shock
-    dti_back: Rate | None = None  # income-shock
+    dti_back: NonNegativeRatio | None = None  # income-shock
     breaches_threshold: bool | None = None  # income-shock
     blocked_by: str | None = None  # income-shock
     max_payment: Money | None = None  # arm-reset
@@ -201,7 +230,7 @@ class IncomeShockRequest(_CommonStressFields):
 
     mode: Literal["income-shock"] = "income-shock"
     base_request: AffordabilityRequest
-    reductions: list[Rate] = Field(min_length=1)
+    reductions: list[IncomeReduction] = Field(min_length=1)
     dti_threshold: Rate  # D-04: REQUIRED; no module default
 
 
@@ -298,7 +327,9 @@ def rate_shock(
     # Resolve baseline label + payment.
     if baseline_label is None:
         baseline_label = rows[0].label
-    baseline_row = next((r for r in rows if r.label == baseline_label), rows[0])
+    baseline_row = next((r for r in rows if r.label == baseline_label), None)
+    if baseline_row is None:
+        raise ValueError(f"baseline_label {baseline_label!r} did not match any rate-shock row")
     baseline_pi = baseline_row.monthly_pi
     assert baseline_pi is not None  # mypy narrow; constructed non-None above
 
@@ -369,6 +400,8 @@ def income_shock(
     """
     rows: list[StressRow] = []
     for reduction in reductions:
+        if reduction < Decimal("0") or reduction >= Decimal("1"):
+            raise ValueError(f"income-shock reduction must be >= 0 and < 1; got {reduction}")
         multiplier = Decimal("1") - reduction
         shocked_household = base_request.household.model_copy(
             update={
@@ -399,7 +432,7 @@ def income_shock(
         )
 
     # Worst case = highest dti_back (None treated as 0 to keep max() total).
-    def _row_dti(r: StressRow) -> Rate:
+    def _row_dti(r: StressRow) -> NonNegativeRatio:
         return r.dti_back if r.dti_back is not None else Decimal("0")
 
     worst_label = max(rows, key=_row_dti).label if rows else None

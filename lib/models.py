@@ -32,6 +32,12 @@ Rate = Annotated[
 ]
 """A fractional rate in [0, 1] with up to 6 decimal places (e.g. 0.065000 = 6.5%)."""
 
+NonNegativeRatio = Annotated[
+    Decimal,
+    Field(strict=True, max_digits=14, decimal_places=6, ge=Decimal("0")),
+]
+"""A non-negative ratio that may exceed 1.0, used for DTI-style outputs."""
+
 
 class Loan(BaseModel):
     """Inputs to an amortization. Phase 3 will use this; Phase 1 just defines it."""

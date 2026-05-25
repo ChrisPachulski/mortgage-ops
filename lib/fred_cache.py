@@ -206,6 +206,37 @@ def _write_lock_exclusive(lock_path: Path, lock: dict[str, Any]) -> bool:
     return True
 
 
+def _lock_token_matches(left: dict[str, Any] | None, right: dict[str, Any]) -> bool:
+    """Compare the ownership token fields used by release/stale recovery."""
+    return (
+        left is not None
+        and left.get("pid") == right.get("pid")
+        and left.get("acquired_at") == right.get("acquired_at")
+    )
+
+
+def _try_remove_stale_lock(lock_path: Path, stale_lock: dict[str, Any]) -> bool:
+    """Remove a stale lock only while holding a local recovery guard."""
+    guard_path = lock_path.with_name(f"{lock_path.name}.stale-recovery")
+    guard = {
+        "pid": os.getpid(),
+        "acquired_at": _now_ms(),
+        "reason": f"stale recovery for {lock_path.name}",
+    }
+    if not _write_lock_exclusive(guard_path, guard):
+        return False
+    try:
+        current = _read_lock(lock_path)
+        if not (_is_lock_stale(current) and _lock_token_matches(current, stale_lock)):
+            return False
+        with contextlib.suppress(FileNotFoundError):
+            lock_path.unlink()
+        return True
+    finally:
+        with contextlib.suppress(FileNotFoundError):
+            guard_path.unlink()
+
+
 def _acquire_lock(
     cache_dir: Path,
     *,
@@ -237,8 +268,7 @@ def _acquire_lock(
                 "reason": reason,
             }
             if existing is not None and _is_lock_stale(existing):
-                with contextlib.suppress(FileNotFoundError):
-                    lock_path.unlink()
+                _try_remove_stale_lock(lock_path, existing)
             try:
                 if _write_lock_exclusive(lock_path, my_lock):
                     return my_lock

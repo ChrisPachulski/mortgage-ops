@@ -95,7 +95,12 @@ from lib.amortize import build_schedule
 from lib.arm import ARMRequest, ARMTerms
 from lib.fred_cache import CACHE_DIR, get_cached_or_fetch, with_cache_lock
 from lib.household import Household  # noqa: TC001
-from lib.models import Loan, Money, Rate  # Pydantic resolves annotations at runtime
+from lib.models import (  # Pydantic resolves annotations at runtime
+    Loan,
+    Money,
+    NonNegativeRatio,
+    Rate,
+)
 from lib.money import quantize_cents, quantize_rate
 from lib.points import PointsRequestFromLoans
 from lib.points import evaluate as points_evaluate
@@ -284,7 +289,7 @@ class ProgramResult(BaseModel):
     """PMI / MIP / funding-fee-monthly equivalent; Decimal("0.00") when N/A."""
     piti: Money
     cash_to_close: Money
-    dti_back: Rate
+    dti_back: NonNegativeRatio
     ltv: Rate
     eligible: bool
     blocker_reasons: list[str] = Field(default_factory=list)
@@ -328,7 +333,7 @@ class StressRow(BaseModel):
     stress_kind: Literal["rate_shock", "income_shock", "arm_reset"]
     baseline_piti: Money
     stressed_piti: Money | None = None
-    stressed_dti_back: Rate
+    stressed_dti_back: NonNegativeRatio
     breaches_dti_ceiling: bool
     blocker_reasons: list[str] = Field(default_factory=list)
 
@@ -850,17 +855,28 @@ def _build_matrix(
     case, 30 when jumbo triggers).
     """
     programs, warnings = _determine_programs(listing, household, profile)
+    down_payment_pcts = _matrix_down_payment_pcts(household.preferred_down_payment_pct)
     cells: list[ProgramResult] = []
     for program in programs:
         rate = todays_rates[program]
-        for dp_pct in DOWN_PAYMENT_PCTS:
+        for dp_pct in down_payment_pcts:
             cells.append(_build_program_result(program, dp_pct, listing, household, profile, rate))
     matrix = DownPaymentMatrix(
         cells=cells,
         programs_present=programs,
-        down_payment_pcts=list(DOWN_PAYMENT_PCTS),
+        down_payment_pcts=down_payment_pcts,
     )
     return matrix, warnings
+
+
+def _matrix_down_payment_pcts(preferred_dp: Decimal) -> list[Decimal]:
+    """Return the fixed ladder plus the user's preferred DP when absent."""
+    target = quantize_rate(preferred_dp)
+    values = [quantize_rate(dp) for dp in DOWN_PAYMENT_PCTS]
+    if target not in values:
+        values.append(target)
+        values.sort()
+    return values
 
 
 # ---------------------------------------------------------------------------
@@ -1143,13 +1159,12 @@ def _build_stress_block(
             RateShockRequest(
                 mode="rate-shock",
                 loan=cell_loan,
-                rates=[shocked_rate],  # FULL Rate value, NOT bps
+                rates=[current_rate, shocked_rate],  # FULL Rate values, NOT bps
                 baseline_label=str(current_rate),
                 scenario_label=f"{cell.program}+200bps",
             )
         )
-        # rate_shock loop generates one upstream row per rate; we ask for one.
-        upstream_rate_row = rate_resp.rows[0]
+        upstream_rate_row = next(r for r in rate_resp.rows if r.label == str(shocked_rate))
         rows.append(_stress_row_from_rate_shock(cell, upstream_rate_row, household, ceiling))
 
         # ============================================================

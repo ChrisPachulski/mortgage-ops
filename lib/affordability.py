@@ -182,7 +182,7 @@ import numpy_financial as npf
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from lib.amortize import build_schedule
-from lib.models import Loan, Money, Rate
+from lib.models import Loan, Money, NonNegativeRatio, Rate
 from lib.money import quantize_cents, quantize_rate
 from lib.rules._loader import StaleReferenceWarning
 
@@ -583,8 +583,8 @@ class AffordabilityResponse(BaseModel):
     loan_amount: Money | None = None
     property_value: Money | None = None
     financed_loan_amount: Money | None = None  # loan_amount + UFMIP for FHA per D-03
-    dti_front: Rate | None = None
-    dti_back: Rate | None = None
+    dti_front: NonNegativeRatio | None = None
+    dti_back: NonNegativeRatio | None = None
     ltv: Rate | None = None
     cltv: Rate | None = None
     piti: Money | None = None
