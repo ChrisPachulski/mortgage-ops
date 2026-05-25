@@ -430,8 +430,17 @@ def _save_cache(
         payload = {"schema_version": SCHEMA_VERSION, "entries": {series_id: entry}}
         tmp_path = path.with_suffix(path.suffix + ".tmp")
         try:
-            tmp_path.write_text(json.dumps(payload, indent=2))
+            fd = os.open(tmp_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o644)
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                fh.write(json.dumps(payload, indent=2))
+                fh.flush()
+                os.fsync(fh.fileno())
             os.replace(tmp_path, path)
+            dir_fd = os.open(path.parent, os.O_RDONLY)
+            try:
+                os.fsync(dir_fd)
+            finally:
+                os.close(dir_fd)
         finally:
             with contextlib.suppress(FileNotFoundError):
                 tmp_path.unlink()

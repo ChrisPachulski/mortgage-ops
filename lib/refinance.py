@@ -738,8 +738,14 @@ def _compute_breakeven_npv(
     """
     period_rate = discount_rate_annual / Decimal("12")
     per_period = _flatten_cashflows_to_per_period(cashflows, horizon_months)
-    for n in range(0, horizon_months + 1):
-        cumulative = npf.npv(period_rate, per_period[: n + 1])
+    cumulative = per_period[0]
+    if cumulative >= Decimal("0"):
+        return 0, "ok"
+    discount_factor = Decimal("1")
+    period_discount = Decimal("1") / (Decimal("1") + period_rate)
+    for n in range(1, horizon_months + 1):
+        discount_factor *= period_discount
+        cumulative += per_period[n] * discount_factor
         if cumulative >= Decimal("0"):
             return n, "ok"
     return None, "never_breaks_even"

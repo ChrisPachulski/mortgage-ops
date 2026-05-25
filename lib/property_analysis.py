@@ -38,15 +38,11 @@ Pitfalls mitigated in this plan (RESEARCH.md §"Pitfalls"):
     ``list[Payment]`` schedule attached (mirrors Phase 8 D-03).
 
 Iteration-2 (PLAN-CHECK) fixes baked in:
-  - B-2 (VA-program affordability construction): ``_build_program_result``
-    synthesizes a deterministic ``VAInputs(region="northeast", family_size=2,
-    actual_residual_income=quantize_cents(monthly_income * Decimal("0.5")))``
-    when ``program == "VA30"`` and tags ``eligible_reasons`` with
-    "VA-RESIDUAL-SYNTHESIZED-V1". This is a CONSERVATIVE estimate (50% of
-    monthly income comfortably exceeds the highest M26-7 minimum residual
-    of ~$1,158 for family_size=5 in the West region); a follow-on phase
-    may surface region / family_size on Profile if higher VA accuracy is
-    required.
+  - B-2 (VA-program affordability construction): VA cells are not approved
+    without caller-supplied residual-income inputs. Phase 14's public
+    Household/Profile models do not carry those fields, so VA30 cells surface
+    "VA-RESIDUAL-NOT-SUPPLIED" as an ineligible blocker instead of fabricating
+    residual income from gross monthly income.
   - B-3 (PropertyListing required fields): NOT in this module — test
     helper ``_make_clean_listing`` defaults source_url / zpid / fetched_at
     so Phase-13 audit fields are populated. See tests/test_property_analysis.py.
@@ -83,7 +79,6 @@ from lib.affordability import (
     ForwardModeRequest,
     LocationFIPS,
     MonthlyDebts,
-    VAInputs,
 )
 from lib.affordability import (
     Household as AffordabilityHousehold,
@@ -290,7 +285,7 @@ class ProgramResult(BaseModel):
     piti: Money
     cash_to_close: Money
     dti_back: NonNegativeRatio
-    ltv: Rate
+    ltv: NonNegativeRatio
     eligible: bool
     blocker_reasons: list[str] = Field(default_factory=list)
     """When ``eligible=False``: the blocked_by citation read VERBATIM from
@@ -298,8 +293,7 @@ class ProgramResult(BaseModel):
     """
     eligible_reasons: list[str] = Field(default_factory=list)
     """Soft signals tagged at cell-construction time, e.g.,
-    "PMI-RATE-ESTIMATED-0.0075", "VA-RESIDUAL-SYNTHESIZED-V1",
-    "VA-FUNDING-FEE-FINANCED"."""
+    "PMI-RATE-ESTIMATED-0.0075", "VA-FUNDING-FEE-FINANCED"."""
     closing_costs_estimated: bool = True
     """Per Assumption A7: 3% of loan_amount estimate; flagged for the report."""
 
@@ -637,14 +631,6 @@ def _build_affordability_forward_request(
         DEFAULT_CONFORMING_15_TERM_MONTHS if program == "Conv15" else DEFAULT_CONFORMING_TERM_MONTHS
     )
 
-    va_inputs: VAInputs | None = None
-    if program == "VA30":
-        va_inputs = VAInputs(
-            region="northeast",
-            family_size=2,
-            actual_residual_income=quantize_cents(household.monthly_income * Decimal("0.5")),
-        )
-
     affordability_household = AffordabilityHousehold(
         location=LocationFIPS(
             state_fips=household.state_fips,
@@ -666,7 +652,7 @@ def _build_affordability_forward_request(
             insurance_monthly=monthly_insurance,
             hoa_monthly=monthly_hoa,
         ),
-        va=va_inputs,
+        va=None,
     )
 
     monthly_pmi_for_request: Money | None = None
@@ -706,7 +692,8 @@ def _build_program_result(
     the actual computed value.
 
     Iteration-2 fixes baked in:
-      B-2: VA cells synthesize VAInputs deterministically.
+      B-2: VA cells require explicit residual-income data and are blocked when
+      Phase 14's input models do not carry it.
       B-4: ProvenancedMoney unwrap routes through ``_unwrap_provenanced``.
       W-3: VA funding fee FINANCED INTO principal; monthly_mi=0 for VA.
     """
@@ -800,53 +787,50 @@ def _build_program_result(
         base_loan_amount, down_payment, ufmip_not_financed=Decimal("0")
     )
 
-    if program == "VA30":
-        eligible_reasons.append("VA-RESIDUAL-SYNTHESIZED-V1")
-
-    # Step 11 — affordability eligibility (B-2: VA-aware request construction)
-    forward_request = _build_affordability_forward_request(
-        program=program,
-        down_payment_pct=dp_pct,
-        listing=listing,
-        household=household,
-        annual_rate=annual_rate,
-        monthly_tax=monthly_tax,
-        monthly_insurance=monthly_insurance,
-        monthly_hoa=monthly_hoa,
-        monthly_mi=monthly_mi,
-        ltv=ltv,
-    )
-    dti_ceiling = _DTI_CEILING_BY_PROGRAM[program]
+    # Step 11 — affordability eligibility (B-2: VA residual data is required)
     eligible: bool
     blocker_reasons: list[str]
-    try:
-        response = affordability_evaluate(forward_request)
-    except NotImplementedError as exc:
-        # FHA / VA loan_amount above the county ceiling raises here (per
-        # lib/rules/loan_type.py L135). D-14-MATRIX-02 mandates explicit
-        # ineligible rows with populated numerics; mark the cell ineligible
-        # and surface a stable blocker code rather than propagating the crash.
+    if program == "VA30":
         eligible = False
-        if program == "FHA30":
-            blocker_reasons = [f"HUD-LIMIT-CEILING-EXCEEDED: {exc}"]
-        elif program == "VA30":
-            blocker_reasons = [f"VA-LIMIT-CEILING-EXCEEDED: {exc}"]
-        else:
-            blocker_reasons = [f"LOAN-TYPE-CLASSIFY-NOT-IMPLEMENTED: {exc}"]
+        blocker_reasons = ["VA-RESIDUAL-NOT-SUPPLIED"]
     else:
-        if program == "VA30" and dti_back > dti_ceiling:
+        forward_request = _build_affordability_forward_request(
+            program=program,
+            down_payment_pct=dp_pct,
+            listing=listing,
+            household=household,
+            annual_rate=annual_rate,
+            monthly_tax=monthly_tax,
+            monthly_insurance=monthly_insurance,
+            monthly_hoa=monthly_hoa,
+            monthly_mi=monthly_mi,
+            ltv=ltv,
+        )
+        try:
+            response = affordability_evaluate(forward_request)
+        except NotImplementedError as exc:
+            # FHA / VA loan_amount above the county ceiling raises here (per
+            # lib/rules/loan_type.py L135). D-14-MATRIX-02 mandates explicit
+            # ineligible rows with populated numerics; mark the cell ineligible
+            # and surface a stable blocker code rather than propagating the crash.
             eligible = False
-            blocker_reasons = ["DTI-CAP-VA"]
-        elif response.blocked:
-            eligible = False
-            # PATTERNS.md L437-442 — read VERBATIM, never reformat.
-            blocker_reasons = [response.blocked_by] if response.blocked_by is not None else []
-        elif cash_to_close > household.liquid_reserves:
-            eligible = False
-            blocker_reasons = ["CASH-TO-CLOSE-RESERVES"]
+            if program == "FHA30":
+                blocker_reasons = [f"HUD-LIMIT-CEILING-EXCEEDED: {exc}"]
+            elif program == "VA30":
+                blocker_reasons = [f"VA-LIMIT-CEILING-EXCEEDED: {exc}"]
+            else:
+                blocker_reasons = [f"LOAN-TYPE-CLASSIFY-NOT-IMPLEMENTED: {exc}"]
         else:
-            eligible = True
-            blocker_reasons = []
+            if response.blocked:
+                eligible = False
+                # PATTERNS.md L437-442 — read VERBATIM, never reformat.
+                blocker_reasons = [response.blocked_by] if response.blocked_by is not None else []
+            elif cash_to_close > household.liquid_reserves:
+                eligible = False
+                blocker_reasons = ["CASH-TO-CLOSE-RESERVES"]
+            else:
+                eligible = True
+                blocker_reasons = []
 
     # Step 12 — assemble ProgramResult with all numerics populated
     # regardless of eligibility (D-14-MATRIX-02).

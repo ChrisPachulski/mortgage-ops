@@ -589,8 +589,8 @@ class AffordabilityResponse(BaseModel):
     financed_loan_amount: Money | None = None  # loan_amount + UFMIP for FHA per D-03
     dti_front: NonNegativeRatio | None = None
     dti_back: NonNegativeRatio | None = None
-    ltv: Rate | None = None
-    cltv: Rate | None = None
+    ltv: NonNegativeRatio | None = None
+    cltv: NonNegativeRatio | None = None
     piti: Money | None = None
     monthly_pi: Money | None = None
     monthly_mi: Money | None = None
@@ -911,13 +911,8 @@ def evaluate_forward(request: ForwardModeRequest) -> AffordabilityResponse:
     piti = quantize_cents(piti_pre_quantize)
 
     # 9-10. LTV + CLTV (use financed_loan_amount for FHA UFMIP semantics).
-    #       Ratios quantized to 6 decimal places to fit Rate's max_digits=7
-    #       constraint (lib.models — `Rate = Annotated[Decimal, Field(...,
-    #       max_digits=7, decimal_places=6)]`). Round-trip closure (D-09)
-    #       exposes this requirement: a max_loan_amount divided by an
-    #       approximate property_value can produce 28-digit Decimal ratios
-    #       that fail Rate validation. Quantize ONCE at the response boundary,
-    #       same end-of-period discipline as money via quantize_cents.
+    #       Quantize to 6 decimal places at the response boundary so blocker
+    #       comparisons see stable ratios while still allowing over-100% values.
     ltv = quantize_rate(_compute_ltv(financed_loan_amount, request.property_value))
     cltv = quantize_rate(
         _compute_cltv(
@@ -1141,6 +1136,7 @@ def evaluate_reverse(request: ReverseModeRequest) -> AffordabilityResponse:
         # exactly).
         dti_limited_loan_amount = quantize_cents(raw_pv)
         max_loan_amount = dti_limited_loan_amount
+        down_payment_cap_bound = False
         if request.target_ltv_pct < Decimal("1"):
             down_payment_limited_loan_amount = quantize_cents(
                 request.down_payment
@@ -1155,10 +1151,21 @@ def evaluate_reverse(request: ReverseModeRequest) -> AffordabilityResponse:
                     else Decimal("0")
                 )
                 captured_warnings.append("DOWN-PAYMENT-CASH-BINDING")
+                down_payment_cap_bound = True
 
         # 10. Derive property_value for downstream classify call (NOT surfaced
         #     on response — reverse mode commits to LTV, not a specific property).
         derived_property_value = quantize_cents(max_loan_amount / request.target_ltv_pct)
+        if down_payment_cap_bound:
+            assumed_monthly_mi, _ = _compute_monthly_mi(
+                target_loan_type=request.target_loan_type,
+                financed_loan_amount=max_loan_amount,
+                property_value=derived_property_value,
+                annual_rate=request.annual_rate,
+                term_months=request.term_months,
+                monthly_pmi=request.monthly_pmi,
+                endorsement_date=endorsement_date,
+            )
 
         # 11. Loan-type classification (D-11 step 1)
         county = _build_county(request.household.location)

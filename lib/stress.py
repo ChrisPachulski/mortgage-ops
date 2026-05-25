@@ -92,6 +92,7 @@ IncomeReduction = Annotated[
     Decimal,
     Field(strict=True, max_digits=7, decimal_places=6, ge=Decimal("0"), lt=Decimal("1")),
 ]
+MAX_STRESS_SCENARIOS = 50
 
 # ---------------------------------------------------------------------------
 # Leaf models
@@ -214,8 +215,15 @@ class RateShockRequest(_CommonStressFields):
 
     mode: Literal["rate-shock"] = "rate-shock"
     loan: Loan
-    rates: list[Rate] = Field(min_length=1)
+    rates: list[Rate] = Field(min_length=1, max_length=MAX_STRESS_SCENARIOS)
     baseline_label: str | None = None  # if None, defaults to str(rates[0])
+
+    @model_validator(mode="after")
+    def _rates_unique(self) -> RateShockRequest:
+        duplicates = sorted({rate for rate in self.rates if self.rates.count(rate) > 1})
+        if duplicates:
+            raise ValueError(f"rate-shock rates must be unique; duplicates: {duplicates}")
+        return self
 
 
 class IncomeShockRequest(_CommonStressFields):
@@ -230,7 +238,7 @@ class IncomeShockRequest(_CommonStressFields):
 
     mode: Literal["income-shock"] = "income-shock"
     base_request: AffordabilityRequest
-    reductions: list[IncomeReduction] = Field(min_length=1)
+    reductions: list[IncomeReduction] = Field(min_length=1, max_length=MAX_STRESS_SCENARIOS)
     dti_threshold: Rate  # D-04: REQUIRED; no module default
 
 
@@ -248,7 +256,7 @@ class ArmResetRequest(_CommonStressFields):
 
     mode: Literal["arm-reset"] = "arm-reset"
     base_arm_request: ARMRequest
-    paths: list[RatePath] = Field(min_length=1)
+    paths: list[RatePath] = Field(min_length=1, max_length=MAX_STRESS_SCENARIOS)
 
 
 StressRequest = Annotated[
@@ -465,13 +473,17 @@ def _synthesize_index_path(
     Every reset trigger MUST be covered (alignment-validator on ARMRequest
     enforces this; misalignment would be a Plan-08-02 bug, not a runtime issue).
     """
+
+    def _non_negative_index(value: Decimal) -> Decimal:
+        return quantize_rate(max(Decimal("0"), value))
+
     triggers = compute_reset_triggers(arm_terms, term_months)
     if path.name == "parallel-shift":
         shift = path.params["shift_bps"]
         return [
             IndexPathEntry(
                 period=t,
-                value=quantize_rate(base_index + Decimal(shift) / Decimal("10000")),
+                value=_non_negative_index(base_index + Decimal(shift) / Decimal("10000")),
             )
             for t in triggers
         ]
@@ -480,7 +492,7 @@ def _synthesize_index_path(
         return [
             IndexPathEntry(
                 period=t,
-                value=quantize_rate(base_index + Decimal(k * step) / Decimal("10000")),
+                value=_non_negative_index(base_index + Decimal(k * step) / Decimal("10000")),
             )
             for k, t in enumerate(triggers)
         ]
@@ -491,9 +503,9 @@ def _synthesize_index_path(
     out: list[IndexPathEntry] = []
     for i, t in enumerate(triggers):
         if i < half:
-            v = quantize_rate(base_index - Decimal(drop) / Decimal("10000"))
+            v = _non_negative_index(base_index - Decimal(drop) / Decimal("10000"))
         else:
-            v = quantize_rate(base_index + Decimal(rise) / Decimal("10000"))
+            v = _non_negative_index(base_index + Decimal(rise) / Decimal("10000"))
         out.append(IndexPathEntry(period=t, value=v))
     return out
 

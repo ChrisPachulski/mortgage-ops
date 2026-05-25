@@ -263,7 +263,7 @@ def _model_output_matches_deterministic(
     ):
         return False
     if deterministic is None:
-        return True
+        return _has_required_fields(result)
     for key in ("zpid", "price", "zip", "property_type"):
         expected = deterministic.get(key)
         actual = result.get(key)

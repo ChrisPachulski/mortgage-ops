@@ -32,9 +32,9 @@ Excluded by design:
     marginal_tax_rate — those live on lib/profile.py:Profile per D-14-MODELS-02
     (Profile carries analysis-time preferences + eligibility booleans; Household
     carries financial state).
-  - No va_region / va_family_size / va_actual_residual_income — Plan 14-02
-    synthesizes those deterministically inside _build_program_result (tagged with
-    VA-RESIDUAL-SYNTHESIZED-V1 reason); keeping Household program-agnostic.
+  - No va_region / va_family_size / va_actual_residual_income — VA residual
+    approval requires explicit inputs outside this model; keeping Household
+    program-agnostic.
 """
 
 from __future__ import annotations
