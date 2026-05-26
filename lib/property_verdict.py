@@ -15,8 +15,8 @@ Cascade order (CONTEXT D-14-VERDICT-01..04):
   Level 3: WATCH if ANY eligible-at-preferred-DP program fails the income-shock
            stress (D-14-VERDICT-02 — DTI breaches program ceiling at income x 0.70)
            -> VERDICT_WATCH_STRESS_INCOME_FAIL
-  Level 4: WATCH if all eligible-at-preferred-DP cells are FHA30 AND FHA
-           monthly MIP > $300 (D-14-VERDICT-01 + D-14-VERDICT-03 GO-wins precedence)
+  Level 4: WATCH if all eligible-at-preferred-DP cells are FHA30; the headline
+           calls out when FHA monthly MIP is above $300
            -> VERDICT_WATCH_FHA_MIP_BURDEN
   Level 5: GO (D-14-VERDICT-03 — any non-FHA program eligible at preferred DP)
            -> VERDICT_GO
@@ -79,11 +79,10 @@ failing row; computed_value is the stressed DTI."""
 
 VERDICT_WATCH_FHA_MIP_BURDEN: Final[str] = "MIP-BURDEN-FHA"
 """Level 4 (D-14-VERDICT-01 + D-14-VERDICT-03 precedence) — emitted when ALL
-eligible-at-preferred-DP cells are FHA30 (no Conv/VA/Jumbo eligible) AND the
-FHA monthly MIP exceeds ``_MIP_BURDEN_THRESHOLD`` ($300/mo per Assumption A1).
-D-14-VERDICT-03 GO-wins precedence: this branch is SKIPPED when a non-FHA
-program is eligible at preferred DP — informational MIP burden does not
-downgrade a GO when a non-FHA path exists."""
+eligible-at-preferred-DP cells are FHA30 (no Conv/VA/Jumbo eligible). The
+headline distinguishes an above-threshold FHA monthly MIP from an FHA-only path
+with acceptable MIP. D-14-VERDICT-03 GO-wins precedence: this branch is SKIPPED
+when a non-FHA program is eligible at preferred DP."""
 
 VERDICT_GO: Final[str] = "GO-ALL-GREEN"
 """Level 5 (default; D-14-VERDICT-03) — emitted when at least one non-FHA
@@ -215,17 +214,21 @@ def synthesize(
 
     # -----------------------------------------------------------------------
     # Level 4 (D-14-VERDICT-01 + D-14-VERDICT-03 GO-wins precedence): WATCH
-    # if ONLY FHA30 is eligible at preferred DP AND FHA monthly MIP exceeds
-    # the burden threshold. The guard ``not non_fha_eligible`` enforces
-    # D-14-VERDICT-03: any non-FHA eligible cell short-circuits this branch
-    # straight to Level 5 (GO).
+    # if ONLY FHA30 is eligible at preferred DP. The guard ``not non_fha_eligible``
+    # enforces D-14-VERDICT-03: any non-FHA eligible cell short-circuits this
+    # branch straight to Level 5 (GO).
     # -----------------------------------------------------------------------
     if not non_fha_eligible:
         fha_cells = [c for c in eligible_at_preferred if c.program == "FHA30"]
-        if fha_cells and fha_cells[0].monthly_mi > _MIP_BURDEN_THRESHOLD:
+        if fha_cells:
+            headline = (
+                f"FHA-only path with monthly MIP {fha_cells[0].monthly_mi}"
+                if fha_cells[0].monthly_mi > _MIP_BURDEN_THRESHOLD
+                else f"FHA-only path eligible with monthly MIP {fha_cells[0].monthly_mi}"
+            )
             return Verdict(
                 level="WATCH",
-                headline_reason=(f"FHA-only path with monthly MIP {fha_cells[0].monthly_mi}"),
+                headline_reason=headline,
                 reasons=[
                     VerdictReason(
                         predicate_code=VERDICT_WATCH_FHA_MIP_BURDEN,

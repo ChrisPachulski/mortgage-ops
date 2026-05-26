@@ -59,7 +59,7 @@ fail-loud-via-list, not a raise):
 
 from __future__ import annotations
 
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 from typing import TYPE_CHECKING, Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -224,7 +224,13 @@ class RateShockRequest(_CommonStressFields):
     mode: Literal["rate-shock"] = "rate-shock"
     loan: Loan
     rates: list[Rate] = Field(min_length=1, max_length=MAX_STRESS_SCENARIOS)
-    baseline_label: str | None = None  # if None, defaults to str(rates[0])
+    baseline_label: str | None = Field(
+        default=None,
+        description=(
+            "Baseline rate label; matched by Decimal value against rates, "
+            "so trailing zeros do not affect matching. If None, defaults to str(rates[0])."
+        ),
+    )
 
     @model_validator(mode="after")
     def _rates_unique(self) -> RateShockRequest:
@@ -360,9 +366,18 @@ def rate_shock(
     # Resolve baseline label + payment.
     if baseline_label is None:
         baseline_label = rows[0].label
-    baseline_row = next((r for r in rows if r.label == baseline_label), None)
-    if baseline_row is None:
+        baseline_rate = rates[0]
+    else:
+        try:
+            baseline_rate = Decimal(baseline_label)
+        except (InvalidOperation, ValueError) as exc:
+            raise ValueError(
+                f"baseline_label {baseline_label!r} did not match any rate-shock row"
+            ) from exc
+    baseline_index = next((i for i, rate in enumerate(rates) if rate == baseline_rate), None)
+    if baseline_index is None:
         raise ValueError(f"baseline_label {baseline_label!r} did not match any rate-shock row")
+    baseline_row = rows[baseline_index]
     baseline_pi = baseline_row.monthly_pi
     assert baseline_pi is not None  # mypy narrow; constructed non-None above
 
@@ -523,6 +538,10 @@ def _synthesize_index_path(
             for k, t in enumerate(triggers)
         ]
     # fall-then-rise (closed-set; mypy exhaustiveness narrowed via Literal)
+    if len(triggers) < 2:
+        raise ValueError(
+            f"fall-then-rise ARM path requires at least two reset triggers; got {len(triggers)}"
+        )
     drop = path.params["drop_bps"]
     rise = path.params["rise_bps"]
     half = len(triggers) // 2

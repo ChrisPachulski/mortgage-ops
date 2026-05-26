@@ -563,6 +563,15 @@ class APRRequest(BaseModel):
             raise ValueError("payment_schedule MUST sum to at least 1 period")
         return self
 
+    @model_validator(mode="after")
+    def _actual_actual_requires_explicit_odd_fraction(self) -> APRRequest:
+        if self.day_count == "actual/actual" and self.odd_first_period_days > 0:
+            raise ValueError(
+                "odd_first_period_days is not supported with day_count='actual/actual'; "
+                "set PaymentScheduleEntry.unit_period_fraction from explicit dates instead"
+            )
+        return self
+
 
 class APRResponse(BaseModel):
     """Result of solve_apr() (boundary model).
@@ -730,18 +739,17 @@ def solve_apr(request: APRRequest) -> APRResponse:
     if request.odd_first_period_days > 0:
         # Wave 3 simplification: convert odd_first_period_days into a unit-period
         # fraction relative to the standard unit period. For 30/360 the standard
-        # unit is 30 days; for actual/365 it is 365/12 ~= 30.4167 days; for
-        # actual/actual the request lacks origination/first_payment dates here, so
-        # we use 30 days as a proxy (callers needing exact actual/actual fractions
-        # use _compute_odd_first_period_fraction with explicit dates and set
-        # PaymentScheduleEntry.unit_period_fraction directly, leaving
-        # odd_first_period_days=0).
+        # unit is 30 days; for actual/365 it is 365/12 ~= 30.4167 days.
+        # actual/actual is rejected at the APRRequest boundary because exact
+        # fractions require explicit origination and first-payment dates.
         if request.day_count == "30/360":
             unit_days_dec = Decimal("30")
         elif request.day_count == "actual/365":
             unit_days_dec = Decimal("365") / Decimal("12")
-        else:  # actual/actual — Wave 3 simplification: use 30 as proxy
-            unit_days_dec = Decimal("30")
+        else:  # actual/actual rejected by APRRequest validator above
+            raise ValueError(
+                "odd_first_period_days is not supported with day_count='actual/actual'"
+            )
         with localcontext(MONEY_CONTEXT):
             f_odd = Decimal(request.odd_first_period_days) / unit_days_dec
         if f_odd >= Decimal("1"):

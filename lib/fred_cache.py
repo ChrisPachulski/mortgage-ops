@@ -27,6 +27,7 @@ from __future__ import annotations
 import contextlib
 import json
 import os
+import re
 import sys
 import time
 import warnings
@@ -71,6 +72,17 @@ returned as ``None`` from ``_load_cache`` (falling through to the fetcher path
 per CR-01 — see ``get_cached_or_fetch``). Defending in ``_load_cache`` keeps
 ``is_fresh`` simple and matches the "shape-validate on read" pattern in
 ``_read_lock``."""
+
+SERIES_ID_PATTERN: Final[re.Pattern[str]] = re.compile(r"^[A-Z][A-Z0-9_]{0,63}$")
+"""FRED series IDs accepted by the cache filename boundary."""
+
+
+def _validate_series_id(series_id: str) -> str:
+    if not SERIES_ID_PATTERN.fullmatch(series_id):
+        raise ValueError(
+            f"FRED series_id must match /^[A-Z][A-Z0-9_]{{0,63}}$/ (got {series_id!r})"
+        )
+    return series_id
 
 
 def _is_decimal_string(value: Any) -> bool:
@@ -415,6 +427,7 @@ def with_cache_lock(
 
 def _cache_path(series_id: str, cache_dir: Path = CACHE_DIR) -> Path:
     """Per-series file: ``data/cache/fred_{series_id}.json`` (D-12-LIVE02-01)."""
+    series_id = _validate_series_id(series_id)
     return cache_dir / f"fred_{series_id}.json"
 
 
@@ -519,6 +532,7 @@ def get_cached_or_fetch(
     Note: CR-01 fixed a prior ``KeyError`` path from malformed cache entries;
     ``_load_cache`` now returns ``None`` for shape-invalid entries instead.
     """
+    series_id = _validate_series_id(series_id)
     entry = _load_cache(series_id, cache_dir)
     if entry is not None and is_fresh(entry):
         return entry
