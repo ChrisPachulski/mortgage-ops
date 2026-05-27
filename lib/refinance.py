@@ -183,8 +183,9 @@ class RefiCashflow(BaseModel):
     """A single refi cashflow with sign-direction enforced by Pydantic.
 
     REFI sign convention (D-04; references/refi-npv.md):
-      outflows negative (closing costs, additional payment when new_pi > old_pi)
-      inflows positive (savings, cash-out proceeds, tax shield)
+      outflows negative (closing costs, additional payment when new_pi > old_pi,
+      or reduced tax shield)
+      inflows positive (savings, cash-out proceeds, increased tax shield)
 
     The model rejects mismatches at construction time (SC-4): an outflow with
     a positive amount or an inflow with a negative amount raises ValidationError.
@@ -209,8 +210,8 @@ class RefiCashflow(BaseModel):
 
     direction: Literal["outflow", "inflow"]
     """Direction of the cashflow from the borrower's perspective. outflow = money
-    leaving the borrower (closing costs, additional payment); inflow = money
-    arriving (savings, cash-out proceeds, tax shield)."""
+    leaving the borrower or a reduced tax benefit; inflow = money arriving or an
+    increased tax benefit."""
 
     amount: Decimal = Field(strict=True, max_digits=14, decimal_places=2)
     """Signed Decimal amount. NOT Money (ge=0 would block negatives). The
@@ -223,7 +224,8 @@ class RefiCashflow(BaseModel):
         "monthly_payment_delta",
         "tax_shield",
     ]
-    """Category of the cashflow. tax_shield is after-tax mode only (D-09).
+    """Category of the cashflow. tax_shield is after-tax mode only (D-09) and
+    represents the new-vs-old deductible-interest tax delta.
     Phase 6 fixtures collectively cover every value (D-03 citation-coverage)."""
 
     @model_validator(mode="after")
@@ -759,26 +761,25 @@ def _compute_breakeven_npv(
 
 def _compute_tax_shield_cashflows(
     *,
+    old_loan: Loan,
     new_loan: Loan,
     marginal_tax_rate: Decimal,
     filing_status: Literal["single", "mfj", "mfs", "hoh"],
     has_grandfathered_debt: bool,
     horizon_months: int,
 ) -> list[RefiCashflow]:
-    """Per-period tax_shield inflow stream for the after-tax NPV overlay (D-09).
+    """Per-period tax-shield delta stream for the after-tax NPV overlay (D-09).
 
     Per 06-RESEARCH §"(f) Tax Treatment":
       qualified_limit = lib.rules.irs_pub936.qualified_loan_limit(
           filing_status, has_grandfathered_debt=...
       )
-      deductible_principal = min(new_principal, qualified_limit)
-      deduction_fraction   = deductible_principal / new_principal  (Decimal)
+      deduction_fraction = min(principal, qualified_limit) / principal
       For each period t in 1..horizon:
-          interest_t            = new_schedule.payments[t-1].interest
-          deductible_interest_t = interest_t * deduction_fraction
-          tax_shield_t          = deductible_interest_t * marginal_tax_rate
-          emit RefiCashflow(period=t, direction='inflow',
-                            amount=tax_shield_t, kind='tax_shield')
+          old_shield_t = old_deductible_interest_t * marginal_tax_rate
+          new_shield_t = new_deductible_interest_t * marginal_tax_rate
+          tax_delta_t  = new_shield_t - old_shield_t
+          emit tax_delta_t as an inflow when positive and an outflow when negative
 
     Tax-shield cashflows with quantized amount == $0.00 are dropped (no sign
     hazard at the validator, but they bloat the audit trail).
@@ -794,24 +795,53 @@ def _compute_tax_shield_cashflows(
         filing_status=filing_status,
         has_grandfathered_debt=has_grandfathered_debt,
     )
-    if new_loan.principal == Decimal("0"):
+    if old_loan.principal == Decimal("0") and new_loan.principal == Decimal("0"):
         return []
-    deductible_principal = min(new_loan.principal, qualified_limit)
-    deduction_fraction = deductible_principal / new_loan.principal
 
+    old_deduction_fraction = (
+        min(old_loan.principal, qualified_limit) / old_loan.principal
+        if old_loan.principal > Decimal("0")
+        else Decimal("0")
+    )
+    new_deduction_fraction = (
+        min(new_loan.principal, qualified_limit) / new_loan.principal
+        if new_loan.principal > Decimal("0")
+        else Decimal("0")
+    )
+
+    old_schedule = build_schedule(old_loan)
     new_schedule = build_schedule(new_loan)
     cashflows: list[RefiCashflow] = []
-    upper = min(horizon_months, len(new_schedule.payments))
+    upper = min(horizon_months, max(len(old_schedule.payments), len(new_schedule.payments)))
     for t in range(1, upper + 1):
-        interest_t = new_schedule.payments[t - 1].interest
-        deductible_interest_t = interest_t * deduction_fraction
-        tax_shield_t = quantize_cents(deductible_interest_t * marginal_tax_rate)
-        if tax_shield_t > Decimal("0.00"):
+        old_interest_t = (
+            old_schedule.payments[t - 1].interest
+            if t <= len(old_schedule.payments)
+            else Decimal("0.00")
+        )
+        new_interest_t = (
+            new_schedule.payments[t - 1].interest
+            if t <= len(new_schedule.payments)
+            else Decimal("0.00")
+        )
+        old_tax_shield_t = old_interest_t * old_deduction_fraction * marginal_tax_rate
+        new_tax_shield_t = new_interest_t * new_deduction_fraction * marginal_tax_rate
+        tax_delta_t = quantize_cents(new_tax_shield_t - old_tax_shield_t)
+        if tax_delta_t > Decimal("0.00"):
             cashflows.append(
                 RefiCashflow(
                     period=t,
                     direction="inflow",
-                    amount=tax_shield_t,
+                    amount=tax_delta_t,
+                    kind="tax_shield",
+                )
+            )
+        elif tax_delta_t < Decimal("0.00"):
+            cashflows.append(
+                RefiCashflow(
+                    period=t,
+                    direction="outflow",
+                    amount=tax_delta_t,
                     kind="tax_shield",
                 )
             )
@@ -859,12 +889,12 @@ def evaluate_rate_and_term(req: RateAndTermRefiRequest) -> RefiResponse:
       9. Construct RefiResponse with all populated fields.
 
     After-tax mode (D-09): when req.after_tax_mode=True, _compute_tax_shield_cashflows
-    (Plan 06-03 Task 2) builds the period-by-period tax_shield inflow stream from
-    IRS Pub 936 qualified_loan_limit (RUL-11); after_tax_npv on the response is
-    populated with NPV(cashflows + tax_shield_cashflows). When False, after_tax_npv
-    is None and no IRS predicate is invoked. StaleReferenceWarning surfaces from
-    the IRS reference data into RefiResponse.warnings per the module docstring
-    "Stale-warning expected behavior" contract.
+    (Plan 06-03 Task 2) builds the period-by-period old-vs-new tax_shield delta
+    stream from IRS Pub 936 qualified_loan_limit (RUL-11); after_tax_npv on the
+    response is populated with NPV(cashflows + tax_shield_cashflows). When False,
+    after_tax_npv is None and no IRS predicate is invoked. StaleReferenceWarning
+    surfaces from the IRS reference data into RefiResponse.warnings per the module
+    docstring "Stale-warning expected behavior" contract.
     """
     # 1-2: build loans
     old_loan = _build_old_loan_residual(
@@ -938,6 +968,7 @@ def evaluate_rate_and_term(req: RateAndTermRefiRequest) -> RefiResponse:
         with warnings.catch_warnings(record=True) as captured:
             warnings.simplefilter("always", StaleReferenceWarning)
             tax_shield_cashflows = _compute_tax_shield_cashflows(
+                old_loan=old_loan,
                 new_loan=new_loan,
                 marginal_tax_rate=req.marginal_tax_rate,
                 filing_status=req.filing_status,
@@ -1104,6 +1135,7 @@ def evaluate_cash_out(req: CashOutRefiRequest) -> RefiResponse:
         with warnings.catch_warnings(record=True) as captured:
             warnings.simplefilter("always", StaleReferenceWarning)
             tax_shield_cashflows = _compute_tax_shield_cashflows(
+                old_loan=old_loan,
                 new_loan=new_loan,
                 marginal_tax_rate=req.marginal_tax_rate,
                 filing_status=req.filing_status,

@@ -43,14 +43,14 @@ Run `--help` first. Build the JSON input matching the documented shape
   "arm_terms": {
     "initial_period_months": 84,
     "reset_period_months": 12,
-    "margin": "0.02750",
-    "periodic_cap": "0.02000",
-    "lifetime_cap": "0.05000",
-    "floor": "0.02000",
-    "index_name": "SOFR",
-    "rounding_increment": "0.00125"
+    "initial_cap_bps": 500,
+    "periodic_cap_bps": 200,
+    "lifetime_cap_bps": 500,
+    "floor_rate": "0.020000",
+    "margin_bps": 275,
+    "index_series_id": "SOFR1Y"
   },
-  "assumed_index_rate": "0.05000",
+  "assumed_index_rate": "0.050000",
   "index_path": []
 }
 ```
@@ -58,15 +58,15 @@ Run `--help` first. Build the JSON input matching the documented shape
 Notes on ARM-specific fields (per `--help`):
 
 - `arm_terms`: 8 required fields + optional `note_rate`
-  (`initial_period_months`, `reset_period_months`, `margin`,
-  `periodic_cap`, `lifetime_cap`, `floor`, `index_name`,
-  `rounding_increment`).
+  (`initial_period_months`, `reset_period_months`, `initial_cap_bps`,
+  `periodic_cap_bps`, `lifetime_cap_bps`, `floor_rate`, `margin_bps`,
+  `index_series_id`).
 - `assumed_index_rate`: caller-supplied fallback when `index_path` is
   empty (Phase 5 D-13 caller-supplies-index discipline; FRED MCP
   populates at narration time per Phase 12).
 - `index_path`: list of `{period, value}` entries overriding
   `assumed_index_rate` at named periods (e.g.,
-  `[{"period": 85, "value": "0.04500"}]` for the first reset).
+  `[{"period": 85, "value": "0.045000"}]` for the first reset).
 
 All money/rate fields MUST be JSON strings.
 

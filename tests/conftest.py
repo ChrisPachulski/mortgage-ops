@@ -205,6 +205,7 @@ REPO_ROOT: Path = Path(__file__).resolve().parent.parent
 def node_orchestration_run(
     *args: str,
     db_path: Path | None = None,
+    env_overrides: dict[str, str] | None = None,
     timeout: int = 30,
     check: bool = False,
 ) -> subprocess.CompletedProcess[str]:
@@ -221,6 +222,8 @@ def node_orchestration_run(
                  scripts target a throwaway tmp DB. When None, scripts use the
                  default data/mortgage-ops.duckdb (Phase 9 init-db.mjs honors
                  this env-var override per Plan 09-02).
+        env_overrides: Additional environment variables for test-only path
+                 isolation, such as markdown output directories.
         timeout: subprocess timeout in seconds (default 30; parallel-write
                  test in Plan 09-06 overrides to 60).
         check: When True, raises CalledProcessError on non-zero exit. Default
@@ -232,6 +235,8 @@ def node_orchestration_run(
     env = os.environ.copy()
     if db_path is not None:
         env["MORTGAGE_OPS_DB_PATH"] = str(db_path)
+    if env_overrides is not None:
+        env.update(env_overrides)
     return subprocess.run(
         ["node", *args],
         cwd=str(REPO_ROOT),

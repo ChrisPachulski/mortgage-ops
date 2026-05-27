@@ -1,7 +1,7 @@
 {
   "citation": "Fannie LLPA Matrix §B5-1 (Pitfall 6 boundary: 700 -> 700-719 bucket)",
   "source_url": "https://singlefamily.fanniemae.com/media/9391/display",
-  "comment": "Hand-calc: credit_score=700 -> '700-719' bucket; LTV=80 -> '75.01-80' bucket; primary, purchase, 1-unit. Base 125 bps + 0 purpose + 0 occupancy + 0 unit = 125 bps.",
+  "comment": "Hand-calc: credit_score=700 -> '700-719' bucket; LTV=80 -> '75.01-80' bucket; primary, purchase, 1-unit. Official purchase cell = 137.5 bps + 0 occupancy + 0 unit = 137.5 bps.",
   "credit_score": 700,
   "ltv_pct": "80.00",
   "loan_purpose": "purchase",
@@ -9,5 +9,5 @@
   "unit_count": 1,
   "expected_credit_score_bucket": "700-719",
   "expected_ltv_bucket": "75.01-80",
-  "expected_llpa_bps": "125"
+  "expected_llpa_bps": "137.5"
 }

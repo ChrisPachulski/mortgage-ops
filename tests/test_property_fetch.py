@@ -21,10 +21,9 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
-
-import pytest
 
 SCRIPT_PATH: Path = (
     Path(__file__).resolve().parent.parent
@@ -89,6 +88,9 @@ def _run_cli(
     cmd = [sys.executable, str(SCRIPT_PATH), *args]
     merged_env = dict(os.environ)
     merged_env.pop("ANTHROPIC_API_KEY", None)
+    tmp_root = Path(tempfile.mkdtemp(prefix="mortgage-ops-property-fetch-"))
+    merged_env.setdefault("MORTGAGE_OPS_PROPERTY_CACHE_DIR", str(tmp_root / "cache"))
+    merged_env.setdefault("MORTGAGE_OPS_DB_PATH", str(tmp_root / "mortgage-ops.duckdb"))
     if env:
         merged_env.update(env)
     return subprocess.run(
@@ -267,18 +269,13 @@ def test_outer_try_catches_unexpected_failure(tmp_path: Path) -> None:
     assert env["error"].startswith("unexpected_failure")
 
 
-@pytest.mark.skipif(
-    not (Path(__file__).resolve().parent.parent / "data").exists(),
-    reason="data/ dir absent; Q1 cache test depends on data/cache writability",
-)
 def test_cli_writes_html_cache_on_round_1(tmp_path: Path) -> None:
     """Q1 default: successful shape-1 emission writes
-    data/cache/property-{zpid}.json so a later --user-provided round-trip
+    property-{zpid}.json so a later --user-provided round-trip
     can skip Sonnet entirely."""
-    # Clean any stale cache file from a previous run so the assertion is real.
-    cache_file = Path(__file__).resolve().parent.parent / "data" / "cache" / "property-12345.json"
-    if cache_file.exists():
-        cache_file.unlink()
+    cache_dir = tmp_path / "cache"
+    db_path = tmp_path / "mortgage-ops.duckdb"
+    cache_file = cache_dir / "property-12345.json"
 
     html_path = _write_html_with_sonnet_fixture(tmp_path, sonnet_dict=None)
     payload = '{"price":"625000","zip":"94110","property_type":"SFH"}'
@@ -288,9 +285,14 @@ def test_cli_writes_html_cache_on_round_1(tmp_path: Path) -> None:
         str(html_path),
         "--user-provided",
         payload,
+        env={
+            "MORTGAGE_OPS_PROPERTY_CACHE_DIR": str(cache_dir),
+            "MORTGAGE_OPS_DB_PATH": str(db_path),
+        },
     )
     assert result.returncode == 0
     env = json.loads(result.stdout)
     # Sanity: only assert cache write on a true shape-1 outcome.
     assert env["awaiting_user_input"] is False
     assert cache_file.exists(), f"expected Q1 cache file at {cache_file}"
+    assert db_path.exists(), f"expected property persistence DB at {db_path}"

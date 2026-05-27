@@ -1067,7 +1067,7 @@ def test_refi_after_tax_mode_engine(
     test_refi_cashflow_kind_citation_coverage, which globs *.json and asserts
     expected.cashflows_kinds contains the required Literals — it does NOT call
     evaluate(). The pinned numerical contract (npv='60705.48',
-    after_tax_npv='96584.52', tax_shield_sample.amount='300.00') was therefore
+    after_tax_npv='43912.40', tax_shield_sample.amount='-120.00') was therefore
     unprotected at engine-output level. A regression in
     _compute_tax_shield_cashflows (wrong period indexing, wrong
     qualified_loan_limit branch, wrong marginal_tax_rate multiplication) would
@@ -1096,9 +1096,9 @@ def test_refi_after_tax_mode_engine(
     assert Decimal(resp.after_tax_npv) == Decimal(expected["after_tax_npv"]), (
         f"after_tax_npv drift: got {resp.after_tax_npv} != expected {expected['after_tax_npv']}"
     )
-    # Tax shield strictly improves PV (more money in borrower's pocket)
-    assert Decimal(resp.after_tax_npv) > Decimal(resp.npv), (
-        "after_tax_npv should exceed pre-tax npv (tax shield is an inflow stream)"
+    # Lower interest reduces the tax shield relative to the old loan.
+    assert Decimal(resp.after_tax_npv) < Decimal(resp.npv), (
+        "after_tax_npv should be below pre-tax npv when the new loan reduces deductible interest"
     )
 
     # First-period tax_shield cashflow pinned (D-03 kind coverage anchor)

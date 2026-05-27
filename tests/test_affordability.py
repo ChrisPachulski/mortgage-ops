@@ -636,6 +636,14 @@ def test_AFFD_05_reverse_round_trip(
     assert rev_resp.mode == "reverse"
     assert rev_resp.max_loan_amount is not None
     assert rev_resp.assumed_ltv_pct == rev_req.target_ltv_pct
+    expected = fx["expected_response"]
+    assert rev_resp.max_loan_amount == Decimal(expected["max_loan_amount"])
+    assert rev_resp.implied_pi == Decimal(expected["implied_pi"])
+    assert rev_resp.assumed_monthly_mi == Decimal(expected["assumed_monthly_mi"])
+    assert rev_resp.blocked == expected["blocked"]
+    assert rev_resp.blocked_by == expected["blocked_by"]
+    for warning in expected["warnings"]:
+        assert warning in rev_resp.warnings
     # Round-trip: build forward request from reverse output
     derived_property_value = (rev_resp.max_loan_amount / rev_req.target_ltv_pct).quantize(
         Decimal("0.01")
@@ -661,6 +669,44 @@ def test_AFFD_05_reverse_round_trip(
     assert fwd_resp.dti_back - rev_req.max_dti <= Decimal("0.0001")
     # D-18 dollar exact equality
     assert fwd_resp.loan_amount == rev_resp.max_loan_amount
+
+
+def test_reverse_down_payment_cap_implied_pi_matches_forward_monthly_pi(
+    affordability_fixture: Callable[[str], dict[str, Any]],
+) -> None:
+    fx = affordability_fixture("reverse_conventional_pmi_down_payment_cap_binds")
+    rev_req = _build_request_from_fixture(fx["request"])
+    assert isinstance(rev_req, ReverseModeRequest)
+    rev_resp = evaluate(rev_req)
+    expected = fx["expected_response"]
+
+    assert rev_resp.max_loan_amount == Decimal(expected["max_loan_amount"])
+    assert rev_resp.implied_pi == Decimal(expected["implied_pi"])
+    assert rev_resp.assumed_monthly_mi == Decimal(expected["assumed_monthly_mi"])
+    for warning in expected["warnings"]:
+        assert warning in rev_resp.warnings
+
+    assert rev_resp.max_loan_amount is not None
+    derived_property_value = (rev_resp.max_loan_amount / rev_req.target_ltv_pct).quantize(
+        Decimal("0.01")
+    )
+    fwd_req = ForwardModeRequest(
+        mode="forward",
+        household=rev_req.household,
+        max_dti=rev_req.max_dti,
+        target_loan_type=rev_req.target_loan_type,
+        term_months=rev_req.term_months,
+        annual_rate=rev_req.annual_rate,
+        apr=rev_req.apr,
+        apor=rev_req.apor,
+        monthly_pmi=rev_req.monthly_pmi,
+        endorsement_date_override=rev_req.endorsement_date_override,
+        junior_liens=rev_req.junior_liens,
+        loan_amount=rev_resp.max_loan_amount,
+        property_value=derived_property_value,
+    )
+    fwd_resp = evaluate(fwd_req)
+    assert fwd_resp.monthly_pi == rev_resp.implied_pi
 
 
 def test_AFFD_06_joint_applicants(
@@ -937,6 +983,27 @@ def test_evaluate_ltv_ceiling_blocker_conventional() -> None:
     assert resp.blocked_by == "LTV-CEILING-CONVENTIONAL"
 
 
+def test_evaluate_cltv_ceiling_blocker_conventional() -> None:
+    """Conventional loan with acceptable LTV but over-ceiling CLTV blocks on CLTV."""
+    req = ForwardModeRequest(
+        mode="forward",
+        household=_make_clean_household(),
+        max_dti=Decimal("0.430000"),
+        target_loan_type="conventional",
+        term_months=360,
+        annual_rate=Decimal("0.065000"),
+        monthly_pmi=Decimal("250.00"),
+        loan_amount=Decimal("450000.00"),
+        property_value=Decimal("500000.00"),
+        junior_liens=[Decimal("50000.00")],
+    )
+    resp = evaluate(req)
+    assert resp.ltv == Decimal("0.900000")
+    assert resp.cltv == Decimal("1.000000")
+    assert resp.blocked is True
+    assert resp.blocked_by == "CLTV-CEILING-CONVENTIONAL"
+
+
 def test_evaluate_classify_blocker_preserved_for_jumbo() -> None:
     """Task 2 Test 5: jumbo-classify-step blocker (Plan 04-02) precedes precedence pipeline."""
     household = _make_clean_household(
@@ -1171,31 +1238,37 @@ def test_evaluate_blockers_appends_soft_warnings_even_when_blocked() -> None:
 
 def test_blocked_by_citation_coverage() -> None:
     """RUL-12/13 inheritance: every BLOCKED_BY_* template introduced in
-    lib/affordability.py is exercised by at least one fixture."""
+    lib/affordability.py is exercised by at least one scenario."""
     fixtures_dir = Path(__file__).resolve().parent / "fixtures" / "affordability"
     all_blocked_by: list[str | None] = []
     for fp in sorted(fixtures_dir.glob("*.json")):
         data = json.loads(fp.read_text())
         if data.get("expected_response") is not None:
             all_blocked_by.append(data["expected_response"].get("blocked_by"))
-
-    # Every non-VA template format must appear in at least one fixture.
-    templates_to_check = [
-        BLOCKED_BY_LTV_CEILING_TEMPLATE,  # LTV-CEILING-{LOAN_TYPE} — exercised? optional
-        BLOCKED_BY_DTI_CAP_TEMPLATE,  # DTI-CAP-{LOAN_TYPE} — fha fixture
-    ]
-    # DTI-CAP-* must be exercised (forward_fha_above_dti_cap)
-    dti_prefix = BLOCKED_BY_DTI_CAP_TEMPLATE.split("{")[0]  # "DTI-CAP-"
-    assert any(bb is not None and bb.startswith(dti_prefix) for bb in all_blocked_by), (
-        "No fixture exercises DTI-CAP-{LOAN_TYPE} citation template"
+    inline_cltv_req = ForwardModeRequest(
+        mode="forward",
+        household=_make_clean_household(),
+        max_dti=Decimal("0.430000"),
+        target_loan_type="conventional",
+        term_months=360,
+        annual_rate=Decimal("0.065000"),
+        monthly_pmi=Decimal("250.00"),
+        loan_amount=Decimal("450000.00"),
+        property_value=Decimal("500000.00"),
+        junior_liens=[Decimal("50000.00")],
     )
+    all_blocked_by.append(evaluate(inline_cltv_req).blocked_by)
 
-    # LTV-CEILING-* is exercised by the test_evaluate_ltv_ceiling_blocker_conventional
-    # test (constructs the request inline rather than via fixture); citation-coverage
-    # check at the fixture-level documents only the fixture-driven coverage.
-    # This branch is intentionally permissive — Plan 04-04 already pins LTV-CEILING-
-    # via inline tests.
-    _ = templates_to_check  # documented intent; LTV-CEILING is inline-pinned
+    # Every non-VA template format must appear in at least one scenario.
+    templates_to_check = [
+        BLOCKED_BY_CLTV_CEILING_TEMPLATE,
+        BLOCKED_BY_DTI_CAP_TEMPLATE,
+    ]
+    for template in templates_to_check:
+        prefix = template.split("{")[0]
+        assert any(bb is not None and bb.startswith(prefix) for bb in all_blocked_by), (
+            f"No scenario exercises {template} citation template"
+        )
 
     # FHFA-LIMIT-* (loan-type-classify mismatch) — substring "FHFA-LIMIT-"
     assert any(bb is not None and bb.startswith("FHFA-LIMIT-") for bb in all_blocked_by), (

@@ -18,9 +18,86 @@ from __future__ import annotations
 import json
 from typing import Any
 
+DECIMAL_JSON_NUMBER_FIELDS = frozenset(
+    {
+        "actual_residual_income",
+        "annual_rate",
+        "apor",
+        "apr",
+        "assumed_index_rate",
+        "assumed_ltv_pct",
+        "assumed_monthly_mi",
+        "auto",
+        "balance",
+        "cash_out_amount",
+        "closing_costs",
+        "credit_cards",
+        "cumulative_interest",
+        "cumulative_principal",
+        "current_balance",
+        "current_housing_payment",
+        "delta_vs_baseline_monthly",
+        "delta_vs_baseline_pct",
+        "discount_rate_annual",
+        "disclosed_apr",
+        "down_payment",
+        "dti_threshold",
+        "extra_principal",
+        "finance_charges",
+        "financed_loan_amount",
+        "floor_rate",
+        "fred_15_override",
+        "fred_30_override",
+        "gross_monthly_income",
+        "highest_rate",
+        "implied_pi",
+        "insurance_monthly",
+        "interest",
+        "junior_liens",
+        "loan_amount",
+        "marginal_tax_rate",
+        "max_dti",
+        "max_loan_amount",
+        "max_payment",
+        "monthly_mi",
+        "monthly_pi",
+        "monthly_pmi",
+        "monthly_savings",
+        "new_annual_rate",
+        "new_loan_monthly_pi_override",
+        "new_principal",
+        "note_rate",
+        "old_annual_rate",
+        "old_loan_balance",
+        "other",
+        "payment",
+        "piti",
+        "points_cost",
+        "principal",
+        "property_tax_monthly",
+        "property_value",
+        "rates",
+        "reductions",
+        "student_loans",
+        "target_ltv_pct",
+        "total_gross_monthly_income",
+        "total_interest",
+        "total_monthly_debts",
+        "unit_period_fraction",
+        "value",
+    }
+)
+
+
+def _path_targets_decimal_field(path: list[str | int]) -> bool:
+    for part in reversed(path):
+        if isinstance(part, str):
+            return part in DECIMAL_JSON_NUMBER_FIELDS
+    return False
+
 
 def find_json_float_loc(raw: str) -> tuple[list[str | int], str] | None:
-    """Walk parsed JSON and return (loc-path, decimal-string) of the first JSON float.
+    """Walk parsed JSON and return the first JSON number used for a Decimal field.
 
     Pydantic v2 strict mode accepts JSON numbers for Decimal fields by design
     (https://docs.pydantic.dev/2.13/concepts/json/#json-parsing) — JSON has no
@@ -28,10 +105,11 @@ def find_json_float_loc(raw: str) -> tuple[list[str | int], str] | None:
     the project's money-discipline contract (CLAUDE.md FND-01) and D-19 require
     money/rate fields to be JSON STRINGS (e.g. "400000.00"). So we pre-parse
     with `parse_float=Decimal` to mark JSON-numbers-with-decimal-points as
-    Decimal instances, then walk the parsed tree to find the first Decimal —
-    its loc-path identifies the offending field.
+    Decimal instances, then walk the parsed tree to find the first Decimal or
+    integer JSON number at a known Decimal field path. Its loc-path identifies
+    the offending field.
 
-    Returns None if the input has no JSON floats or fails JSON parsing
+    Returns None if the input has no offending JSON numbers or fails JSON parsing
     (in the latter case, Pydantic surfaces its canonical error downstream).
 
     Lifted verbatim from scripts/amortize.py:70-123 + scripts/affordability.py:70-123
@@ -55,6 +133,12 @@ def find_json_float_loc(raw: str) -> tuple[list[str | int], str] | None:
         node, path = stack.pop()
         if isinstance(node, _Decimal):
             return (path, str(node))
+        if (
+            isinstance(node, int)
+            and not isinstance(node, bool)
+            and _path_targets_decimal_field(path)
+        ):
+            return (path, str(node))
         if isinstance(node, dict):
             for k, v in reversed(list(node.items())):
                 stack.append((v, [*path, k]))
@@ -68,7 +152,7 @@ def make_decimal_type_envelope(
     loc: list[str | int],
     input_str: str,
 ) -> list[dict[str, Any]]:
-    """Construct the 6-key Pydantic-shape envelope for a JSON-float rejection.
+    """Construct the 6-key Pydantic-shape envelope for a JSON-number rejection.
 
     Single source of truth for the WR-02 envelope shape. Mirrors the inline
     construction at scripts/amortize.py:196-213 + scripts/affordability.py:236-273
@@ -93,7 +177,7 @@ def make_decimal_type_envelope(
             "loc": loc,
             "msg": (
                 "Input should be a valid decimal — JSON string required "
-                "for money/rate fields per D-19 (JSON floats are rejected "
+                "for money/rate fields per D-19 (JSON numbers are rejected "
                 "at the boundary)"
             ),
             "input": input_str,

@@ -17,13 +17,11 @@ Coverage:
   - FHA fha_high_balance: loan > floor + listed high-cost county at <= ceiling
   - FHA above-county-ceiling: NotImplementedError (jumbo FHA not in v1)
   - FHA missing-county above floor: MissingCountyDataError (loud)
-  - VA va_standard: loan <= baseline in any county (REF-01 wired in plan 02-03;
-    VA full-entitlement uses FHFA conforming limits since 2020 Blue Water Navy
-    Vietnam Veterans Act)
-  - VA va_high_balance: loan > baseline + listed high-cost county at <= ceiling
-  - VA above-county-ceiling: NotImplementedError (partial-entitlement VA, which
-    requires gap-down-payment, is not a v1 product)
-  - VA missing-county above baseline: MissingCountyDataError (loud)
+  - VA va_standard: loan <= baseline in any county
+  - VA full entitlement: loan > baseline classifies as va_high_balance without
+    a county cap
+  - VA partial entitlement: county-limit math still fails loud when county is
+    missing or the loan exceeds the county ceiling
   - unit_count > 1 stubbed with NotImplementedError (multi-family deferred)
 """
 
@@ -190,8 +188,7 @@ def test_fha_unlisted_county_above_floor_raises_missing_county_data() -> None:
 
 def test_va_program_classifies_below_baseline_as_va_standard() -> None:
     # Hand: $400,000 VA loan in Autauga AL (NOT in high_cost_counties; baseline
-    # applies). $400k <= $832,750 → va_standard. (VA full-entitlement uses FHFA
-    # conforming limits since 2020 Blue Water Navy Vietnam Veterans Act.)
+    # applies). $400k <= $832,750 → va_standard.
     fx = _fx("loan_type_va_standard.json")
     county = _county_from_fx(fx["county"])
     result = classify(
@@ -204,8 +201,8 @@ def test_va_program_classifies_below_baseline_as_va_standard() -> None:
 
 
 def test_va_program_classifies_above_baseline_high_cost_county_as_va_high_balance() -> None:
-    # Hand: $1,000,000 VA loan in San Francisco. $832,750 < $1M <= $1,249,125
-    # SF ceiling → va_high_balance.
+    # Hand: $1,000,000 VA loan with full entitlement. $1M > $832,750 baseline
+    # but full-entitlement VA has no county loan limit, so va_high_balance.
     fx = _fx("loan_type_va_high_balance.json")
     county = _county_from_fx(fx["county"])
     result = classify(
@@ -217,22 +214,44 @@ def test_va_program_classifies_above_baseline_high_cost_county_as_va_high_balanc
     assert result == fx["expected_loan_type"] == "va_high_balance"
 
 
-def test_va_program_above_county_ceiling_raises() -> None:
-    # Hand: $1,500,000 VA loan in San Francisco. Above $1,249,125 ceiling →
-    # full entitlement insufficient; partial-entitlement VA (gap-down-payment)
-    # not a v1 product. Loud error.
+def test_va_program_full_entitlement_above_county_ceiling_is_still_va_high_balance() -> None:
+    # Hand: VA says full-entitlement borrowers do not have a county loan limit;
+    # lender approval/appraisal support are outside this classifier.
+    result = classify(
+        Decimal("1500000.00"),
+        county=County(state_fips="06", county_fips="075", name="San Francisco CA"),
+        program="va",
+    )
+    assert result == "va_high_balance"
+
+
+def test_va_program_full_entitlement_above_baseline_missing_county_allowed() -> None:
+    # Hand: full-entitlement VA limit math does not need county data.
+    assert classify(Decimal("900000.00"), county=None, program="va") == "va_high_balance"
+
+
+def test_va_program_partial_entitlement_above_county_ceiling_raises() -> None:
+    # Hand: partial-entitlement VA still uses FHFA county-limit math; a loan
+    # above the county ceiling may require a gap down payment, deferred from v1.
     with pytest.raises(NotImplementedError, match="exceeds county ceiling"):
         classify(
             Decimal("1500000.00"),
             county=County(state_fips="06", county_fips="075", name="San Francisco CA"),
             program="va",
+            va_full_entitlement=False,
         )
 
 
-def test_va_program_above_baseline_missing_county_raises() -> None:
-    # Hand: $900k > $832,750 baseline; without county we cannot classify. Fail loud.
-    with pytest.raises(MissingCountyDataError, match="VA loan_amount"):
-        classify(Decimal("900000.00"), county=None, program="va")
+def test_va_program_partial_entitlement_above_baseline_missing_county_raises() -> None:
+    # Hand: partial-entitlement VA needs county data to calculate remaining
+    # bonus entitlement and any gap down payment.
+    with pytest.raises(MissingCountyDataError, match="county required"):
+        classify(
+            Decimal("900000.00"),
+            county=None,
+            program="va",
+            va_full_entitlement=False,
+        )
 
 
 def test_unit_count_above_one_raises_not_implemented() -> None:

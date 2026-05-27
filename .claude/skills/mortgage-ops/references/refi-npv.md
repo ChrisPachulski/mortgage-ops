@@ -402,22 +402,25 @@ The cross-field validator `_validate_common` raises `ValueError` if
 
 ```
 qualified_limit = qualified_loan_limit(filing_status, ...)  # RUL-11; lib.rules.irs_pub936
-deductible_principal = min(new_loan_principal, qualified_limit)
-deduction_fraction = deductible_principal / new_loan_principal
+old_fraction = min(old_loan_principal, qualified_limit) / old_loan_principal
+new_fraction = min(new_loan_principal, qualified_limit) / new_loan_principal
 
 For each period t in 1..N:
-    interest_t = new_schedule.payments[t-1].interest
-    deductible_interest_t = interest_t * deduction_fraction
-    tax_shield_t = deductible_interest_t * marginal_tax_rate
+    old_deductible_interest_t = old_schedule.payments[t-1].interest * old_fraction
+    new_deductible_interest_t = new_schedule.payments[t-1].interest * new_fraction
+    tax_delta_t = (new_deductible_interest_t - old_deductible_interest_t) * marginal_tax_rate
 
-    Append RefiCashflow(period=t, direction="inflow",
-                        amount=tax_shield_t, kind="tax_shield")
+    Append RefiCashflow(period=t,
+                        direction="inflow" if tax_delta_t > 0 else "outflow",
+                        amount=tax_delta_t,
+                        kind="tax_shield")
 ```
 
-The tax-shield cashflows enter `_compute_npv` alongside the savings
-stream; the engine surfaces both `npv` (pre-tax) and `after_tax_npv`
-(includes tax shield) on `RefiResponse` so the consumer sees both
-numbers without a second engine call.
+The tax-shield delta cashflows enter `_compute_npv` alongside the
+savings stream; the engine surfaces both `npv` (pre-tax) and
+`after_tax_npv` (including the old-vs-new tax-shield delta) on
+`RefiResponse` so the consumer sees both numbers without a second
+engine call.
 
 ### 6.3 Grandfathering ($1M vs $750k caps)
 

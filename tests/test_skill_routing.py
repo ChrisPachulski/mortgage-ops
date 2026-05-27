@@ -104,6 +104,15 @@ def test_property_mode_row0_present(skill_root: Path) -> None:
     )
 
 
+def test_points_mode_route_present(skill_root: Path) -> None:
+    """Discount-points questions must route deterministically to points_breakeven.py."""
+    skill_md = (skill_root / "SKILL.md").read_text()
+    head = "\n".join(skill_md.splitlines()[:200])
+    assert "discount points" in head
+    assert "points_breakeven.py" in head
+    assert (skill_root / "modes" / "points.md").is_file()
+
+
 # ---------------------------------------------------------------------------
 # MODE-01 — modes/property.md presence + cross-reference
 # ---------------------------------------------------------------------------
@@ -199,3 +208,10 @@ def test_property_mode_documents_envelope_codes(skill_root: Path) -> None:
             f"modes/property.md does not document envelope error code {code!r} "
             f"(MODE-01 + PATTERNS L79 edge-cases convention)"
         )
+
+
+@_xfail_unless_property_mode_exists()
+def test_property_mode_fred_cache_recovery_uses_real_cli_shape(skill_root: Path) -> None:
+    body = (skill_root / "modes" / "property.md").read_text()
+    assert "fred_cli.py\n  MORTGAGE30US --latest" in body
+    assert "fred_cli.py\n  get MORTGAGE30US --latest" not in body

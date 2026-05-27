@@ -145,9 +145,11 @@ def main() -> int:
 
         # D-12-LIVE02-01 cache-first ordering: a valid fresh local cache MUST be
         # readable without FRED_API_KEY.
-        from lib.fred_cache import _load_cache, get_cached_or_fetch, is_fresh
+        from lib.fred_cache import CACHE_DIR, _load_cache, get_cached_or_fetch, is_fresh
 
-        cached_entry = _load_cache(series_id)
+        cache_dir = Path(os.environ.get("MORTGAGE_OPS_FRED_CACHE_DIR", CACHE_DIR))
+
+        cached_entry = _load_cache(series_id, cache_dir=cache_dir)
         if cached_entry is not None and is_fresh(cached_entry):
             log_event(
                 ctx,
@@ -250,7 +252,7 @@ def main() -> int:
 
         # CR-02: D-12-LIVE02-01 + Pitfall 1 always-exit-0 contract.
         try:
-            return _emit(get_cached_or_fetch(series_id, fetcher=_fetcher))
+            return _emit(get_cached_or_fetch(series_id, cache_dir=cache_dir, fetcher=_fetcher))
         except Exception as exc:  # load-bearing always-exit-0 contract per D-12-LIVE02-01
             return _emit(
                 {

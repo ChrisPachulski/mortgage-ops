@@ -41,8 +41,11 @@ def _node_run(script: str, timeout: int = 10) -> subprocess.CompletedProcess[str
 
 
 @pytest.fixture(autouse=True)
-def _cleanup_lock() -> Iterator[None]:
-    """Remove any stale data/.lock from prior test runs before AND after."""
+def _cleanup_lock(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    """Use a per-test lock path so unit tests never remove the shared writer lock."""
+    global LOCK_PATH
+    LOCK_PATH = tmp_path / ".lock"
+    monkeypatch.setenv("MORTGAGE_OPS_LOCK_PATH", str(LOCK_PATH))
     if LOCK_PATH.exists():
         LOCK_PATH.unlink()
     yield

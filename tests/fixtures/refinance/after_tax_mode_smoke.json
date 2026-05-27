@@ -1,7 +1,7 @@
 {
   "_meta": {
     "oracle_source": "Plan 06-05 Task 6: D-09 after-tax mode smoke fixture; cites RUL-11 (IRS Pub 936 qualified_loan_limit)",
-    "derivation": "engine-derived 2026-05-02 via lib.refinance.evaluate (Phase 5 D-04 [REVISED] hand_calc_check witness pattern). after_tax_npv > pre-tax npv as expected (tax shield improves PV). Sample tax_shield cashflow pinned for D-03 citation-coverage (kind='tax_shield' surface).",
+    "derivation": "Engine-derived tax-shield-delta fixture. after_tax_npv < pre-tax npv because the lower-rate new loan reduces the borrower's mortgage-interest tax shield relative to the old loan. Sample tax_shield cashflow pinned for D-03 citation-coverage (kind='tax_shield' surface).",
     "citation": "06-RESEARCH §'(f) Tax Treatment per IRS Pub 936' + D-09 (after_tax_mode opt-in) + D-03 (RefiCashflow.kind Literal coverage); REFI-09 cross-cutting closure for after-tax mode."
   },
   "request": {
@@ -22,7 +22,7 @@
   "expected": {
     "refi_kind": "rate_and_term",
     "npv": "60705.48",
-    "after_tax_npv": "96584.52",
+    "after_tax_npv": "43912.40",
     "old_monthly_pi": "2120.34",
     "new_monthly_pi": "1753.77",
     "monthly_savings": "366.57",
@@ -39,8 +39,8 @@
     "analysis_horizon_months_used": 300,
     "tax_shield_sample": {
       "period": 1,
-      "direction": "inflow",
-      "amount": "300.00",
+      "direction": "outflow",
+      "amount": "-120.00",
       "kind": "tax_shield"
     },
     "cashflows_kinds": ["closing_costs", "monthly_savings", "tax_shield"]

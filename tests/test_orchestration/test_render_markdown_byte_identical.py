@@ -1,7 +1,6 @@
 """Phase 9 render-markdown byte-identical end-to-end test (ROADMAP SC-4).
 
-SC-4: data/loans.md and data/scenarios.md regenerate via --render-markdown
-byte-identical.
+SC-4: loans.md and scenarios.md regenerate via --render-markdown byte-identical.
 
 This is the END-TO-END companion to Wave 4's
 test_render_markdown.py::test_render_markdown_byte_identical (which is
@@ -22,15 +21,11 @@ import hashlib
 import json
 from typing import TYPE_CHECKING
 
-from tests.conftest import REPO_ROOT, node_orchestration_run
+from tests.conftest import node_orchestration_run
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-# The render-markdown subcommand writes to FIXED paths under data/
-# (Plan 09-04 D-04-07: paths NOT env-var-overridable in v1).
-LOANS_MD: Path = REPO_ROOT / "data" / "loans.md"
-SCENARIOS_MD: Path = REPO_ROOT / "data" / "scenarios.md"
 GENERATED_HEADER: str = "<!-- Generated from data/mortgage-ops.duckdb"
 
 
@@ -43,12 +38,10 @@ def test_render_markdown_byte_identical_end_to_end(tmp_path: Path) -> None:
     render -> render -> SHA256-compare. Both files (loans.md +
     scenarios.md) must hash identically across consecutive runs."""
     db_path = tmp_path / "test_render_e2e.duckdb"
-
-    # Cleanup any leftover render artifacts (Plan 09-04 D-04-07: render
-    # writes to fixed paths under data/, regardless of DB location).
-    for f in (LOANS_MD, SCENARIOS_MD):
-        if f.exists():
-            f.unlink()
+    markdown_dir = tmp_path / "markdown"
+    markdown_env = {"MORTGAGE_OPS_MARKDOWN_DIR": str(markdown_dir)}
+    loans_md = markdown_dir / "loans.md"
+    scenarios_md = markdown_dir / "scenarios.md"
 
     try:
         # 1. Init schema
@@ -93,23 +86,29 @@ def test_render_markdown_byte_identical_end_to_end(tmp_path: Path) -> None:
 
         # 3. First render
         r1 = node_orchestration_run(
-            "orchestration/db-write.mjs", "render-markdown", db_path=db_path
+            "orchestration/db-write.mjs",
+            "render-markdown",
+            db_path=db_path,
+            env_overrides=markdown_env,
         )
         assert r1.returncode == 0, f"render run 1 failed: {r1.stderr}"
-        assert LOANS_MD.exists(), f"loans.md not created at {LOANS_MD}"
-        assert SCENARIOS_MD.exists(), f"scenarios.md not created at {SCENARIOS_MD}"
+        assert loans_md.exists(), f"loans.md not created at {loans_md}"
+        assert scenarios_md.exists(), f"scenarios.md not created at {scenarios_md}"
 
-        hash_loans_1 = _sha256(LOANS_MD)
-        hash_scenarios_1 = _sha256(SCENARIOS_MD)
+        hash_loans_1 = _sha256(loans_md)
+        hash_scenarios_1 = _sha256(scenarios_md)
 
         # 4. Second render against same DB state — must produce identical bytes
         r2 = node_orchestration_run(
-            "orchestration/db-write.mjs", "render-markdown", db_path=db_path
+            "orchestration/db-write.mjs",
+            "render-markdown",
+            db_path=db_path,
+            env_overrides=markdown_env,
         )
         assert r2.returncode == 0, f"render run 2 failed: {r2.stderr}"
 
-        hash_loans_2 = _sha256(LOANS_MD)
-        hash_scenarios_2 = _sha256(SCENARIOS_MD)
+        hash_loans_2 = _sha256(loans_md)
+        hash_scenarios_2 = _sha256(scenarios_md)
 
         # 5. Byte-identical contract (load-bearing)
         assert hash_loans_1 == hash_loans_2, (
@@ -127,8 +126,8 @@ def test_render_markdown_byte_identical_end_to_end(tmp_path: Path) -> None:
 
         # 6. Mandatory <!-- Generated from ... --> header at line 1 of both
         # (Wave 4 D-04-01 — load-bearing per Plan 09-PATTERNS.md)
-        loans_text = LOANS_MD.read_text()
-        scenarios_text = SCENARIOS_MD.read_text()
+        loans_text = loans_md.read_text()
+        scenarios_text = scenarios_md.read_text()
         assert loans_text.startswith(GENERATED_HEADER), (
             f"loans.md missing 'Generated from' header at line 1; "
             f"first 80 chars: {loans_text[:80]!r}"
@@ -148,6 +147,5 @@ def test_render_markdown_byte_identical_end_to_end(tmp_path: Path) -> None:
 
     finally:
         # Cleanup generated artifacts (gitignored but tidy)
-        for f in (LOANS_MD, SCENARIOS_MD):
-            if f.exists():
-                f.unlink()
+        loans_md.unlink(missing_ok=True)
+        scenarios_md.unlink(missing_ok=True)

@@ -46,6 +46,16 @@ portability seam."""
 ARM_MODULE_PATH: Path = Path(__file__).resolve().parent.parent / "lib" / "arm.py"
 """For lazy-import test (D-18 inherited): assert lib.arm is NOT imported by --help."""
 
+ARM_MODE_PATH: Path = (
+    Path(__file__).resolve().parent.parent
+    / ".claude"
+    / "skills"
+    / "mortgage-ops"
+    / "modes"
+    / "arm.md"
+)
+"""Skill-mode documentation whose JSON example must stay valid ARMRequest input."""
+
 
 def _make_5_1_arm_request(
     principal: str = "400000.00",
@@ -237,6 +247,23 @@ def test_arm_terms_field_set() -> None:
     extra_errors = [e for e in exc.value.errors() if "extra_field" in e["loc"]]
     assert len(extra_errors) >= 1
     assert extra_errors[0]["type"] == "extra_forbidden"
+
+
+def test_arm_mode_json_example_matches_arm_request_schema() -> None:
+    """ARM mode's documented JSON example must validate against ARMRequest."""
+    import json
+
+    from lib.arm import ARMRequest
+
+    text = ARM_MODE_PATH.read_text(encoding="utf-8")
+    start = text.index("```json") + len("```json")
+    end = text.index("```", start)
+    payload = json.loads(text[start:end])
+
+    request = ARMRequest.model_validate(payload)
+    assert request.arm_terms.initial_cap_bps == 500
+    assert request.arm_terms.margin_bps == 275
+    assert request.arm_terms.index_series_id == "SOFR1Y"
 
 
 def test_arm_terms_missing_floor_rate_raises() -> None:

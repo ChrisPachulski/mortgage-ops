@@ -166,7 +166,7 @@ Orchestrator error codes (one bullet per code):
   Point user at `config/household.example.yml`; DO NOT auto-edit (User Layer).
 - `profile_yaml_invalid` → same recovery, with `config/profile.example.yml`.
 - `fred_cache_cold` → run `python .claude/skills/mortgage-ops/scripts/fred_cli.py
-  get MORTGAGE30US --latest` (and `MORTGAGE15US --latest` if Conv15 in scope); retry.
+  MORTGAGE30US --latest` (and `MORTGAGE15US --latest` if Conv15 in scope); retry.
 - `output_dir_unwritable` → defensive; should never trigger with default
   `--output-dir reports/`. Ask user to inspect `reports/` permissions.
 - `missing_county_data` → listing's ZIP absent from

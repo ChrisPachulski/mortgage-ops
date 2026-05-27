@@ -1168,11 +1168,6 @@ def evaluate_reverse(request: ReverseModeRequest) -> AffordabilityResponse:
             )
             if down_payment_limited_loan_amount < max_loan_amount:
                 max_loan_amount = down_payment_limited_loan_amount
-                max_pi = quantize_cents(
-                    max_pi * max_loan_amount / dti_limited_loan_amount
-                    if dti_limited_loan_amount > Decimal("0")
-                    else Decimal("0")
-                )
                 captured_warnings.append("DOWN-PAYMENT-CASH-BINDING")
                 down_payment_cap_bound = True
 
@@ -1189,6 +1184,11 @@ def evaluate_reverse(request: ReverseModeRequest) -> AffordabilityResponse:
                 monthly_pmi=request.monthly_pmi,
                 endorsement_date=endorsement_date,
             )
+        max_pi = quantize_cents(
+            -npf.pmt(monthly_rate, request.term_months, max_loan_amount)
+            if max_loan_amount > Decimal("0")
+            else Decimal("0")
+        )
 
         # 11. Loan-type classification (D-11 step 1)
         county = _build_county(request.household.location)

@@ -26,7 +26,7 @@
 //   (Pitfall 3: would break byte-equality across runs).
 
 import { Database } from 'duckdb-async';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { withLock } from './lockfile.mjs';
@@ -35,8 +35,10 @@ const ORCH_DIR = dirname(fileURLToPath(import.meta.url));
 const MORTGAGE_OPS = dirname(ORCH_DIR);
 const DB_PATH = process.env.MORTGAGE_OPS_DB_PATH ||
                 join(MORTGAGE_OPS, 'data', 'mortgage-ops.duckdb');
-const LOANS_MD = join(MORTGAGE_OPS, 'data', 'loans.md');
-const SCENARIOS_MD = join(MORTGAGE_OPS, 'data', 'scenarios.md');
+const MARKDOWN_DIR = process.env.MORTGAGE_OPS_MARKDOWN_DIR ||
+                     join(MORTGAGE_OPS, 'data');
+const LOANS_MD = join(MARKDOWN_DIR, 'loans.md');
+const SCENARIOS_MD = join(MARKDOWN_DIR, 'scenarios.md');
 
 // ===== Arg parser (ported from career-ops/scripts/db-write.mjs:55-83) =====
 
@@ -204,6 +206,9 @@ async function cmdInsertReport(db, flags) {
 async function cmdQuery(db, flags) {
   const { sql } = flags;
   if (!sql) throw new Error('--sql required');
+  if (!isReadOnlySql(sql)) {
+    throw new Error('query only accepts a single read-only SQL statement');
+  }
   const rows = await db.all(sql);
   // BigInt JSON serialization workaround: career-ops jsonReplacer pattern.
   // BigInt only appears for INTEGER columns (id, term_months, period). Money
@@ -211,6 +216,38 @@ async function cmdQuery(db, flags) {
   const replacer = (_key, value) =>
     typeof value === 'bigint' ? Number(value) : value;
   console.log(JSON.stringify(rows, replacer));
+}
+
+function stripLeadingSqlComments(sql) {
+  let s = sql.trimStart();
+  while (s.startsWith('--') || s.startsWith('/*')) {
+    if (s.startsWith('--')) {
+      const newline = s.indexOf('\n');
+      s = newline === -1 ? '' : s.slice(newline + 1).trimStart();
+      continue;
+    }
+    const end = s.indexOf('*/');
+    if (end === -1) {
+      return '';
+    }
+    s = s.slice(end + 2).trimStart();
+  }
+  return s;
+}
+
+function isReadOnlySql(sql) {
+  const stripped = stripLeadingSqlComments(sql);
+  const trimmed = stripped.trim();
+  if (!trimmed) return false;
+  const statements = trimmed.split(';').map(s => s.trim()).filter(Boolean);
+  if (statements.length !== 1) return false;
+
+  const normalized = statements[0].toLowerCase();
+  const startsReadOnly = /^(select|with|show|describe|pragma)\b/.test(normalized);
+  if (!startsReadOnly) return false;
+
+  const writeTokens = /\b(insert|update|delete|drop|create|alter|truncate|merge|copy|attach|detach|vacuum|checkpoint|call|set|reset)\b/;
+  return !writeTokens.test(normalized);
 }
 
 async function cmdRenderMarkdown(db, _flags, positional) {
@@ -222,6 +259,7 @@ async function cmdRenderMarkdown(db, _flags, positional) {
   }
 
   const results = {};
+  mkdirSync(MARKDOWN_DIR, { recursive: true });
 
   if (target === 'loans' || target === 'all') {
     // Plan 09-04 D-04-02: every DECIMAL column CAST AS VARCHAR (PATTERNS Critical Issue 2)
@@ -308,6 +346,7 @@ function usage() {
     '  query            --sql "<SELECT ...>"',
     '',
     'Env: MORTGAGE_OPS_DB_PATH overrides default data/mortgage-ops.duckdb',
+    '     MORTGAGE_OPS_MARKDOWN_DIR overrides markdown output directory',
   ].join('\n');
 }
 

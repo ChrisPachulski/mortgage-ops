@@ -14,18 +14,18 @@ What this predicate decides:
   per Fannie's published Single-Family Selling Guide §B5-1 matrix.
 
 The lookup composes:
-  - base_llpa_bps[credit_score_bucket][ltv_bucket]  (2D base matrix)
-  - loan_purpose_addons[loan_purpose][ltv_bucket]   (cash-out refi add-on)
+  - loan_purpose_llpa_bps[loan_purpose][credit_score_bucket][ltv_bucket]
   - occupancy_addons[occupancy]                     (second_home / investment)
   - unit_count_addons[str(unit_count)]              (2-4 unit add-on)
 
 Pitfall 6 (LLPA tier-boundary off-by-one): credit-score 720 belongs to the
 "720-739" bucket, NOT "700-719". Bucket helpers `_credit_score_bucket` and
-`_ltv_bucket` are unit-tested at every boundary (700, 719, 720, 739, 740).
+`_ltv_bucket` are unit-tested at every boundary (700, 719, 720, 739, 740,
+759, 760, 779, 780).
 
-Per CONTEXT.md D-04: full matrix is shipped — every cell of the (credit-score
-bucket * LTV bucket * loan purpose * occupancy * unit count) cube has a
-concrete bps value; no stub branches.
+Per CONTEXT.md D-04: the current official loan-purpose grids are shipped. Cash-out
+refinance only has Fannie cells through 80% LTV; higher-LTV cash-out requests
+raise LookupError instead of fabricating values.
 Per CONTEXT.md D-05: data/reference/fannie-llpa-matrix.yml is implementation-
 detail under RUL-02; NOT a new REF-ID.
 
@@ -67,8 +67,8 @@ def _credit_score_bucket(credit_score: int) -> str:
     """Map credit score (300-850) to its Fannie matrix bucket id.
 
     Bucket boundaries are LOW-INCLUSIVE, HIGH-INCLUSIVE per the YAML.
-    Pitfall 6: 720 -> "720-739" (NOT "700-719"); 740 -> "740-759-or-better"
-    (NOT "720-739"). Tested independently at every boundary.
+    Pitfall 6: 720 -> "720-739" (NOT "700-719"); the current official grid
+    also separates 740-759, 760-779, and 780+ tiers.
     """
     raw = load_reference("fannie-llpa-matrix")
     buckets = raw["credit_score_buckets"]
@@ -134,8 +134,8 @@ def compute_llpa(
 ) -> Decimal:
     """Return Fannie LLPA in basis points for the given borrower/loan profile.
 
-    Composes base matrix + loan-purpose add-on + occupancy add-on + unit-count
-    add-on. All four components come from data/reference/fannie-llpa-matrix.yml
+    Composes the loan-purpose matrix + occupancy add-on + unit-count add-on.
+    All components come from data/reference/fannie-llpa-matrix.yml
     (implementation-detail under RUL-02 per CONTEXT.md D-05).
 
     Per CONTEXT.md `<specifics>` fail-loud discipline: raises LookupError when
@@ -147,20 +147,13 @@ def compute_llpa(
     ltv_b = _ltv_bucket(ltv_pct)
 
     try:
-        base_bps = Decimal(raw["base_llpa_bps"][cs_bucket][ltv_b])
+        base_bps = Decimal(raw["loan_purpose_llpa_bps"][loan_purpose][cs_bucket][ltv_b])
     except KeyError as exc:
         raise LookupError(
             f"No Fannie LLPA cell for "
-            f"credit_score_bucket={cs_bucket!r}, ltv_bucket={ltv_b!r} "
+            f"loan_purpose={loan_purpose!r}, credit_score_bucket={cs_bucket!r}, "
+            f"ltv_bucket={ltv_b!r} "
             f"(CONTEXT.md fail-loud discipline; check YAML)"
-        ) from exc
-
-    try:
-        purpose_addon = Decimal(raw["loan_purpose_addons"][loan_purpose][ltv_b])
-    except KeyError as exc:
-        raise LookupError(
-            f"No Fannie LLPA loan_purpose_addon for "
-            f"loan_purpose={loan_purpose!r}, ltv_bucket={ltv_b!r}"
         ) from exc
 
     try:
@@ -173,4 +166,4 @@ def compute_llpa(
     except KeyError as exc:
         raise LookupError(f"No Fannie LLPA unit_count_addon for unit_count={unit_count!r}") from exc
 
-    return base_bps + purpose_addon + occ_addon + unit_addon
+    return base_bps + occ_addon + unit_addon

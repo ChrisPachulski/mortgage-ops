@@ -15,7 +15,7 @@ Two ratios reported, both as decimals (display layer formats as `43.0%` per D-NU
 - **Front-end DTI (housing-only):** `monthly_PITI / gross_monthly_income`
 - **Back-end DTI (housing + other monthly debts):** `(monthly_PITI + monthly_debts) / gross_monthly_income`
 
-Where `gross_monthly_income` = sum of applicant gross monthly incomes. ATR/QM caps the back-end at 0.43 (CFPB §1026.43(c)(2); compensating factors permit non-QM at higher levels).
+Where `gross_monthly_income` = sum of applicant gross monthly incomes. Treat the DTI target as a borrower-affordability and program-overlay input, not the General QM legal test. Current General QM is price-based: `lib.rules.atr_qm` compares APR against APOR thresholds, while lender and agency overlays may still impose DTI limits for qualification.
 
 ### LTV / CLTV
 
@@ -69,8 +69,8 @@ Affordability checks are NOT independent. They run in a fixed first-binding-rule
 1. **classify** (`lib.rules.loan_type.classify`) — must succeed (loan must be a recognized program: conventional/conforming, conventional/jumbo, FHA, VA, USDA). Failure → `BLOCKED_BY_CLASSIFY`.
 2. **USDA income test** (`lib.rules.usda`) — applicant household income must be ≤ 115% area median (USDA Section 502 Direct rule). Only run for USDA candidates.
 3. **LTV / CLTV bounds** (`lib.rules.loan_type._max_ltv`) — per program (e.g., FHA min downpayment = 3.5%, conventional ≥ 3% on first-time-buyer programs).
-4. **DTI** — back-end DTI vs program cap (ATR/QM = 0.43; FHA manual underwriting up to 0.50 with comp factors).
-5. **ATR/QM** (`lib.rules.atr_qm`) — Reg Z 12 CFR §1026.43 ability-to-repay; QM safe harbor vs rebuttable presumption vs non-QM.
+4. **DTI** — back-end DTI vs the caller-supplied affordability/program overlay cap (for example, FHA manual-underwriting overlays can allow higher DTIs with compensating factors).
+5. **ATR/QM** (`lib.rules.atr_qm`) — Reg Z 12 CFR §1026.43 ability-to-repay; General QM safe harbor/rebuttable-presumption status is determined by the APR-vs-APOR price thresholds implemented in the rules module.
 6. **VA residual income** (`lib.rules.va_residual_income`) — VA-only; minimum residual income table per region + family size (M26-7 Ch 4).
 
 Output schema: `affordable: false`, `blocked_by: "BLOCKED_BY_DTI"`, `citation: "CFPB §1026.43(c)(2)"`, plus the binding rule's pass/fail data for narration.
@@ -80,7 +80,7 @@ Output schema: `affordable: false`, `blocked_by: "BLOCKED_BY_DTI"`, `citation: "
 - `lib/affordability.py` — `evaluate_forward`, `evaluate_reverse`, blocker chain
 - `lib/rules/loan_type.py` — `classify()` dispatcher (`references/gse-limits.md`)
 - `lib/rules/conventional_pmi.py`, `lib/rules/fha_mip.py` — MI predicates (`references/mip-pmi.md`)
-- `lib/rules/atr_qm.py` — ATR/QM cap and compensating-factors logic
+- `lib/rules/atr_qm.py` — ATR/QM APR-vs-APOR price-threshold logic
 - `lib/rules/va_residual_income.py` — VA M26-7 grid
 - `lib/rules/usda.py` — USDA Section 502 income test
 - `.claude/skills/mortgage-ops/scripts/affordability.py` — JSON-in/JSON-out CLI

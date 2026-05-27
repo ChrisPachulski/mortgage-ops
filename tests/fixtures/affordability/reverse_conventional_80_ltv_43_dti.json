@@ -3,7 +3,7 @@
   "id": "reverse_conventional_80_ltv_43_dti",
   "source": "ROADMAP SC-2 round-trip anchor; D-09 closure verified at Plan 04-03",
   "rounding": "ROUND_HALF_UP",
-  "notes": "Reverse conventional 80% LTV / 43% DTI / 7%/30yr / joint income $10k / down_payment $100k / no debts / no escrow. SC-2 round-trip closure: forward(reverse).dti_back \u2264 0.43 + Decimal('0.0001') AND forward.loan_amount == reverse.max_loan_amount EXACTLY (D-18 dollar exact equality). BLOCKER 2: household.size=2 = len(applicants).",
+  "notes": "Reverse conventional 80% LTV / 43% DTI / 7%/30yr / joint income $10k / down_payment $100k / no debts / no escrow. The down-payment cap binds: $100k at 80% LTV supports a $400k loan. SC-2 round-trip closure: forward(reverse).dti_back <= 0.43 + Decimal('0.0001') AND forward.loan_amount == reverse.max_loan_amount EXACTLY (D-18 dollar exact equality). BLOCKER 2: household.size=2 = len(applicants).",
   "request": {
     "household": {
       "location": {
@@ -59,6 +59,7 @@
     "blocked": false,
     "blocked_by": null,
     "warnings": [
+      "DOWN-PAYMENT-CASH-BINDING",
       "ATR-QM-NOT-EVALUATED-MISSING-APR-OR-APOR",
       "FANNIE-LLPA-720-739-75-80"
     ],
@@ -74,8 +75,8 @@
     "piti": null,
     "monthly_pi": null,
     "monthly_mi": null,
-    "max_loan_amount": "646322.54",
-    "implied_pi": "4300.00",
+    "max_loan_amount": "400000.00",
+    "implied_pi": "2661.21",
     "assumed_ltv_pct": "0.800000",
     "assumed_monthly_mi": "0.00"
   }

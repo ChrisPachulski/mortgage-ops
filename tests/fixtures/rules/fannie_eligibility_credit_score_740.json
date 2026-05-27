@@ -1,13 +1,13 @@
 {
-  "citation": "Fannie LLPA Matrix §B5-1 (Pitfall 6 boundary: 740 -> 740-759-or-better bucket, NOT 720-739)",
+  "citation": "Fannie LLPA Matrix §B5-1 (Pitfall 6 boundary: 740 -> 740-759 bucket, NOT 720-739)",
   "source_url": "https://singlefamily.fanniemae.com/media/9391/display",
-  "comment": "Hand-calc: credit_score=740 -> '740-759-or-better' bucket; LTV=80 -> '75.01-80'. Base 0 + 0 + 0 + 0 = 0 bps. Top-tier credit, no LLPA on standard purchase.",
+  "comment": "Hand-calc: credit_score=740 -> '740-759' bucket; LTV=80 -> '75.01-80'. Official purchase cell = 87.5 bps.",
   "credit_score": 740,
   "ltv_pct": "80.00",
   "loan_purpose": "purchase",
   "occupancy": "primary",
   "unit_count": 1,
-  "expected_credit_score_bucket": "740-759-or-better",
+  "expected_credit_score_bucket": "740-759",
   "expected_ltv_bucket": "75.01-80",
-  "expected_llpa_bps": "0"
+  "expected_llpa_bps": "87.5"
 }

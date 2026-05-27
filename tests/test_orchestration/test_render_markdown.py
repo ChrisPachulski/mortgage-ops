@@ -8,7 +8,10 @@ consecutive renders against the same DB state produce IDENTICAL bytes.
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 
 def test_render_markdown_byte_identical(tmp_path: Path) -> None:
@@ -28,33 +31,10 @@ def test_render_markdown_byte_identical(tmp_path: Path) -> None:
 
     db_path = tmp_path / "test.duckdb"
 
-    # CAVEAT (Warning #8 / D-04-07 / D-03-06 risk acceptance): this test is
-    # NOT tmp_path-isolated for the rendered markdown files. Render-markdown
-    # writes to data/loans.md + data/scenarios.md (paths baked into
-    # orchestration/db-write.mjs as MORTGAGE_OPS / 'data' / ...; not
-    # env-var-overridable in v1 per D-04-07). If a developer is mid-session
-    # with a populated production DB and this test runs against the real
-    # data/ directory, it will OVERWRITE live data/loans.md and
-    # data/scenarios.md with the test fixtures' synthetic content. The risk
-    # is accepted because (a) those files are gitignored generated artifacts
-    # (Plan 09-02), (b) regenerating from the real DB is a single
-    # `node orchestration/db-write.mjs render-markdown` away, and (c) the
-    # try/finally cleanup unlinks both files at the end of the test, so a
-    # subsequent production render starts from a known-empty state. The
-    # alternative (env-var-overridable render paths) is deferred to a
-    # future phase per D-04-07.
-    #
-    # We isolate the DB to tmp_path by overriding MORTGAGE_OPS_DB_PATH;
-    # only the markdown output paths are not isolated.
-    repo_root = Path(__file__).resolve().parent.parent.parent
-    loans_md = repo_root / "data" / "loans.md"
-    scenarios_md = repo_root / "data" / "scenarios.md"
-
-    # Cleanup any leftovers from prior runs
-    if loans_md.exists():
-        loans_md.unlink()
-    if scenarios_md.exists():
-        scenarios_md.unlink()
+    markdown_dir = tmp_path / "markdown"
+    markdown_env = {"MORTGAGE_OPS_MARKDOWN_DIR": str(markdown_dir)}
+    loans_md = markdown_dir / "loans.md"
+    scenarios_md = markdown_dir / "scenarios.md"
 
     try:
         # 1. Init schema in tmp DB
@@ -92,6 +72,7 @@ def test_render_markdown_byte_identical(tmp_path: Path) -> None:
             "orchestration/db-write.mjs",
             "render-markdown",
             db_path=db_path,
+            env_overrides=markdown_env,
         )
         assert r1.returncode == 0, f"render 1 failed: {r1.stderr}"
         assert loans_md.exists(), f"loans.md not created at {loans_md}"
@@ -104,6 +85,7 @@ def test_render_markdown_byte_identical(tmp_path: Path) -> None:
             "orchestration/db-write.mjs",
             "render-markdown",
             db_path=db_path,
+            env_overrides=markdown_env,
         )
         assert r2.returncode == 0, f"render 2 failed: {r2.stderr}"
         loans_bytes_b = loans_md.read_bytes()
@@ -141,8 +123,5 @@ def test_render_markdown_byte_identical(tmp_path: Path) -> None:
         assert "0.070000" in loans_text
 
     finally:
-        # Cleanup generated artifacts (gitignored but tidy)
-        if loans_md.exists():
-            loans_md.unlink()
-        if scenarios_md.exists():
-            scenarios_md.unlink()
+        loans_md.unlink(missing_ok=True)
+        scenarios_md.unlink(missing_ok=True)

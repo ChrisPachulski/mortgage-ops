@@ -26,6 +26,7 @@ Determine the mode from the user's input:
 | Single loan + payment question (`"$400k @ 6.5%/30yr, what's my payment?"`) | `evaluate` | `scripts/amortize.py` + `lib.affordability` composition |
 | Multiple offers, "compare", "rank by NPV" | `compare` | `scripts/refi_npv.py` per offer |
 | "refi", "refinance", "should I refi" | `refinance` | `scripts/refi_npv.py` |
+| "points", "discount points", "are points worth it" | `points` | `scripts/points_breakeven.py` |
 | "afford", "qualify", "max loan", "DTI" | `affordability` | `scripts/affordability.py` |
 | "stress", "shock", "what if rates jump", "sweep" | `stress` | `scripts/stress_test.py` |
 | "amortization schedule", "amortize", "extra principal" | `amortize` | `scripts/amortize.py` |
@@ -41,13 +42,14 @@ Precedence (top wins; UI-SPEC §a):
                                   → `property` (HIGHEST — overrides ALL verbs and explicit slash-commands)
 1. Explicit sub-command           → `/mortgage-ops {mode}`
 2. "refinance" / "refi" verb      → `refinance` (overrides arm/amortize/stress vocabulary)
-3. "afford" / "borrow" verb       → `affordability` (overrides amortize)
-4. "compare" / multi-offer        → `compare` (overrides evaluate)
-5. "stress" / "sweep" + range     → `stress`
-6. "ARM" / "X/Y" + no refi verb   → `arm`
-7. "amortization" / "schedule"    → `amortize`
-8. Single offer + judgment verb   → `evaluate`
-9. Fallback                       → discovery menu (see bottom)
+3. "points" / "discount points"   → `points`
+4. "afford" / "borrow" verb       → `affordability` (overrides amortize)
+5. "compare" / multi-offer        → `compare` (overrides evaluate)
+6. "stress" / "sweep" + range     → `stress`
+7. "ARM" / "X/Y" + no refi verb   → `arm`
+8. "amortization" / "schedule"    → `amortize`
+9. Single offer + judgment verb   → `evaluate`
+10. Fallback                      → discovery menu (see bottom)
 
 When precedence is tied, ask ONE clarifying question (not two):
 
@@ -154,6 +156,7 @@ eagerly read references):
 | "is mortgage interest deductible", "tax implications", "Pub 936" | `references/tax-deductibility.md` |
 | "why don't your numbers match Excel", "how do you round", "spreadsheet tradition" | `references/spreadsheet-conventions.md` |
 | "what's the current rate", "FRED", "MORTGAGE30US", "how do live rates work" | `references/fred-context.md` |
+| "are points worth it", "discount points", "points breakeven" | `references/points-breakeven.md` |
 
 If the user does NOT use one of these phrases, do NOT load any reference
 file. The mode file + `_shared.md` + `_profile.md` together provide enough
@@ -161,7 +164,7 @@ context to route, call the script, and narrate. Loading references on every
 invocation would blow the SKILL token budget (SKLL-01).
 
 If the user asks two explanation questions in one prompt, load both
-references but narrate sequentially. Do NOT pre-load all 9 references at
+references but narrate sequentially. Do NOT pre-load all 10 references at
 session start.
 
 ## Number Formatting
@@ -234,6 +237,7 @@ Available commands:
   /mortgage-ops evaluate             → Evaluate a single offer (judgment)
   /mortgage-ops compare              → Compare 2+ offers, rank them
   /mortgage-ops refinance            → Refi NPV analysis (current vs new loan)
+  /mortgage-ops points               → Discount-points breakeven
   /mortgage-ops affordability        → How much house can we afford?
   /mortgage-ops stress               → Rate / income shock scenarios
   /mortgage-ops amortize             → Schedule + payment for a single loan

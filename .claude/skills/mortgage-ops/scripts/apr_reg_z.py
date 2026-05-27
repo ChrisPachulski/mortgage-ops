@@ -207,6 +207,30 @@ def main() -> int:
             )
             print(json.dumps(convergence_envelope), file=sys.stderr)
             return 2
+        except ValueError as e:
+            _major_minor = ".".join(_pydantic_version.split(".")[:2])
+            loc = ["odd_first_period_days"] if "odd_first_period_days" in str(e) else ["solver"]
+            value_envelope: list[dict[str, Any]] = [
+                {
+                    "type": "value_error",
+                    "loc": loc,
+                    "msg": str(e),
+                    "input": request.model_dump(mode="json"),
+                    "url": f"https://errors.pydantic.dev/{_major_minor}/v/value_error",
+                    "ctx": {"class": "ValueError"},
+                }
+            ]
+            log_event(
+                ctx,
+                "ERROR",
+                "apr solver rejected input",
+                event="apr_value_error",
+                exit_status="error_validation",
+                loc=loc,
+                error=str(e),
+            )
+            print(json.dumps(value_envelope), file=sys.stderr)
+            return 2
 
         # Happy path.
         payload = response.model_dump_json(indent=2)

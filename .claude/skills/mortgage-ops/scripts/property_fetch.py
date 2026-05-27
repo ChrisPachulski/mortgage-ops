@@ -27,6 +27,7 @@ Q1 default: on Round 1 success, the extracted dict is written to
 ``data/cache/property-{zpid}.json``. On Round 2 (``--user-provided`` passed
 with the same URL), the CLI reads that JSON instead of re-invoking Sonnet —
 saves $0.16/round-trip per the cost analysis in 13-CONTEXT.
+Tests can redirect this cache with ``MORTGAGE_OPS_PROPERTY_CACHE_DIR``.
 
 Block detection (``lib.property_block_detector.detect_block``) runs BEFORE
 the Sonnet extraction call so captcha/short-body/missing-__NEXT_DATA__ pages
@@ -305,7 +306,9 @@ def _run_property_fetch(
     cache_path: Path | None = None
     cached_extracted: dict[str, Any] | None = None
     if zpid is not None:
-        cache_path = project_root / "data" / "cache" / f"property-{zpid}.json"
+        cache_dir_env = os.environ.get("MORTGAGE_OPS_PROPERTY_CACHE_DIR")
+        cache_dir = Path(cache_dir_env) if cache_dir_env else project_root / "data" / "cache"
+        cache_path = cache_dir / f"property-{zpid}.json"
         if args.user_provided is not None and cache_path.is_file():
             try:
                 cached_extracted = json.loads(cache_path.read_text(encoding="utf-8"))
@@ -467,7 +470,11 @@ def _run_property_fetch(
         except Exception:
             household_hash = "uncomputed"
 
-        write_listing(listing, household_hash=household_hash)
+        db_path_env = os.environ.get("MORTGAGE_OPS_DB_PATH")
+        if db_path_env:
+            write_listing(listing, household_hash=household_hash, db_path=Path(db_path_env))
+        else:
+            write_listing(listing, household_hash=household_hash)
     except Exception as exc:
         sys.stderr.write(f"persistence warning: {exc!r}\n")
 

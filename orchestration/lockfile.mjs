@@ -5,11 +5,9 @@
 // .career-ops.lock -> .lock, header citation block.
 //
 // PERS-04 + PERS-05 + ROADMAP SC-3: 60s stale-lock recovery.
-// Plan 09-01 D-01-01: writeFileSync(flag:'w') + read-back-and-verify is the
-// poor-man's compare-and-swap (PATTERNS Critical Issue 1). flag:'wx' (O_EXCL)
-// is INTENTIONALLY NOT USED — it would crash on every acquire because the
-// existing stale lock would still be on disk; the existing code intentionally
-// OVERWRITES stale locks at lines acquireLock:if(!existing||isStale(existing)).
+// Plan 09-01 D-01-01: acquisition uses O_EXCL (`wx`) so creating data/.lock is
+// the compare-and-swap. Stale locks are removed only while holding
+// data/.lock.stale-recovery, also acquired with O_EXCL.
 //
 // Plan 09-01 D-01-02: stale recovery is acquired_at-based (JSON content),
 // NOT mtime-based. Deliberate: mtime is vulnerable to filesystem `touch`
@@ -17,12 +15,13 @@
 // timestamp is set deterministically by the writer in the same wall-clock
 // domain that reads it back.
 
-import { writeFileSync, readFileSync, unlinkSync, existsSync } from 'fs';
+import { closeSync, existsSync, openSync, readFileSync, unlinkSync, writeFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const MORTGAGE_OPS = dirname(dirname(fileURLToPath(import.meta.url)));
-const LOCK_PATH = join(MORTGAGE_OPS, 'data', '.lock');
+const LOCK_PATH = process.env.MORTGAGE_OPS_LOCK_PATH || join(MORTGAGE_OPS, 'data', '.lock');
+const STALE_RECOVERY_LOCK_PATH = `${LOCK_PATH}.stale-recovery`;
 
 export const STALE_THRESHOLD_MS = 60_000;
 export const DEFAULT_TIMEOUT_MS = 30_000;
@@ -32,14 +31,18 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
-export function readLock() {
-  if (!existsSync(LOCK_PATH)) return null;
+function readJsonFile(path) {
+  if (!existsSync(path)) return null;
   try {
-    return JSON.parse(readFileSync(LOCK_PATH, 'utf-8'));
+    return JSON.parse(readFileSync(path, 'utf-8'));
   } catch (e) {
     // Corrupt or partially-written lock — treat as absent so caller overwrites.
     return null;
   }
+}
+
+export function readLock() {
+  return readJsonFile(LOCK_PATH);
 }
 
 export function isStale(lock) {
@@ -48,24 +51,89 @@ export function isStale(lock) {
   return age > STALE_THRESHOLD_MS;
 }
 
+function writeExclusiveJson(path, payload) {
+  const fd = openSync(path, 'wx');
+  try {
+    writeFileSync(fd, JSON.stringify(payload, null, 2));
+  } finally {
+    closeSync(fd);
+  }
+}
+
+function unlinkIfExists(path) {
+  try {
+    unlinkSync(path);
+  } catch (e) {
+    if (e.code !== 'ENOENT') {
+      throw e;
+    }
+  }
+}
+
+function tryClearStaleRecoveryLock() {
+  const recovery = readJsonFile(STALE_RECOVERY_LOCK_PATH);
+  if ((recovery && isStale(recovery)) || (recovery === null && existsSync(STALE_RECOVERY_LOCK_PATH))) {
+    unlinkIfExists(STALE_RECOVERY_LOCK_PATH);
+  }
+}
+
+function sameLock(a, b) {
+  if (!a || !b) {
+    return a === b;
+  }
+  return a.pid === b.pid && a.acquired_at === b.acquired_at;
+}
+
+function tryRemoveStaleLock(observedLock) {
+  if (observedLock && !isStale(observedLock)) {
+    return false;
+  }
+
+  const recoveryLock = {
+    pid: process.pid,
+    acquired_at: Date.now(),
+    reason: 'stale-lock-recovery',
+  };
+
+  try {
+    writeExclusiveJson(STALE_RECOVERY_LOCK_PATH, recoveryLock);
+  } catch (e) {
+    if (e.code === 'EEXIST') {
+      tryClearStaleRecoveryLock();
+      return false;
+    }
+    throw e;
+  }
+
+  try {
+    const current = readLock();
+    if ((current === null || isStale(current)) && sameLock(current, observedLock)) {
+      unlinkIfExists(LOCK_PATH);
+      return true;
+    }
+    return false;
+  } finally {
+    const currentRecovery = readJsonFile(STALE_RECOVERY_LOCK_PATH);
+    if (sameLock(currentRecovery, recoveryLock)) {
+      unlinkIfExists(STALE_RECOVERY_LOCK_PATH);
+    }
+  }
+}
+
 export async function acquireLock({ timeoutMs = DEFAULT_TIMEOUT_MS, reason = '' } = {}) {
   const deadline = Date.now() + timeoutMs;
   const myLock = { pid: process.pid, acquired_at: Date.now(), reason };
 
   while (Date.now() < deadline) {
-    const existing = readLock();
-    if (!existing || isStale(existing)) {
-      try {
-        // flag:'w' = O_TRUNC | O_CREAT | O_WRONLY (NOT O_EXCL — see header comment).
-        writeFileSync(LOCK_PATH, JSON.stringify(myLock, null, 2), { flag: 'w' });
-        // Read-back-and-verify: poor-man's compare-and-swap.
-        const readBack = readLock();
-        if (readBack && readBack.pid === process.pid && readBack.acquired_at === myLock.acquired_at) {
-          return myLock;
-        }
-      } catch (e) {
-        // Race: another process wrote between our read and write. Retry.
+    try {
+      writeExclusiveJson(LOCK_PATH, myLock);
+      return myLock;
+    } catch (e) {
+      if (e.code !== 'EEXIST') {
+        throw e;
       }
+      const existing = readLock();
+      tryRemoveStaleLock(existing);
     }
     await sleep(POLL_INTERVAL_MS);
   }

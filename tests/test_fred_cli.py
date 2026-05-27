@@ -7,6 +7,7 @@ Always-exit-0 envelope per Pitfall 1 + D-12-LIVE02-01 recovery contract.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import time
@@ -55,6 +56,7 @@ def test_fred_cli_help_fast_lazy_imports() -> None:
 
 def test_fred_cli_missing_api_key_returns_exit_0_with_error_envelope(
     monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     """LIVE-01 + Pitfall 1: missing FRED_API_KEY -> exit 0 + JSON envelope with `error` field.
 
@@ -63,11 +65,18 @@ def test_fred_cli_missing_api_key_returns_exit_0_with_error_envelope(
     not a non-zero exit.
     """
     monkeypatch.delenv("FRED_API_KEY", raising=False)
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in {"FRED_API_KEY", "MORTGAGE_OPS_FRED_CACHE_DIR"}
+    }
+    env["MORTGAGE_OPS_FRED_CACHE_DIR"] = str(tmp_path / "empty-fred-cache")
     result = subprocess.run(
         [sys.executable, str(SCRIPT_PATH), "MORTGAGE30US", "--latest"],
         capture_output=True,
         text=True,
         timeout=10,
+        env=env,
     )
     assert result.returncode == 0  # NOT 2 — see D-12-LIVE02-01 recovery contract
     envelope = json.loads(result.stdout)
@@ -178,7 +187,7 @@ def _run_cli_with_mocked_save_cache(exc_class: str, exc_args_repr: str) -> dict[
     return payload
 
 
-def test_fred_cli_cache_hit_without_api_key_returns_cached_envelope() -> None:
+def test_fred_cli_cache_hit_without_api_key_returns_cached_envelope(tmp_path: Path) -> None:
     """Cache-first ordering: a fresh local cache MUST be readable without
     FRED_API_KEY set. The API key is only required when a fetch is actually
     needed (cache miss / stale). Pre-fix, the missing-key check short-circuited
@@ -186,15 +195,9 @@ def test_fred_cli_cache_hit_without_api_key_returns_cached_envelope() -> None:
     key.
 
     Subprocess-driven so the CLI's lazy ``from lib.fred_cache import _load_cache``
-    binds to the real ``CACHE_DIR``. Writes a fresh cache file under the real
-    ``data/cache/`` (per-series ``fred_MORTGAGE15US.json``) and cleans up
-    afterward — chosen over monkeypatching because ``_load_cache`` captures
-    ``CACHE_DIR`` as a default-arg binding at definition time. Uses
-    MORTGAGE15US to avoid colliding with any MORTGAGE30US cache another test
-    might leave behind.
+    follows the same env-var cache override path users can exercise.
     """
-    project_root = Path(__file__).resolve().parent.parent
-    cache_dir = project_root / "data" / "cache"
+    cache_dir = tmp_path / "fred-cache"
     cache_dir.mkdir(parents=True, exist_ok=True)
     cache_file = cache_dir / "fred_MORTGAGE15US.json"
 
@@ -218,33 +221,30 @@ def test_fred_cli_cache_hit_without_api_key_returns_cached_envelope() -> None:
     # schema_version pinned in lib.fred_cache.SCHEMA_VERSION = 1; mirror inline
     # to avoid importing lib at module scope (keeps this test hermetic).
     payload = {"schema_version": 1, "entries": {"MORTGAGE15US": cached_envelope}}
-    pre_existed = cache_file.exists()
-    saved_content = cache_file.read_text() if pre_existed else None
     cache_file.write_text(json.dumps(payload))
 
-    try:
-        env = {k: v for k, v in __import__("os").environ.items() if k != "FRED_API_KEY"}
-        result = subprocess.run(
-            [sys.executable, str(SCRIPT_PATH), "MORTGAGE15US", "--latest"],
-            capture_output=True,
-            text=True,
-            timeout=10,
-            env=env,
-        )
-        assert result.returncode == 0, f"stdout={result.stdout!r} stderr={result.stderr!r}"
-        envelope = json.loads(result.stdout)
-        # Cache hit — no missing-key complaint despite FRED_API_KEY unset.
-        assert envelope["error"] is None, f"unexpected error: {envelope['error']!r}"
-        assert envelope["value"] == "5.94"
-        assert envelope["series_id"] == "MORTGAGE15US"
-        assert envelope["fetched_at"] == fresh_iso
-        assert envelope["source_url"] is not None
-        assert "api_key=***" in envelope["source_url"]  # redaction preserved
-    finally:
-        if pre_existed and saved_content is not None:
-            cache_file.write_text(saved_content)
-        else:
-            cache_file.unlink(missing_ok=True)
+    env = {
+        k: v
+        for k, v in os.environ.items()
+        if k not in {"FRED_API_KEY", "MORTGAGE_OPS_FRED_CACHE_DIR"}
+    }
+    env["MORTGAGE_OPS_FRED_CACHE_DIR"] = str(cache_dir)
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT_PATH), "MORTGAGE15US", "--latest"],
+        capture_output=True,
+        text=True,
+        timeout=10,
+        env=env,
+    )
+    assert result.returncode == 0, f"stdout={result.stdout!r} stderr={result.stderr!r}"
+    envelope = json.loads(result.stdout)
+    # Cache hit — no missing-key complaint despite FRED_API_KEY unset.
+    assert envelope["error"] is None, f"unexpected error: {envelope['error']!r}"
+    assert envelope["value"] == "5.94"
+    assert envelope["series_id"] == "MORTGAGE15US"
+    assert envelope["fetched_at"] == fresh_iso
+    assert envelope["source_url"] is not None
+    assert "api_key=***" in envelope["source_url"]  # redaction preserved
 
 
 def test_fred_cli_lock_timeout_returns_exit_0_with_error_envelope() -> None:

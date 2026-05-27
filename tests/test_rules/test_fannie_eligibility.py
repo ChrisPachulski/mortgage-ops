@@ -6,7 +6,7 @@ Coverage:
   - Pitfall 6: credit-score bucket boundaries at 700, 719, 720, 739, 740
     (independent unit-tests of _credit_score_bucket helper)
   - Full-stack LLPA round-trip at each boundary (credit_score -> bucket -> bps)
-  - Cash-out refi loan_purpose add-on (composition: base + addon)
+  - Cash-out refi loan-purpose grid
   - Fail-loud LookupError when no matrix cell matches
   - Auto-discovery: citation-coverage meta-test gains [fannie_eligibility] case
 """
@@ -59,8 +59,24 @@ def test_credit_score_bucket_739_upper_boundary() -> None:
 
 
 def test_credit_score_bucket_740_lower_boundary() -> None:
-    # Hand: 740 is the lower bound of '740-759-or-better'.
-    assert _credit_score_bucket(740) == "740-759-or-better"
+    # Hand: 740 is the lower bound of '740-759'.
+    assert _credit_score_bucket(740) == "740-759"
+
+
+def test_credit_score_bucket_759_upper_boundary() -> None:
+    assert _credit_score_bucket(759) == "740-759"
+
+
+def test_credit_score_bucket_760_lower_boundary() -> None:
+    assert _credit_score_bucket(760) == "760-779"
+
+
+def test_credit_score_bucket_779_upper_boundary() -> None:
+    assert _credit_score_bucket(779) == "760-779"
+
+
+def test_credit_score_bucket_780_lower_boundary() -> None:
+    assert _credit_score_bucket(780) == "780-or-better"
 
 
 # LTV bucket boundary unit-tests (HIGH-INCLUSIVE per YAML).
@@ -94,8 +110,13 @@ def test_ltv_bucket_rejects_more_than_two_decimal_places() -> None:
 def test_ltv_bucket_accepts_exactly_two_decimal_places() -> None:
     # Regression for WR-03: ensure the >2-decimal guard does not over-trigger
     # — Decimal("60.00") has exponent -2 and must still resolve cleanly.
-    # 60.00 is the upper bound of the '0-60' bucket per the YAML.
-    assert _ltv_bucket(Decimal("60.00")) == "0-60"
+    # 60.00 is the upper bound of the '30.01-60' bucket per the YAML.
+    assert _ltv_bucket(Decimal("60.00")) == "30.01-60"
+
+
+def test_ltv_bucket_splits_low_ltv_columns() -> None:
+    assert _ltv_bucket(Decimal("30.00")) == "0-30"
+    assert _ltv_bucket(Decimal("30.01")) == "30.01-60"
 
 
 def test_ltv_bucket_accepts_one_decimal_place() -> None:
@@ -131,9 +152,9 @@ def test_compute_llpa_at_credit_score_boundary(fixture_name: str) -> None:
     assert result == Decimal(fx["expected_llpa_bps"])
 
 
-def test_compute_llpa_cash_out_refi_addon() -> None:
-    # Hand: cash_out_refi addon at LTV=80, credit=720 = base 50 + addon 275 = 325 bps.
-    # Same inputs with loan_purpose="purchase" yield base 50 + 0 = 50 bps.
+def test_compute_llpa_cash_out_refi_grid_cell() -> None:
+    # Hand: cash_out_refi at LTV=80, credit=720 = official cell 275 bps.
+    # Same inputs with loan_purpose="purchase" yield official cell 125 bps.
     fx = _load("fannie_eligibility_cash_out_refi.json")
     cash_out = compute_llpa(
         credit_score=fx["credit_score"],
@@ -154,7 +175,7 @@ def test_compute_llpa_cash_out_refi_addon() -> None:
 
 
 def test_compute_llpa_below_620_credit_high_ltv() -> None:
-    # Hand: credit_score=550 -> 'below-620'; LTV=95 -> '90.01-95'. Base 325 + 0 + 0 + 0 = 325 bps.
+    # Hand: credit_score=550 -> 'below-620'; LTV=95 -> '90.01-95'. Official purchase cell = 225 bps.
     # Confirms the worst-case cell is reachable (no NotImplementedError per D-04).
     result = compute_llpa(
         credit_score=550,
@@ -163,7 +184,7 @@ def test_compute_llpa_below_620_credit_high_ltv() -> None:
         occupancy="primary",
         unit_count=1,
     )
-    assert result == Decimal("325")
+    assert result == Decimal("225")
 
 
 def test_compute_llpa_missing_cell_raises_lookup_error_via_unknown_purpose() -> None:
@@ -186,5 +207,29 @@ def test_credit_score_300_is_in_below_620() -> None:
 
 
 def test_credit_score_850_is_in_top_bucket() -> None:
-    # Hand: 850 is the ceiling of the '740-759-or-better' bucket (matches Borrower.Field(le=850)).
-    assert _credit_score_bucket(850) == "740-759-or-better"
+    # Hand: 850 is the ceiling of the '780-or-better' bucket (matches Borrower.Field(le=850)).
+    assert _credit_score_bucket(850) == "780-or-better"
+
+
+def test_compute_llpa_distinguishes_current_top_credit_tiers() -> None:
+    assert compute_llpa(
+        740,
+        ltv_pct=Decimal("80.00"),
+        loan_purpose="purchase",
+        occupancy="primary",
+        unit_count=1,
+    ) == Decimal("87.5")
+    assert compute_llpa(
+        760,
+        ltv_pct=Decimal("80.00"),
+        loan_purpose="purchase",
+        occupancy="primary",
+        unit_count=1,
+    ) == Decimal("62.5")
+    assert compute_llpa(
+        780,
+        ltv_pct=Decimal("80.00"),
+        loan_purpose="purchase",
+        occupancy="primary",
+        unit_count=1,
+    ) == Decimal("37.5")

@@ -1,7 +1,7 @@
 {
-  "citation": "Fannie LLPA Matrix §B5-1 (loan_purpose add-on cell: cash_out_refi)",
+  "citation": "Fannie LLPA Matrix §B5-1 (loan-purpose grid cell: cash_out_refi)",
   "source_url": "https://singlefamily.fanniemae.com/media/9391/display",
-  "comment": "Hand-calc: credit_score=720 -> '720-739'; LTV=80 -> '75.01-80'. Base 50 + cash_out_refi addon 275 + 0 + 0 = 325 bps. Confirms cash-out refi increment over identical purchase loan (which would be 50 bps).",
+  "comment": "Hand-calc: credit_score=720 -> '720-739'; LTV=80 -> '75.01-80'. Official cash-out refinance cell = 275 bps. Confirms cash-out refi increment over identical purchase loan (which is 125 bps).",
   "credit_score": 720,
   "ltv_pct": "80.00",
   "loan_purpose": "cash_out_refi",
@@ -9,5 +9,5 @@
   "unit_count": 1,
   "expected_credit_score_bucket": "720-739",
   "expected_ltv_bucket": "75.01-80",
-  "expected_llpa_bps": "325"
+  "expected_llpa_bps": "275"
 }
